@@ -45,6 +45,13 @@ export default function HomeScreen() {
     // loadSharedLinks(); // Disabled until rebuild
   }, []);
 
+  // Refresh data when screen comes into focus (after sign-in)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
+
   // Load subscription info
   useEffect(() => {
     loadSubscriptionInfo();
@@ -86,6 +93,8 @@ export default function HomeScreen() {
 
   const loadData = async () => {
     try {
+      console.log('Home screen: Loading data...');
+      
       // Initialize trial if needed for new users - with error handling
       try {
         const { initializeTrialIfNeeded } = await import('@/utils/subscription-utils');
@@ -99,6 +108,9 @@ export default function HomeScreen() {
         AsyncStorage.getItem(ENTRIES_KEY).catch(() => null),
         AsyncStorage.getItem(ONBOARDING_KEY).catch(() => null),
       ]);
+
+      console.log('Home screen: Entries data from AsyncStorage:', entriesData ? 'present' : 'null');
+      console.log('Home screen: Entries data length:', entriesData ? JSON.parse(entriesData).length : 0);
 
       let parsedEntries: CharismaEntry[] = [];
       if (entriesData) {

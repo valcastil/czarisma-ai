@@ -106,11 +106,11 @@ export default function AuthSignInScreen() {
             
             Alert.alert(
               'Success! 🎉',
-              'Account created successfully. You can now subscribe to Pro.',
+              'Account created successfully. Welcome to Charisma!',
               [
                 {
                   text: 'Continue',
-                  onPress: () => router.replace('/subscription'),
+                  onPress: () => router.replace('/(tabs)'),
                 },
               ]
             );
@@ -138,16 +138,18 @@ export default function AuthSignInScreen() {
         if (error) throw error;
 
         if (data.user) {
+          console.log('Email sign-in successful, restoring user data...');
           // Restore user data from Supabase
           const { restoreUserDataFromSupabase } = await import('@/utils/auth-utils');
-          await restoreUserDataFromSupabase();
+          const restoreResult = await restoreUserDataFromSupabase();
+          console.log('Restore result:', restoreResult);
           
           // Create trial subscription if user doesn't have one
           const { createTrialIfNeeded } = await import('@/utils/subscription-utils');
           await createTrialIfNeeded(data.user.id);
           
-          // Navigate back to subscription
-          router.replace('/subscription');
+          // Navigate to home screen
+          router.replace('/(tabs)');
         }
       }
     } catch (error: any) {
@@ -262,10 +264,12 @@ export default function AuthSignInScreen() {
             }
 
             logger.info('Session established:', sessionData);
+            console.log('Google sign-in successful, restoring user data...');
 
             // Restore user data from Supabase
             const { restoreUserDataFromSupabase } = await import('@/utils/auth-utils');
-            await restoreUserDataFromSupabase();
+            const restoreResult = await restoreUserDataFromSupabase();
+            console.log('Google restore result:', restoreResult);
 
             try {
               const { refreshProStatus } = await import('@/utils/subscription-utils');
@@ -330,10 +334,14 @@ export default function AuthSignInScreen() {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            }
+          }}
           style={styles.backButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <IconSymbol name="chevron.left" size={24} color={colors.gold} />
+          <IconSymbol name="chevron.left" size={24} color={router.canGoBack() ? colors.gold : 'transparent'} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {isSignUp ? 'Create Account' : 'Sign In'}

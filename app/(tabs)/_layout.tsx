@@ -1,13 +1,13 @@
-import { useRouter, useFocusEffect } from 'expo-router';
-import React, { useState, useCallback, useEffect } from 'react';
-import { TouchableOpacity, StyleSheet, View, Text } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MaterialTopTabs } from '@/components/ui/material-top-tabs';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { MaterialTopTabs } from '@/components/ui/material-top-tabs';
 import { useTheme } from '@/hooks/use-theme';
+import { getCurrentUser, getUnreadCount, subscribeToConversations } from '@/utils/message-utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { getCurrentUser, subscribeToConversations, getUnreadCount } from '@/utils/message-utils';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENTRIES_KEY = '@charisma_entries';
 
@@ -42,7 +42,7 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
         const isFocused = state.index === index;
         const color = isFocused ? colors.gold : colors.textSecondary;
 
-        const onPress = () => {
+        const onPress = async () => {
           const event = navigation.emit({
             type: 'tabPress',
             target: route.key,
@@ -57,10 +57,18 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
             if (route.name === 'explore') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/onboarding-charisma');
-            } else {
-              if (route.name === 'messages') {
-                clearNewMessages?.();
+            } else if (route.name === 'messages') {
+              // Check if user is authenticated before accessing messages
+              const user = await getCurrentUser();
+              if (!user) {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.replace('/auth-sign-in');
+                return;
               }
+              clearNewMessages?.();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate(route.name, route.params);
+            } else {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               navigation.navigate(route.name, route.params);
             }
@@ -116,6 +124,7 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
 export default function TabLayout() {
   const [hasEntries, setHasEntries] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const router = useRouter();
 
   const checkEntries = useCallback(async () => {
     try {
@@ -184,6 +193,26 @@ export default function TabLayout() {
       unsubscribe?.();
     };
   }, [checkUnreadMessages]);
+
+  // Handle hardware back button to prevent freeze
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Check if user is authenticated
+      (async () => {
+        const user = await getCurrentUser();
+        if (!user) {
+          // If not authenticated, exit the app
+          BackHandler.exitApp();
+          return true;
+        }
+        // If authenticated, let the default back behavior handle it
+        return false;
+      })();
+      return true; // Prevent default behavior while we check auth
+    });
+
+    return () => backHandler.remove();
+  }, []);
 
   return (
     <MaterialTopTabs

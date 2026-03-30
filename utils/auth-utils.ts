@@ -63,28 +63,13 @@ export const handleSignOut = async (): Promise<{ success: boolean; error?: any }
     // 1. Track the sign out event
     trackAuth('sign_out', 'manual');
 
-    // 2. Sync local data to Supabase (for authenticated users)
-    await syncDataToSupabase();
+    // 2. Navigate to sign-in screen immediately for responsive UX
+    router.replace('/auth-sign-in');
 
-    // 3. Sign out from Supabase
-    const { error: supabaseError } = await supabase.auth.signOut();
-    if (supabaseError) {
-      console.error('Error signing out from Supabase:', supabaseError);
-      // Continue with cleanup even if Supabase sign out fails
-    }
-
-    // 4. Logout from RevenueCat
-    try {
-      await logoutRevenueCatUser();
-    } catch (error) {
-      console.error('Error logging out from RevenueCat:', error);
-      // Continue with cleanup
-    }
-
-    // 5. Clear all user-specific CACHE data from AsyncStorage
-    // Note: We only clear cache, not the profile/entries keys
-    // This allows guest mode to work, but authenticated data is in Supabase
+    // 3. Run all cleanup tasks in parallel (non-blocking)
     const cacheKeys = [
+      '@charisma_profile',
+      '@charisma_entries',
       '@pro_status',
       '@trial_start_date',
       '@pro_email',
@@ -97,11 +82,12 @@ export const handleSignOut = async (): Promise<{ success: boolean; error?: any }
       '@last_sync_time',
     ];
 
-    await AsyncStorage.multiRemove(cacheKeys);
-    console.log('User cache cleared from local storage');
-
-    // 6. Navigate to sign-in screen
-    router.replace('/auth-sign-in');
+    await Promise.allSettled([
+      syncDataToSupabase(),
+      supabase.auth.signOut(),
+      logoutRevenueCatUser(),
+      AsyncStorage.multiRemove(cacheKeys),
+    ]);
 
     console.log('User signed out successfully');
     return { success: true };
@@ -215,7 +201,13 @@ export const restoreUserDataFromSupabase = async (): Promise<{ success: boolean;
     }
 
     // Fetch entries from Supabase
+    console.log('Fetching entries from Supabase for user:', user.id);
     const supabaseEntries = await getSupabaseEntries(user.id);
+    console.log('Supabase entries fetched:', supabaseEntries?.length || 0);
+    
+    if (supabaseEntries && supabaseEntries.length > 0) {
+      console.log('Sample Supabase entry:', supabaseEntries[0]);
+    }
     
     if (supabaseEntries && supabaseEntries.length > 0) {
       // Convert Supabase entries to local format
@@ -234,6 +226,20 @@ export const restoreUserDataFromSupabase = async (): Promise<{ success: boolean;
       // Save to AsyncStorage
       await AsyncStorage.setItem('@charisma_entries', JSON.stringify(localEntries));
       console.log(`Restored ${localEntries.length} entries from Supabase`);
+      
+      // Verify the entries were saved
+      const savedEntries = await AsyncStorage.getItem('@charisma_entries');
+      console.log('Verified saved entries count:', savedEntries ? JSON.parse(savedEntries).length : 0);
+    } else {
+      console.log('No entries found in Supabase to restore');
+      
+      // Check if there are any entries in the local storage that might be stale
+      const existingEntries = await AsyncStorage.getItem('@charisma_entries');
+      if (existingEntries) {
+        console.log('Found existing entries in local storage (will be cleared):', JSON.parse(existingEntries).length);
+        await AsyncStorage.removeItem('@charisma_entries');
+        console.log('Cleared stale entries from local storage');
+      }
     }
 
     console.log('User data restored successfully from Supabase');

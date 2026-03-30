@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
@@ -10,7 +10,7 @@ import { Colors } from '@/constants/theme';
 import { ThemeProvider, useColorScheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
 import { initializeRevenueCat } from '@/lib/revenuecat';
-import { initializeSupabase } from '@/lib/supabase';
+import { initializeSupabase, supabase } from '@/lib/supabase';
 import { initializeVexo } from '@/lib/vexo-analytics';
 
 // Stripe publishable key - replace with your actual key
@@ -23,6 +23,18 @@ export const unstable_settings = {
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
+  const router = useRouter();
+
+  // Check auth state after navigation is ready
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace('/auth-sign-in');
+      }
+    };
+    checkAuth();
+  }, []);
 
   const customDarkTheme = {
     ...DarkTheme,

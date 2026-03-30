@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useTheme } from '@/hooks/use-theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/hooks/use-theme';
 import {
-  initializeRevenueCat,
-  showPaywall,
-  showCustomerCenter,
-  isCustomerCenterAvailable,
-  checkProSubscription,
-  getSubscriptionStatus,
-  getCustomerInfo,
-  restorePurchases,
-  identifyRevenueCatUser,
-  getOfferings,
-  purchasePackage,
-  getPackagePrice,
-  getPackageDuration,
+    checkProSubscription,
+    getCustomerInfo,
+    getOfferings,
+    getPackageDuration,
+    getPackagePrice,
+    getSubscriptionStatus,
+    identifyRevenueCatUser,
+    initializeRevenueCat,
+    isCustomerCenterAvailable,
+    purchasePackage,
+    restorePurchases,
+    showCustomerCenter,
+    showPaywall,
 } from '@/lib/revenuecat';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 export default function SubscriptionRevenueCatScreen() {
   const router = useRouter();
@@ -266,8 +266,14 @@ export default function SubscriptionRevenueCatScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol size={24} name="chevron.left" color={colors.text} />
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            }
+          }} 
+          style={styles.backButton}>
+          <IconSymbol size={24} name="chevron.left" color={router.canGoBack() ? colors.text : 'transparent'} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {isPro ? 'Manage Subscription' : 'Upgrade to Pro'}

@@ -1,7 +1,7 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WhatsAppBackground } from '@/components/ui/whatsapp-background';
 import { useTheme } from '@/hooks/use-theme';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { initializeGemini } from '@/lib/gemini';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
@@ -129,13 +129,16 @@ export default function AIChatScreen() {
 
     const generateNextWelcome = async (history: any[]) => {
         try {
-            const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash",
-                systemInstruction: "You are a charismatic AI assistant. Generate a SHORT, warm, one-sentence welcome back message for the NEXT time the user opens the app, based on our conversation so far. VARY YOUR TONE (witty, calm, enthusiastic). Do not give advice, just a hook for next time."
-            });
+            if (!genAI) {
+                console.warn('Gemini AI not initialized');
+                return;
+            }
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-            const chat = model.startChat({ history: history });
-            const result = await chat.sendMessage("[System: Generate the cached welcome message for the next session.]");
+            const systemPrompt = { role: "user", parts: [{ text: "System: You are a charismatic AI assistant. Generate a SHORT, warm, one-sentence welcome back message for the NEXT time the user opens the app, based on our conversation so far. VARY YOUR TONE (witty, calm, enthusiastic). Do not give advice, just a hook for next time." }] };
+            const systemAck = { role: "model", parts: [{ text: "Understood. I will generate a short, warm welcome back message." }] };
+            const chat = model.startChat({ history: [systemPrompt, systemAck, ...history] });
+            const result = await chat.sendMessage("Generate the cached welcome message for the next session.");
             const nextGreeting = result.response.text();
 
             await AsyncStorage.setItem(NEXT_GREETING_KEY, nextGreeting);
@@ -159,7 +162,7 @@ export default function AIChatScreen() {
     const [chatHistory, setChatHistory] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
-    const genAI = new GoogleGenerativeAI(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '');
+    const genAI = initializeGemini();
 
     const handleSend = async () => {
         if (!message.trim() || isLoading) return;
@@ -177,12 +180,22 @@ export default function AIChatScreen() {
         await AsyncStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(updatedMessagesWithUser));
 
         try {
-            const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash",
-                systemInstruction: "You are a charismatic AI assistant. CRITICAL: Keep your response strictly under 500 characters. ONLY answer questions about: Charisma, Emotions, Feelings, Health, Mind, and Fitness. Politely refuse to answer any other topics and steer the conversation back to personal growth."
-            });
+            if (!genAI) {
+                if (isMounted.current) {
+                    setMessages(prev => [...prev, {
+                        id: Date.now().toString(),
+                        text: "AI is currently unavailable. Please check your internet connection and try again.",
+                        isUser: false
+                    }]);
+                }
+                setIsLoading(false);
+                return;
+            }
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            const systemPrompt = { role: "user", parts: [{ text: "System: You are a charismatic AI assistant. CRITICAL: Keep your response strictly under 500 characters. ONLY answer questions about: Charisma, Emotions, Feelings, Health, Mind, and Fitness. Politely refuse to answer any other topics and steer the conversation back to personal growth." }] };
+            const systemAck = { role: "model", parts: [{ text: "Understood. I will keep responses under 500 characters and only discuss Charisma, Emotions, Feelings, Health, Mind, and Fitness topics." }] };
             const chat = model.startChat({
-                history: chatHistory,
+                history: [systemPrompt, systemAck, ...chatHistory],
             });
 
             const result = await chat.sendMessage(userMessageText);

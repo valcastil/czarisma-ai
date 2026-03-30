@@ -28,6 +28,13 @@ export default function ProfileScreen() {
     loadProfileData();
   }, []);
 
+  // Refresh profile data when screen comes into focus (after sign-in)
+  useFocusEffect(
+    useCallback(() => {
+      loadProfileData();
+    }, [])
+  );
+
   const loadProfileData = async () => {
     try {
       setLoading(true);
@@ -52,6 +59,35 @@ export default function ProfileScreen() {
       console.log('Top charisma type:', userStats.topCharisma.type);
       console.log('Top charisma count:', userStats.topCharisma.count);
       console.log('Recent entries:', recent.length);
+
+      // If no profile data exists (signed out), show default empty profile
+      if (!profileData) {
+        const defaultProfile: UserProfile = {
+          id: '',
+          name: 'Guest User',
+          username: 'guest',
+          email: '',
+          password: '',
+          bio: '',
+          isVerified: false,
+          twoFactorEnabled: false,
+          totalEntries: 0,
+          streak: 0,
+          topCharisma: 'confidence',
+          joinDate: Date.now(),
+          location: { city: 'Unknown', country: 'Unknown' },
+          interests: [],
+          preferredEmotions: [],
+          notifications: { push: true, email: true, dailyReminders: true, weeklyReports: false },
+          privacy: { profileVisibility: 'public', showEmail: false, showPhone: false, showLocation: true, showBirthDate: false },
+          preferences: { theme: 'auto', language: 'en' },
+          socialLinks: {},
+        };
+        setProfile(defaultProfile);
+        setStats(userStats);
+        setRecentEntries(recent);
+        return;
+      }
 
       // Update profile with current stats
       const updatedProfile = await updateProfile({

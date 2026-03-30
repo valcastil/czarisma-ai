@@ -10,7 +10,7 @@ import {
 } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -44,35 +44,46 @@ export default function MessagesScreen() {
     };
   }, []);
 
+  // Refresh messages when screen comes into focus (after sign-in)
+  useFocusEffect(
+    useCallback(() => {
+      initializeMessages();
+    }, [])
+  );
+
   const initializeMessages = async () => {
     try {
       const user = await getCurrentUser();
-      if (user) {
-        setCurrentUser(user);
-        await registerCurrentUser();
-        await loadConversations();
-
-        // Subscribe to real-time conversation updates
-        const unsubscribe = subscribeToConversations((updatedConversation) => {
-          setConversations(prev => {
-            const existingIndex = prev.findIndex(c => c.id === updatedConversation.id);
-            if (existingIndex >= 0) {
-              // Update existing conversation
-              const updated = [...prev];
-              updated[existingIndex] = updatedConversation;
-              return updated.sort((a, b) => b.updatedAt - a.updatedAt);
-            } else {
-              // Add new conversation
-              return [updatedConversation, ...prev];
-            }
-          });
-        });
-
-        // Store unsubscribe function for cleanup
-        return () => {
-          unsubscribe();
-        };
+      if (!user) {
+        // Not authenticated, redirect to sign-in
+        router.replace('/auth-sign-in');
+        return;
       }
+      
+      setCurrentUser(user);
+      await registerCurrentUser();
+      await loadConversations();
+
+      // Subscribe to real-time conversation updates
+      const unsubscribe = subscribeToConversations((updatedConversation) => {
+        setConversations(prev => {
+          const existingIndex = prev.findIndex(c => c.id === updatedConversation.id);
+          if (existingIndex >= 0) {
+            // Update existing conversation
+            const updated = [...prev];
+            updated[existingIndex] = updatedConversation;
+            return updated.sort((a, b) => b.updatedAt - a.updatedAt);
+          } else {
+            // Add new conversation
+            return [updatedConversation, ...prev];
+          }
+        });
+      });
+
+      // Store unsubscribe function for cleanup
+      return () => {
+        unsubscribe();
+      };
     } catch (error) {
       console.error('Error initializing messages:', error);
       Alert.alert('Error', 'Failed to initialize messages');

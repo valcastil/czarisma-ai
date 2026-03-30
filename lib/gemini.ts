@@ -3,6 +3,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 // Initialize the Gemini AI client
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 
+// Debug: Log the API key status (without exposing the key)
+console.log('Gemini API Key Status:', API_KEY ? 'Present' : 'Missing');
+console.log('API Key Length:', API_KEY.length);
+
 let genAI: GoogleGenerativeAI | null = null;
 
 /**
@@ -24,7 +28,7 @@ export const initializeGemini = () => {
 /**
  * Get Gemini model instance
  */
-export const getGeminiModel = (modelName: string = 'gemini-2.0-flash') => {
+export const getGeminiModel = (modelName: string = 'gemini-2.5-flash') => {
   const ai = initializeGemini();
   if (!ai) return null;
   
