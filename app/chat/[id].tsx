@@ -12,30 +12,30 @@ import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { formatCharismaEntryForMessage } from '@/utils/charisma-share-utils';
 import {
-    getCurrentUser,
-    getMessages,
-    sendMessage,
-    subscribeToMessages,
-    updateConversation,
-    updateMessageReactions,
+  getCurrentUser,
+  getMessages,
+  sendMessage,
+  subscribeToMessages,
+  updateConversation,
+  updateMessageReactions,
 } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function ChatScreen() {
@@ -899,7 +899,7 @@ export default function ChatScreen() {
             onPress={handleMenuPress}
             activeOpacity={0.7}>
             <IconSymbol size={24} name="ellipsis" color={(canChat && userEmail) ? colors.text : colors.textSecondary} />
-            {(!canChat || !userEmail) && (
+            {(canChat && userEmail) && (
               <View style={[
                 styles.proBadge,
                 { backgroundColor: colors.gold }
@@ -1370,10 +1370,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1,
     flexDirection: 'row',
-    minWidth: 40,
+    minWidth: 48,
   },
   proBadgeText: {
-    fontSize: 9,
+    fontSize: 7,
     fontWeight: '800',
     color: '#000000',
     letterSpacing: 1,

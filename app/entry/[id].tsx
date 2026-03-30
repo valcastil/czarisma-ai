@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, CharismaEntry } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CharismaEntry, Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { checkPaidProStatus } from '@/utils/subscription-utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
 
@@ -318,7 +318,7 @@ export default function EntryDetailScreen() {
           onPress={handleStartEdit}
           activeOpacity={0.8}>
           <IconSymbol size={20} name="pencil" color={isPro ? "#F4C542" : "#808080"} />
-          {!isPro && (
+          {isPro && (
             <View style={[styles.proBadge, { backgroundColor: colors.gold }]}>
               <Text style={styles.proBadgeText} numberOfLines={1}>PRO</Text>
             </View>

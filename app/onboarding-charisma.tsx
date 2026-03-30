@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import { CharismaLogo } from '@/components/charisma-logo';
-import { checkProStatus, isProCharisma } from '@/utils/subscription-utils';
+import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
+import { checkProStatus, isProCharisma } from '@/utils/subscription-utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const ONBOARDING_KEY = '@charisma_onboarding';
 
@@ -387,7 +386,7 @@ export default function OnboardingCharismaScreen() {
           <Text style={[styles.appTitle, { color: colors.text }]}>Charisma Chat</Text>
           {isPro && userEmail && (
             <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
-              <Text style={styles.proStatusText}>✨ PRO ACTIVE</Text>
+              <Text style={styles.proStatusText}>PRO</Text>
             </View>
           )}
         </View>
@@ -489,7 +488,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    alignSelf: 'flex-start',
   },
   proStatusText: {
     fontSize: 12,

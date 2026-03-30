@@ -1,25 +1,25 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
-  ScrollView,
-  Pressable,
-} from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, CharismaEntry } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import { CharismaLogo } from '@/components/charisma-logo';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { checkProStatus, setProStatusForTesting, startFreeTrial, getTrialStatus, canAccessFeatures, getSubscriptionStatus, TrialStatus, checkTrialExpirationAndRedirect } from '@/utils/subscription-utils';
+import { CharismaEntry } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
-import { Alert } from 'react-native';
+import { canAccessFeatures, checkProStatus, checkTrialExpirationAndRedirect, getTrialStatus, setProStatusForTesting, TrialStatus } from '@/utils/subscription-utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
 
@@ -820,7 +820,7 @@ export default function AddEntryScreen() {
           )}
           {isPro && userEmail && (
             <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
-              <Text style={styles.proStatusText}>✨ PRO ACTIVE</Text>
+              <Text style={styles.proStatusText}>PRO</Text>
             </View>
           )}
         </View>

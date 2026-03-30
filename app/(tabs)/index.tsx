@@ -9,14 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -231,11 +231,6 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
           ]}
           onPress={() => router.push('/ai-chat')}
           activeOpacity={0.8}>
-          <IconSymbol
-            name="sparkles"
-            size={16}
-            color="#000000"
-          />
           <Text
             style={[
               styles.subscriptionText,
