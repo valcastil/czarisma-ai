@@ -335,6 +335,12 @@ export const sendMessage = async (
         if (!receiverId || !receiverId.trim()) {
             throw new Error('Receiver ID is required');
         }
+
+        // Validate UUID format to prevent database errors
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(receiverId)) {
+            throw new Error('Invalid receiver ID format. Expected UUID format.');
+        }
         
         if ((!content || !content.trim()) && !attachment) {
             throw new Error('Message must have content or attachment');
@@ -438,6 +444,13 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return [];
+
+        // Validate UUID format to prevent database errors
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(otherUserId)) {
+            console.error('Invalid UUID format for otherUserId:', otherUserId);
+            return [];
+        }
 
         const { data, error } = await supabase
             .from('messages')

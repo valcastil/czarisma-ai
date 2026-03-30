@@ -269,6 +269,11 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
       return selfMsgs;
     }
 
+    // Demo and contact users don't exist in Supabase — return empty
+    if (otherUserId.startsWith('demo_') || otherUserId.startsWith('contact_')) {
+      return [];
+    }
+
     const messages = await SupabaseMessageService.getMessages(otherUserId);
 
     // Mark unread messages as read
@@ -302,6 +307,10 @@ export const subscribeToMessages = (
   otherUserId: string,
   onNewMessage: (message: Message) => void
 ): (() => void) => {
+  // Demo and contact users don't exist in Supabase — no-op subscription
+  if (otherUserId.startsWith('demo_') || otherUserId.startsWith('contact_')) {
+    return () => {};
+  }
   return SupabaseMessageService.subscribeToMessages(otherUserId, onNewMessage);
 };
 
