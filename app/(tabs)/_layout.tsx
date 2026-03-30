@@ -1,0 +1,298 @@
+import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useState, useCallback, useEffect } from 'react';
+import { TouchableOpacity, StyleSheet, View, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialTopTabs } from '@/components/ui/material-top-tabs';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useTheme } from '@/hooks/use-theme';
+import * as Haptics from 'expo-haptics';
+import { getCurrentUser, subscribeToConversations, getUnreadCount } from '@/utils/message-utils';
+
+const ENTRIES_KEY = '@charisma_entries';
+
+function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNewMessages }: any) {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const focusedRouteName = state?.routes?.[state.index]?.name;
+
+  useEffect(() => {
+    if (focusedRouteName === 'messages' && hasNewMessages) {
+      clearNewMessages?.();
+    }
+  }, [focusedRouteName, hasNewMessages, clearNewMessages]);
+
+  return (
+    <View style={[styles.tabBar, {
+      backgroundColor: colors.background,
+      borderTopColor: colors.border,
+      paddingBottom: insets.bottom,
+    }]}>
+      {state.routes.map((route: any, index: number) => {
+        const { options } = descriptors[route.key];
+        const label =
+          options.tabBarLabel !== undefined
+            ? options.tabBarLabel
+            : options.title !== undefined
+              ? options.title
+              : route.name;
+
+        const isFocused = state.index === index;
+        const color = isFocused ? colors.gold : colors.textSecondary;
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+
+          if (!isFocused && !event.defaultPrevented) {
+            // For the explore tab (Add button), we might want specific behavior?
+            // Actually, the original code PUSHED to /onboarding-charisma.
+            // If we nav to the tab, we need to decide if the tab ITSELF redirects or if we intercept here.
+            // Let's intercept "explore" if that's the intention.
+            if (route.name === 'explore') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/onboarding-charisma');
+            } else {
+              if (route.name === 'messages') {
+                clearNewMessages?.();
+              }
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate(route.name, route.params);
+            }
+          }
+        };
+
+        // Special render for "explore" (Middle Button)
+        if (route.name === 'explore') {
+          return (
+            <View key={route.key} style={styles.tabItem}>
+              <TouchableOpacity
+                style={[styles.addButton, { backgroundColor: colors.gold }]}
+                onPress={onPress}
+                activeOpacity={0.8}>
+                <IconSymbol size={32} name="plus" color="#000000" />
+              </TouchableOpacity>
+            </View>
+          );
+        }
+
+        let iconName = "house";
+        if (route.name === 'index') iconName = "house";
+        if (route.name === 'messages') iconName = "message";
+        if (route.name === 'search') iconName = "magnifyingglass";
+        if (route.name === 'profile') iconName = "person";
+
+        return (
+          <TouchableOpacity
+            key={route.key}
+            accessibilityRole="button"
+            accessibilityState={isFocused ? { selected: true } : {}}
+            accessibilityLabel={options.tabBarAccessibilityLabel}
+            testID={options.tabBarTestID}
+            onPress={onPress}
+            style={styles.tabItem}
+          >
+            <View style={styles.tabIconWrap}>
+              <IconSymbol size={24} name={iconName as any} color={color} style={styles.tabIcon} />
+              {route.name === 'messages' && !!hasNewMessages && !isFocused ? (
+                <View style={styles.messageDot} />
+              ) : null}
+            </View>
+            <Text style={[styles.tabLabel, { color }]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+export default function TabLayout() {
+  const [hasEntries, setHasEntries] = useState(false);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+
+  const checkEntries = useCallback(async () => {
+    try {
+      const entriesData = await AsyncStorage.getItem(ENTRIES_KEY);
+      if (entriesData) {
+        const entries = JSON.parse(entriesData);
+        setHasEntries(entries.length > 0);
+      } else {
+        setHasEntries(false);
+      }
+    } catch (error) {
+      console.error('Error checking entries:', error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      checkEntries();
+    }, [checkEntries])
+  );
+
+  // Check for unread messages on initial load and when app comes to foreground
+  const checkUnreadMessages = useCallback(async () => {
+    try {
+      const count = await getUnreadCount();
+      if (count > 0) {
+        setHasNewMessages(true);
+      }
+    } catch (error) {
+      console.error('Error checking unread messages:', error);
+    }
+  }, []);
+
+  // Check unread messages on mount and when tab layout gains focus
+  useFocusEffect(
+    useCallback(() => {
+      checkUnreadMessages();
+    }, [checkUnreadMessages])
+  );
+
+  useEffect(() => {
+    let unsubscribe: undefined | (() => void);
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        if (!user || !isMounted) return;
+
+        // Initial check for unread messages
+        await checkUnreadMessages();
+
+        // Subscribe to real-time conversation updates
+        unsubscribe = subscribeToConversations((conversation) => {
+          if (conversation?.unreadCount && conversation.unreadCount > 0) {
+            setHasNewMessages(true);
+          }
+        });
+      } catch (error) {
+        console.error('Error subscribing to conversations:', error);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      unsubscribe?.();
+    };
+  }, [checkUnreadMessages]);
+
+  return (
+    <MaterialTopTabs
+      tabBar={(props) => (
+        <CustomTabBar
+          {...props}
+          hasNewMessages={hasNewMessages}
+          clearNewMessages={() => setHasNewMessages(false)}
+        />
+      )}
+      tabBarPosition="bottom"
+      screenOptions={{
+        lazy: true,
+        animationEnabled: true,
+        swipeEnabled: true,
+      }}
+    >
+      <MaterialTopTabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+        }}
+      />
+      <MaterialTopTabs.Screen
+        name="messages"
+        options={{
+          title: 'Messages',
+        }}
+      />
+      {/* explore is strictly a placeholder for the button in this logic, 
+          but for swiping order, it will exist as a screen.
+          Ideally we want to SKIP it during swipe or make it a real screen.
+          Users CAN swipe to 'explore' if we leave it here.
+          If we want to avoid swiping to 'explore' (since it pushes a route),
+          we should probably NOT include it as a tab and just render the button overlay?
+          BUT MaterialTopTabs needs the route to exist to map it in the bar easily.
+          
+          Better UX: Make 'explore' a real View (maybe "New Entry") that auto-redirects?
+          OR, simpler: Just let it be a tab that shows "New Entry" screen directly instead of Pushing?
+          
+          The user originally had it strictly as a button. 
+          If I swipe to it, what happens? 
+          For now, I'll map it to a View that redirects on focus if accessed via swipe.
+      */}
+      <MaterialTopTabs.Screen
+        name="explore"
+        options={{
+          title: '',
+        }}
+      />
+      <MaterialTopTabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+        }}
+      />
+      <MaterialTopTabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+        }}
+      />
+    </MaterialTopTabs>
+  );
+}
+
+const styles = StyleSheet.create({
+  tabBar: {
+    flexDirection: 'row',
+    height: 90, // approx 80 + padding
+    borderTopWidth: 1,
+    paddingTop: 8,
+    paddingHorizontal: 12,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  tabIconWrap: {
+    position: 'relative',
+  },
+  tabIcon: {
+    marginTop: 4,
+  },
+  messageDot: {
+    position: 'absolute',
+    top: 0,
+    right: -6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30',
+  },
+  tabLabel: {
+    fontSize: 10,
+    marginTop: 4,
+  },
+  addButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -30, // Float effect
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+});

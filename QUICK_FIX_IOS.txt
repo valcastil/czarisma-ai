@@ -1,0 +1,58 @@
+═══════════════════════════════════════════════════════════════
+  iOS GOOGLE SIGN-IN FIX - "Can't Connect to Server" Error
+═══════════════════════════════════════════════════════════════
+
+PROBLEM: Safari shows "localhost - can't connect to server" after
+         signing in with Google on iOS devices
+
+✅ CODE FIXES APPLIED:
+   - Updated supabase/config.toml
+   - Fixed app/auth-sign-in.tsx
+   - All code changes are COMPLETE
+
+⚠️  ACTION REQUIRED: Update Supabase Dashboard
+
+═══════════════════════════════════════════════════════════════
+STEP 1: Go to Supabase Dashboard
+═══════════════════════════════════════════════════════════════
+
+URL: https://supabase.com/dashboard/project/gdgbuvgmzaqeajwxhldr
+
+Navigate to: Authentication → URL Configuration
+
+═══════════════════════════════════════════════════════════════
+STEP 2: Update Site URL
+═══════════════════════════════════════════════════════════════
+
+Change from: http://127.0.0.1:3000
+Change to:   charismatracker://
+
+═══════════════════════════════════════════════════════════════
+STEP 3: Add Redirect URLs
+═══════════════════════════════════════════════════════════════
+
+Add these URLs (one per line):
+
+charismatracker://auth/callback
+charismatracker://*
+exp://192.168.1.213:8081/--/auth/callback
+exp://192.168.1.213:8081
+exp://localhost:8081/--/auth/callback
+exp://localhost:8081
+http://localhost:8081
+
+⚠️  IMPORTANT: Replace 192.168.1.213 with YOUR IP from Expo terminal!
+    Look for: Metro waiting on exp://YOUR_IP:8081
+
+═══════════════════════════════════════════════════════════════
+STEP 4: Save and Test
+═══════════════════════════════════════════════════════════════
+
+1. Click SAVE in Supabase Dashboard
+2. Restart your app
+3. Test Google Sign-In on iOS
+4. Should redirect back to app (no more localhost error!)
+
+═══════════════════════════════════════════════════════════════
+
+For detailed instructions, see: IOS_REDIRECT_FIX.md
