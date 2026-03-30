@@ -95,7 +95,7 @@ eas build --platform android --profile development
 #### **Test on Android:**
 
 1. **Share a link from any app** (YouTube, Chrome, etc.)
-2. Look for **"Charisma AI"** in the share sheet
+2. Look for **"Charisma Chat"** in the share sheet
 3. Tap it
 4. App should open and show success alert
 5. Link should be saved to database
@@ -104,7 +104,7 @@ eas build --platform android --profile development
 
 1. **Share a link from Safari or any app**
 2. Tap the share button
-3. Look for **"Charisma AI"** in the share sheet
+3. Look for **"Charisma Chat"** in the share sheet
 4. Tap it
 5. App should open and show success alert
 6. Link should be saved to database
@@ -232,25 +232,25 @@ The following errors are expected after creating new files:
 ### **Test 1: Share YouTube Link**
 1. Open YouTube app
 2. Share a video
-3. Select "Charisma AI"
+3. Select "Charisma Chat"
 4. Verify link saved with platform='youtube'
 
 ### **Test 2: Share TikTok Link**
 1. Open TikTok app
 2. Share a video
-3. Select "Charisma AI"
+3. Select "Charisma Chat"
 4. Verify link saved with platform='tiktok'
 
 ### **Test 3: Share Instagram Link**
 1. Open Instagram app
 2. Share a post
-3. Select "Charisma AI"
+3. Select "Charisma Chat"
 4. Verify link saved with platform='instagram'
 
 ### **Test 4: Share Generic Link**
 1. Open browser
 2. Share any URL
-3. Select "Charisma AI"
+3. Select "Charisma Chat"
 4. Verify link saved with platform='web'
 
 ---
