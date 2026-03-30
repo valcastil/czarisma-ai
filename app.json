@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.aiagentmaker.charismachat",
       "buildNumber": "1",
-      "associatedDomains": ["applinks:charismachat.app"],
+      "associatedDomains": [
+        "applinks:charismachat.app"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "This app needs access to your microphone to transcribe voice messages.",
@@ -24,7 +26,9 @@
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to send and receive images and videos in messages.",
         "NSCameraUsageDescription": "This app needs access to your camera to take photos and videos for messages.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos and videos.",
-        "NSUserActivityTypes": ["NSUserActivityTypeBrowsingWeb"]
+        "NSUserActivityTypes": [
+          "NSUserActivityTypeBrowsingWeb"
+        ]
       }
     },
     "android": {
@@ -44,7 +48,10 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_AUDIO"
       ],
       "intentFilters": [
         {
@@ -60,11 +67,16 @@
               "scheme": "charismachat"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "SEND",
-          "category": ["DEFAULT"],
+          "category": [
+            "DEFAULT"
+          ],
           "data": [
             {
               "mimeType": "text/plain"
@@ -118,7 +130,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": ""
+        "projectId": "41fc9874-9a30-4bf1-9523-383d1480ed52"
       }
     }
   }
