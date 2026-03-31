@@ -12,30 +12,30 @@ import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { formatCharismaEntryForMessage } from '@/utils/charisma-share-utils';
 import {
-  getCurrentUser,
-  getMessages,
-  sendMessage,
-  subscribeToMessages,
-  updateConversation,
-  updateMessageReactions,
+    getCurrentUser,
+    getMessages,
+    sendMessage,
+    subscribeToMessages,
+    updateConversation,
+    updateMessageReactions,
 } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 export default function ChatScreen() {
@@ -76,6 +76,7 @@ export default function ChatScreen() {
   const [colorPickerMode, setColorPickerMode] = useState<'sent' | 'received'>('sent');
 
   const flatListRef = useRef<FlatList>(null);
+  const initialScrollDone = useRef(false);
 
   useEffect(() => {
     initializeChat();
@@ -162,8 +163,8 @@ export default function ChatScreen() {
   };
 
   useEffect(() => {
-    // Scroll to bottom when new messages arrive
-    if (messages.length > 0) {
+    // Only animate scroll for new messages after the initial load
+    if (messages.length > 0 && initialScrollDone.current) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -171,9 +172,9 @@ export default function ChatScreen() {
   }, [messages]);
 
   const handleContentSizeChange = () => {
-    // Auto-scroll when content size changes (new messages)
-    if (messages.length > 0) {
-      flatListRef.current?.scrollToEnd({ animated: true });
+    if (messages.length > 0 && !initialScrollDone.current) {
+      // Keep jumping to bottom instantly as FlatList renders items in batches
+      flatListRef.current?.scrollToEnd({ animated: false });
     }
   };
 
@@ -203,6 +204,10 @@ export default function ChatScreen() {
       Alert.alert('Error', 'Failed to load chat');
     } finally {
       setLoading(false);
+      // Allow FlatList to finish rendering, then switch to animated scrolls for new messages
+      setTimeout(() => {
+        initialScrollDone.current = true;
+      }, 800);
     }
   };
 

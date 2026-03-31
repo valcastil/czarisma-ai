@@ -5,7 +5,7 @@ import { initializeGemini } from '@/lib/gemini';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -106,6 +106,7 @@ export default function AIChatScreen() {
     const [activePaymentTab, setActivePaymentTab] = useState<'e&' | 'gcash'>('e&');
 
     const isMounted = React.useRef(true);
+    const scrollViewRef = useRef<ScrollView>(null);
 
     const bottomInset = Math.max(insets.bottom, 10);
 
@@ -457,9 +458,11 @@ export default function AIChatScreen() {
 
             <WhatsAppBackground>
                 <ScrollView 
+                    ref={scrollViewRef}
                     style={styles.messagesContainer} 
                     contentContainerStyle={styles.messagesContent}
                     keyboardShouldPersistTaps="handled"
+                    onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
                 >
                     {messages.map((msg) => (
                         <View key={msg.id} style={[
