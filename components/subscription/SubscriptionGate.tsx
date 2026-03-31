@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import { checkProSubscription, showPaywall } from '@/lib/revenuecat';
-import { useTheme } from '@/hooks/use-theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useTheme } from '@/hooks/use-theme';
+import { checkProSubscription, showPaywall } from '@/lib/revenuecat';
+import { hasAccess } from '@/utils/subscription-utils';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface SubscriptionGateProps {
   children: React.ReactNode;
@@ -17,12 +18,16 @@ interface SubscriptionGateProps {
  * 
  * Wraps content that requires a Pro subscription.
  * Shows upgrade prompt if user is not subscribed.
+ * If FREE_MODE: signed-up users pass, non-signed-up users pass during trial.
  * 
  * @example
  * <SubscriptionGate featureName="Advanced Analytics">
  *   <AdvancedAnalyticsScreen />
  * </SubscriptionGate>
  */
+// FREE MODE: Uses auth + local trial check instead of RevenueCat
+const FREE_MODE = true;
+
 export function SubscriptionGate({
   children,
   featureName = 'Premium Feature',
@@ -35,8 +40,24 @@ export function SubscriptionGate({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkSubscription();
+    if (FREE_MODE) {
+      checkFreeAccess();
+    } else {
+      checkSubscription();
+    }
   }, []);
+
+  const checkFreeAccess = async () => {
+    try {
+      const access = await hasAccess();
+      setIsPro(access);
+    } catch (error) {
+      console.error('Error checking free access:', error);
+      setIsPro(false);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const checkSubscription = async () => {
     try {

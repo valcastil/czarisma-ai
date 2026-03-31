@@ -3,16 +3,88 @@ import { WhatsAppBackground } from '@/components/ui/whatsapp-background';
 import { useTheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
 import { CommonActions, useNavigation } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AI_CHAT_STORAGE_KEY = '@charisma_ai_chat_history';
 const NEXT_GREETING_KEY = '@charisma_next_greeting';
+const AI_USAGE_KEY = '@ai_chat_usage';
+const AI_FIRST_USE_KEY = '@ai_chat_first_use';
+
+// Daily message limit for ALL users before showing subscribe prompt
+const DAILY_MESSAGE_LIMIT = 15;
+// Maximum number of days a user can use AI chat for free
+const MAX_FREE_DAYS = 7;
+
+// Payment link — replace with your actual payment URL
+const PAYMENT_URL = 'https://buy.stripe.com/your_payment_link_here';
+
+/**
+ * Get today's date string for daily counter reset
+ */
+const getTodayKey = () => new Date().toISOString().split('T')[0];
+
+/**
+ * Get current daily usage count
+ */
+const getUsageCount = async (): Promise<number> => {
+    try {
+        const data = await AsyncStorage.getItem(AI_USAGE_KEY);
+        if (!data) return 0;
+        const parsed = JSON.parse(data);
+        if (parsed.date !== getTodayKey()) return 0; // Reset for new day
+        return parsed.count || 0;
+    } catch {
+        return 0;
+    }
+};
+
+/**
+ * Increment daily usage count
+ */
+const incrementUsage = async (): Promise<number> => {
+    try {
+        const today = getTodayKey();
+        const data = await AsyncStorage.getItem(AI_USAGE_KEY);
+        let count = 1;
+        if (data) {
+            const parsed = JSON.parse(data);
+            count = parsed.date === today ? (parsed.count || 0) + 1 : 1;
+        }
+        await AsyncStorage.setItem(AI_USAGE_KEY, JSON.stringify({ date: today, count }));
+        return count;
+    } catch {
+        return 0;
+    }
+};
+
+/**
+ * Get how many days the user has been using AI chat.
+ * Returns { daysUsed, daysRemaining, isExpired }
+ */
+const getFreePeriodStatus = async (): Promise<{ daysUsed: number; daysRemaining: number; isExpired: boolean }> => {
+    try {
+        let firstUse = await AsyncStorage.getItem(AI_FIRST_USE_KEY);
+        if (!firstUse) {
+            // First time using AI chat — record the date
+            const now = Date.now();
+            await AsyncStorage.setItem(AI_FIRST_USE_KEY, now.toString());
+            return { daysUsed: 1, daysRemaining: MAX_FREE_DAYS - 1, isExpired: false };
+        }
+        const startTime = parseInt(firstUse, 10);
+        const daysUsed = Math.floor((Date.now() - startTime) / (24 * 60 * 60 * 1000)) + 1;
+        const daysRemaining = Math.max(0, MAX_FREE_DAYS - daysUsed);
+        return { daysUsed, daysRemaining, isExpired: daysUsed > MAX_FREE_DAYS };
+    } catch {
+        return { daysUsed: 0, daysRemaining: MAX_FREE_DAYS, isExpired: false };
+    }
+};
 
 const INITIAL_GREETINGS = [
     "Hello! I am your Charisma Chat. How can I help you improve your social skills today?",
@@ -30,8 +102,7 @@ export default function AIChatScreen() {
     const [message, setMessage] = useState('');
     const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
     const [messages, setMessages] = useState<{ id: string; text: string; isUser: boolean }[]>([]);
-
-
+    const [showQRModal, setShowQRModal] = useState(false);
 
     const isMounted = React.useRef(true);
 
@@ -49,6 +120,49 @@ export default function AIChatScreen() {
             }
         };
     }, []);
+
+    /**
+     * Check usage limits for ALL users:
+     * 1. 7-day free period — after that, must subscribe
+     * 2. 15 messages/day within the free period
+     * Returns true if the user can send a message, false if blocked.
+     */
+    const checkUsageLimit = async (): Promise<boolean> => {
+        // Check 7-day free period first
+        const period = await getFreePeriodStatus();
+        if (period.isExpired) {
+            Alert.alert(
+                '⏰ Free trial ended',
+                'Your 7-day free AI chat access has ended. Subscribe now to continue chatting with your Charisma AI!',
+                [
+                    { text: 'Maybe Later', style: 'cancel' },
+                    {
+                        text: 'Subscribe Now',
+                        onPress: () => setShowQRModal(true),
+                    },
+                ]
+            );
+            return false;
+        }
+
+        // Check daily message limit
+        const count = await getUsageCount();
+        if (count >= DAILY_MESSAGE_LIMIT) {
+            Alert.alert(
+                '💬 Daily limit reached',
+                `You've used your ${DAILY_MESSAGE_LIMIT} free messages for today (Day ${period.daysUsed} of ${MAX_FREE_DAYS}). Come back tomorrow or subscribe for unlimited access!`,
+                [
+                    { text: 'OK', style: 'cancel' },
+                    {
+                        text: 'Subscribe Now',
+                        onPress: () => setShowQRModal(true),
+                    },
+                ]
+            );
+            return false;
+        }
+        return true;
+    };
 
     const speakText = (text: string) => {
         if (isSpeakerEnabled && isMounted.current) {
@@ -167,6 +281,13 @@ export default function AIChatScreen() {
     const handleSend = async () => {
         if (!message.trim() || isLoading) return;
 
+        // Check usage limit before sending
+        const canSend = await checkUsageLimit();
+        if (!canSend) return;
+
+        // Increment usage counter
+        await incrementUsage();
+
         const userMessageText = message.trim();
         setMessage('');
         setIsLoading(true);
@@ -233,12 +354,52 @@ export default function AIChatScreen() {
         }
     };
 
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(PAYMENT_URL)}`;
+
     return (
         <KeyboardAvoidingView
             style={[styles.container, { backgroundColor: colors.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={0}
         >
+            {/* QR Code Payment Modal */}
+            <Modal
+                visible={showQRModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowQRModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.modalTitle, { color: colors.text }]}>Subscribe to Charisma Chat</Text>
+                        <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                            Scan the QR code below to complete your payment and unlock unlimited AI chat.
+                        </Text>
+
+                        <View style={styles.qrContainer}>
+                            <Image
+                                source={{ uri: qrCodeUrl }}
+                                style={styles.qrImage}
+                                resizeMode="contain"
+                            />
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.paymentLinkButton, { backgroundColor: colors.gold }]}
+                            onPress={() => Linking.openURL(PAYMENT_URL)}
+                        >
+                            <Text style={styles.paymentLinkText}>Open Payment Link</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.modalCloseButton}
+                            onPress={() => setShowQRModal(false)}
+                        >
+                            <Text style={[styles.modalCloseText, { color: colors.textSecondary }]}>Close</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
             <View style={styles.header}>
                 <TouchableOpacity
                     onPress={() => {
@@ -321,6 +482,60 @@ export default function AIChatScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    modalContent: {
+        width: '100%',
+        maxWidth: 360,
+        borderRadius: 24,
+        padding: 28,
+        alignItems: 'center',
+        gap: 12,
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    qrContainer: {
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 16,
+        marginVertical: 12,
+    },
+    qrImage: {
+        width: 200,
+        height: 200,
+    },
+    paymentLinkButton: {
+        width: '100%',
+        paddingVertical: 14,
+        borderRadius: 14,
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    paymentLinkText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#000',
+    },
+    modalCloseButton: {
+        paddingVertical: 10,
+    },
+    modalCloseText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
     header: {
         flexDirection: 'row',

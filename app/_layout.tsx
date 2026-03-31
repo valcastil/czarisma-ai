@@ -12,6 +12,7 @@ import { initializeGemini } from '@/lib/gemini';
 import { initializeRevenueCat } from '@/lib/revenuecat';
 import { initializeSupabase, supabase } from '@/lib/supabase';
 import { initializeVexo } from '@/lib/vexo-analytics';
+import { checkTrialExpirationAndRedirect } from '@/utils/subscription-utils';
 
 // Stripe publishable key - replace with your actual key
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here';
@@ -25,15 +26,17 @@ function RootLayoutContent() {
   const colors = Colors[colorScheme];
   const router = useRouter();
 
-  // Check auth state after navigation is ready
+  // Check auth state and trial status after navigation is ready
+  // Signed-in users: free access. Non-signed-in: 30-day trial, then must sign up.
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuthAndTrial = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        router.replace('/auth-sign-in');
+        // Not signed in — check if local trial is still active
+        await checkTrialExpirationAndRedirect(router);
       }
     };
-    checkAuth();
+    checkAuthAndTrial();
   }, []);
 
   const customDarkTheme = {

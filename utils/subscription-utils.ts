@@ -4,7 +4,68 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const PRO_STATUS_KEY = '@pro_status';
 const TRIAL_START_KEY = '@trial_start_date';
 const PRO_EMAIL_KEY = '@pro_email';
+const LOCAL_TRIAL_START_KEY = '@local_trial_start';
 const TRIAL_DURATION_DAYS = 30;
+
+// FREE MODE: Signed-up users get free access. Non-signed-up users get a 30-day local trial.
+// After trial expires, the user must sign up.
+const FREE_MODE = true;
+
+/**
+ * Check if user is signed in (has an active Supabase session)
+ */
+const isUserSignedIn = async (): Promise<boolean> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Get local trial status for non-signed-up users.
+ * Trial starts on first app open and lasts 30 days.
+ */
+export const getLocalTrialStatus = async (): Promise<TrialStatus> => {
+  try {
+    let trialStart = await AsyncStorage.getItem(LOCAL_TRIAL_START_KEY);
+    if (!trialStart) {
+      // First time opening the app — start the trial now
+      const now = Date.now();
+      await AsyncStorage.setItem(LOCAL_TRIAL_START_KEY, now.toString());
+      trialStart = now.toString();
+    }
+
+    const startTime = parseInt(trialStart, 10);
+    const endTime = startTime + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const daysRemaining = Math.max(0, Math.ceil((endTime - now) / (24 * 60 * 60 * 1000)));
+    const isExpired = now >= endTime;
+
+    return {
+      isTrialActive: !isExpired,
+      trialStartDate: startTime,
+      trialEndDate: endTime,
+      daysRemaining: isExpired ? 0 : daysRemaining,
+      isExpired,
+    };
+  } catch (error) {
+    console.error('Error getting local trial status:', error);
+    return { isTrialActive: true, trialStartDate: Date.now(), trialEndDate: Date.now() + TRIAL_DURATION_DAYS * 86400000, daysRemaining: TRIAL_DURATION_DAYS, isExpired: false };
+  }
+};
+
+/**
+ * Determine if the user has access:
+ * - Signed-in users always have free access
+ * - Non-signed-in users have access only during the 30-day local trial
+ */
+export const hasAccess = async (): Promise<boolean> => {
+  if (await isUserSignedIn()) return true;
+  const trial = await getLocalTrialStatus();
+  return trial.isTrialActive;
+};
 
 export interface ProStatus {
   isPro: boolean;
@@ -25,6 +86,7 @@ export interface TrialStatus {
  * the latest subscription state.
  */
 export const refreshProStatus = async (): Promise<boolean> => {
+  if (FREE_MODE) return await hasAccess();
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -57,6 +119,7 @@ export const refreshProStatus = async (): Promise<boolean> => {
  * Use this for premium-only features like entry editing
  */
 export const checkPaidProStatus = async (): Promise<boolean> => {
+  if (FREE_MODE) return await hasAccess();
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -85,6 +148,7 @@ export const checkPaidProStatus = async (): Promise<boolean> => {
  * Check if user has an active Pro subscription (includes trial)
  */
 export const checkProStatus = async (): Promise<boolean> => {
+  if (FREE_MODE) return await hasAccess();
   try {
     // First check local storage for cached status
     const cachedStatus = await AsyncStorage.getItem(PRO_STATUS_KEY);
@@ -229,8 +293,9 @@ export const PRO_CHARISMA_IDS = [
 /**
  * Check if a charisma ID requires Pro subscription
  */
-export const isProCharisma = (charismaId: string): boolean => {
-  return PRO_CHARISMA_IDS.includes(charismaId);
+export const isProCharisma = (_charismaId: string): boolean => {
+  if (FREE_MODE) return false;
+  return PRO_CHARISMA_IDS.includes(_charismaId);
 };
 
 /**
@@ -329,6 +394,13 @@ const getCurrentUserEmail = async (): Promise<string | null> => {
  * Also handles automatic redirect when trial expires
  */
 export const canAccessFeatures = async (router?: any): Promise<boolean> => {
+  if (FREE_MODE) {
+    const access = await hasAccess();
+    if (!access && router) {
+      router.push('/auth-sign-in');
+    }
+    return access;
+  }
   try {
     const isPro = await checkProStatus();
     if (!isPro && router) {
@@ -345,6 +417,7 @@ export const canAccessFeatures = async (router?: any): Promise<boolean> => {
  * Check if a specific user has valid trial or Pro subscription
  */
 export const hasValidSubscription = async (userId: string): Promise<boolean> => {
+  if (FREE_MODE) return await hasAccess();
   try {
     const { data: { session } } = await supabase.auth.getSession();
 
@@ -452,6 +525,15 @@ export const getUsersWithValidSubscriptions = async (users: any[]): Promise<any[
  * Call this on app startup and major screen navigation
  */
 export const checkTrialExpirationAndRedirect = async (router: any): Promise<void> => {
+  if (FREE_MODE) {
+    const signedIn = await isUserSignedIn();
+    if (signedIn) return; // Signed-in users always have access
+    const trial = await getLocalTrialStatus();
+    if (trial.isExpired) {
+      router.replace('/auth-sign-in');
+    }
+    return;
+  }
   try {
     const isPro = await checkProStatus();
     if (!isPro) return;
@@ -491,6 +573,19 @@ export const getSubscriptionInfo = async (): Promise<{
   statusMessage: string;
   userEmail: string | null;
 }> => {
+  if (FREE_MODE) {
+    const userEmail = await getCurrentUserEmail();
+    const signedIn = await isUserSignedIn();
+    if (signedIn) {
+      return { isPro: true, isTrialActive: false, daysRemaining: null, statusMessage: 'Free Access', userEmail };
+    }
+    // Non-signed-in user: show local trial status
+    const trial = await getLocalTrialStatus();
+    if (trial.isExpired) {
+      return { isPro: false, isTrialActive: false, daysRemaining: 0, statusMessage: 'Trial Expired - Sign Up Free', userEmail: null };
+    }
+    return { isPro: true, isTrialActive: true, daysRemaining: trial.daysRemaining, statusMessage: `${trial.daysRemaining} days left - Sign up for free access`, userEmail: null };
+  }
   try {
     const isPro = await checkProStatus();
     const trialStatus = await getTrialStatus();

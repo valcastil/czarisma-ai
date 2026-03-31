@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useTheme } from '@/hooks/use-theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useTheme } from '@/hooks/use-theme';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    Alert,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 export function SubscriptionStatusBanner() {
   const router = useRouter();
@@ -39,13 +39,8 @@ export function SubscriptionStatusBanner() {
     return null;
   }
 
-  // Don't show banner for active Pro users
-  if (subscriptionInfo.isPro) {
-    return null;
-  }
-
-  // Don't show banner if no trial is active
-  if (!subscriptionInfo.isTrialActive) {
+  // Don't show banner for signed-in users with free access (no trial message needed)
+  if (subscriptionInfo.isPro && !subscriptionInfo.isTrialActive) {
     return null;
   }
 
@@ -53,14 +48,14 @@ export function SubscriptionStatusBanner() {
     if (subscriptionInfo.daysRemaining !== null && subscriptionInfo.daysRemaining <= 3) {
       Alert.alert(
         'Trial Ending Soon',
-        `Your free trial ends in ${subscriptionInfo.daysRemaining} day${subscriptionInfo.daysRemaining === 1 ? '' : 's'}. Upgrade now to continue enjoying all Pro features!`,
+        `Your free trial ends in ${subscriptionInfo.daysRemaining} day${subscriptionInfo.daysRemaining === 1 ? '' : 's'}. Sign up now to keep free access to all features!`,
         [
           { text: 'Later', style: 'cancel' },
-          { text: 'Upgrade Now', onPress: () => router.push('/subscription') },
+          { text: 'Sign Up Free', onPress: () => router.push('/auth-sign-in') },
         ]
       );
     } else {
-      router.push('/subscription');
+      router.push('/auth-sign-in');
     }
   };
 
@@ -74,17 +69,20 @@ export function SubscriptionStatusBanner() {
   };
 
   const getBannerMessage = () => {
+    if (!subscriptionInfo.isPro && subscriptionInfo.daysRemaining === 0) {
+      return '⚠️ Trial expired! Sign up free to continue.';
+    }
     if (subscriptionInfo.daysRemaining !== null) {
       if (subscriptionInfo.daysRemaining <= 1) {
-        return '⚠️ Trial ends tomorrow! Upgrade now to keep Pro features.';
+        return '⚠️ Trial ends tomorrow! Sign up free to keep access.';
       }
       if (subscriptionInfo.daysRemaining <= 3) {
-        return `⏰ Only ${subscriptionInfo.daysRemaining} days left in trial. Upgrade soon!`;
+        return `⏰ Only ${subscriptionInfo.daysRemaining} days left. Sign up free!`;
       }
       if (subscriptionInfo.daysRemaining <= 7) {
-        return `${subscriptionInfo.daysRemaining} days left in free trial`;
+        return `${subscriptionInfo.daysRemaining} days left — Sign up for free access`;
       }
-      return `${subscriptionInfo.daysRemaining} days left in trial`;
+      return `${subscriptionInfo.daysRemaining} days left in trial — Sign up free`;
     }
     return 'Free trial active';
   };
