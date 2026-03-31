@@ -3,7 +3,6 @@ import { WhatsAppBackground } from '@/components/ui/whatsapp-background';
 import { useTheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
 import { CommonActions, useNavigation } from '@react-navigation/native';
-import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useState } from 'react';
@@ -22,8 +21,9 @@ const DAILY_MESSAGE_LIMIT = 15;
 // Maximum number of days a user can use AI chat for free
 const MAX_FREE_DAYS = 7;
 
-// Payment link — replace with your actual payment URL
-const PAYMENT_URL = 'https://buy.stripe.com/your_payment_link_here';
+// Payment QR code images — local assets
+const QR_E_AND_MONEY = require('../assets/images/payment/qr-e-and-money.png');
+const QR_GCASH = require('../assets/images/payment/qr-gcash.png');
 
 /**
  * Get today's date string for daily counter reset
@@ -103,6 +103,7 @@ export default function AIChatScreen() {
     const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
     const [messages, setMessages] = useState<{ id: string; text: string; isUser: boolean }[]>([]);
     const [showQRModal, setShowQRModal] = useState(false);
+    const [activePaymentTab, setActivePaymentTab] = useState<'e&' | 'gcash'>('e&');
 
     const isMounted = React.useRef(true);
 
@@ -354,15 +355,13 @@ export default function AIChatScreen() {
         }
     };
 
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(PAYMENT_URL)}`;
-
     return (
         <KeyboardAvoidingView
             style={[styles.container, { backgroundColor: colors.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={0}
         >
-            {/* QR Code Payment Modal */}
+            {/* QR Code Payment Modal — Two Payment Channels */}
             <Modal
                 visible={showQRModal}
                 transparent
@@ -373,23 +372,51 @@ export default function AIChatScreen() {
                     <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
                         <Text style={[styles.modalTitle, { color: colors.text }]}>Subscribe to Charisma Chat</Text>
                         <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-                            Scan the QR code below to complete your payment and unlock unlimited AI chat.
+                            Choose a payment channel and scan the QR code to transfer payment.
                         </Text>
 
+                        {/* Payment Channel Tabs */}
+                        <View style={styles.tabRow}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.tab,
+                                    activePaymentTab === 'e&' && [styles.tabActive, { borderColor: colors.gold }],
+                                ]}
+                                onPress={() => setActivePaymentTab('e&')}
+                            >
+                                <Text style={[
+                                    styles.tabText,
+                                    { color: activePaymentTab === 'e&' ? colors.gold : colors.textSecondary },
+                                ]}>e& money</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.tab,
+                                    activePaymentTab === 'gcash' && [styles.tabActive, { borderColor: '#007AFF' }],
+                                ]}
+                                onPress={() => setActivePaymentTab('gcash')}
+                            >
+                                <Text style={[
+                                    styles.tabText,
+                                    { color: activePaymentTab === 'gcash' ? '#007AFF' : colors.textSecondary },
+                                ]}>GCash</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* QR Code Display */}
                         <View style={styles.qrContainer}>
                             <Image
-                                source={{ uri: qrCodeUrl }}
+                                source={activePaymentTab === 'e&' ? QR_E_AND_MONEY : QR_GCASH}
                                 style={styles.qrImage}
                                 resizeMode="contain"
                             />
                         </View>
 
-                        <TouchableOpacity
-                            style={[styles.paymentLinkButton, { backgroundColor: colors.gold }]}
-                            onPress={() => Linking.openURL(PAYMENT_URL)}
-                        >
-                            <Text style={styles.paymentLinkText}>Open Payment Link</Text>
-                        </TouchableOpacity>
+                        <Text style={[styles.paymentNote, { color: colors.textSecondary }]}>
+                            {activePaymentTab === 'e&'
+                                ? 'Scan with e& money app to transfer'
+                                : 'Scan with GCash app to transfer via InstaPay'}
+                        </Text>
 
                         <TouchableOpacity
                             style={styles.modalCloseButton}
@@ -508,30 +535,45 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 20,
     },
+    tabRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 4,
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: 'transparent',
+        backgroundColor: 'rgba(128,128,128,0.1)',
+        alignItems: 'center',
+    },
+    tabActive: {
+        backgroundColor: 'rgba(244,197,66,0.1)',
+    },
+    tabText: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
     qrContainer: {
         backgroundColor: '#FFFFFF',
         padding: 16,
         borderRadius: 16,
-        marginVertical: 12,
+        marginVertical: 8,
     },
     qrImage: {
-        width: 200,
-        height: 200,
+        width: 220,
+        height: 220,
     },
-    paymentLinkButton: {
-        width: '100%',
-        paddingVertical: 14,
-        borderRadius: 14,
-        alignItems: 'center',
-        marginTop: 4,
-    },
-    paymentLinkText: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#000',
+    paymentNote: {
+        fontSize: 13,
+        textAlign: 'center',
+        lineHeight: 18,
     },
     modalCloseButton: {
         paddingVertical: 10,
+        marginTop: 4,
     },
     modalCloseText: {
         fontSize: 14,
