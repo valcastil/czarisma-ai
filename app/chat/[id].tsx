@@ -12,30 +12,30 @@ import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { formatCharismaEntryForMessage } from '@/utils/charisma-share-utils';
 import {
-    getCurrentUser,
-    getMessages,
-    sendMessage,
-    subscribeToMessages,
-    updateConversation,
-    updateMessageReactions,
+  getCurrentUser,
+  getMessages,
+  sendMessage,
+  subscribeToMessages,
+  updateConversation,
+  updateMessageReactions,
 } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function ChatScreen() {
@@ -76,7 +76,8 @@ export default function ChatScreen() {
   const [colorPickerMode, setColorPickerMode] = useState<'sent' | 'received'>('sent');
 
   const flatListRef = useRef<FlatList>(null);
-  const initialScrollDone = useRef(false);
+
+  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
   useEffect(() => {
     initializeChat();
@@ -162,21 +163,6 @@ export default function ChatScreen() {
     }
   };
 
-  useEffect(() => {
-    // Only animate scroll for new messages after the initial load
-    if (messages.length > 0 && initialScrollDone.current) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages]);
-
-  const handleContentSizeChange = () => {
-    if (messages.length > 0 && !initialScrollDone.current) {
-      // Keep jumping to bottom instantly as FlatList renders items in batches
-      flatListRef.current?.scrollToEnd({ animated: false });
-    }
-  };
 
   const initializeChat = async () => {
     try {
@@ -204,10 +190,6 @@ export default function ChatScreen() {
       Alert.alert('Error', 'Failed to load chat');
     } finally {
       setLoading(false);
-      // Allow FlatList to finish rendering, then switch to animated scrolls for new messages
-      setTimeout(() => {
-        initialScrollDone.current = true;
-      }, 800);
     }
   };
 
@@ -632,7 +614,11 @@ export default function ChatScreen() {
     });
   };
 
-  const renderMessageItem = ({ item }: { item: Message }) => {
+  const renderMessageItem = ({ item, index }: { item: Message; index: number }) => {
+    // Date separator: show above the first message of each date group
+    // In inverted list, index+1 is the visually-above (older) item
+    const nextItem = reversedMessages[index + 1];
+    const showDateSeparator = !nextItem || nextItem.date !== item.date;
     const isFromCurrentUser = item.isFromCurrentUser;
     const isForwarded = item.content.startsWith('📩 Forwarded from');
     const showActions = selectedMessageId === item.id;
@@ -703,6 +689,8 @@ export default function ChatScreen() {
     };
 
     return (
+      <>
+      {showDateSeparator && renderDateSeparator(item.date)}
       <TouchableOpacity
         onLongPress={() => setReactionMessageId(item.id)}
         delayLongPress={500}
@@ -841,6 +829,7 @@ export default function ChatScreen() {
           )}
         </View>
       </TouchableOpacity>
+      </>
     );
   };
 
@@ -921,14 +910,12 @@ export default function ChatScreen() {
         {/* Messages List */}
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={reversedMessages}
           renderItem={renderMessageItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={handleContentSizeChange}
-          onLayout={handleContentSizeChange}
-          maintainVisibleContentPosition={undefined}
+          inverted
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <IconSymbol size={64} name="message" color={colors.textSecondary} />
