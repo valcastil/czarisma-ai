@@ -9,12 +9,12 @@ import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Image,
+    Linking,
     ScrollView,
     Share,
     StyleSheet,
@@ -125,12 +125,23 @@ export default function HomeScreen() {
     );
   };
 
+  const handleShareLink = async (link: SharedLink) => {
+    try {
+      const message = `Check out this ${link.label}: ${link.url}`;
+      await Share.share({ message });
+    } catch (error) {
+      console.error('Error sharing link:', error);
+    }
+  };
+
   const handleOpenLink = async (url: string) => {
     try {
-      await WebBrowser.openBrowserAsync(url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-        controlsColor: colors.gold,
-      });
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'No app available to open this link');
+      }
     } catch {
       Alert.alert('Error', 'Could not open link');
     }
@@ -283,41 +294,58 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
               const platformColor = getPlatformColor(link.platform);
               const emoji = getPlatformEmoji(link.platform);
               return (
-                <TouchableOpacity
-                  key={link.id}
-                  style={[styles.linkCard, { backgroundColor: colors.card }]}
-                  onPress={() => handleOpenLink(link.url)}
-                  onLongPress={() => handleDeleteLink(link.id)}
-                  activeOpacity={0.7}>
-                  {/* Thumbnail */}
-                  {link.thumbnail ? (
-                    <Image
-                      source={{ uri: link.thumbnail }}
-                      style={styles.linkThumbnail}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.linkThumbnailPlaceholder, { backgroundColor: platformColor + '15' }]}>
-                      <Text style={styles.linkPlaceholderEmoji}>{emoji}</Text>
-                    </View>
-                  )}
-                  {/* Link Info */}
-                  <View style={styles.linkInfo}>
-                    <View style={[styles.linkPlatformTag, { backgroundColor: platformColor + '20' }]}>
-                      <Text style={styles.linkPlatformEmoji}>{emoji}</Text>
-                      <Text style={[styles.linkPlatformLabel, { color: platformColor }]}>{link.label}</Text>
-                    </View>
-                    <Text style={[styles.linkUrl, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {link.url}
-                    </Text>
-                    <View style={styles.linkFooter}>
-                      <Text style={[styles.linkTime, { color: colors.textSecondary }]}>
-                        {link.date} {link.time}
+                <View key={link.id} style={[styles.linkCard, { backgroundColor: colors.card }]}>
+                  <TouchableOpacity
+                    onPress={() => handleOpenLink(link.url)}
+                    activeOpacity={0.7}>
+                    {/* Thumbnail */}
+                    {link.thumbnail ? (
+                      <Image
+                        source={{ uri: link.thumbnail }}
+                        style={styles.linkThumbnail}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.linkThumbnailPlaceholder, { backgroundColor: platformColor + '15' }]}>
+                        <Text style={styles.linkPlaceholderEmoji}>{emoji}</Text>
+                      </View>
+                    )}
+                    {/* Link Info */}
+                    <View style={styles.linkInfo}>
+                      <View style={[styles.linkPlatformTag, { backgroundColor: platformColor + '20' }]}>
+                        <Text style={styles.linkPlatformEmoji}>{emoji}</Text>
+                        <Text style={[styles.linkPlatformLabel, { color: platformColor }]}>{link.label}</Text>
+                      </View>
+                      <Text style={[styles.linkUrl, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {link.url}
                       </Text>
-                      <IconSymbol size={14} name="arrow.up.right" color={colors.gold} />
+                      <View style={styles.linkFooter}>
+                        <Text style={[styles.linkTime, { color: colors.textSecondary }]}>
+                          {link.date} {link.time}
+                        </Text>
+                        <IconSymbol size={14} name="arrow.up.right" color={colors.gold} />
+                      </View>
                     </View>
+                  </TouchableOpacity>
+                  {/* Action Buttons */}
+                  <View style={[styles.linkActions, { borderTopColor: colors.border }]}>
+                    <TouchableOpacity
+                      style={styles.linkActionButton}
+                      onPress={() => handleShareLink(link)}
+                      activeOpacity={0.7}>
+                      <IconSymbol size={18} name="square.and.arrow.up" color={colors.gold} />
+                      <Text style={[styles.linkActionText, { color: colors.gold }]}>Share</Text>
+                    </TouchableOpacity>
+                    <View style={[styles.linkActionDivider, { backgroundColor: colors.border }]} />
+                    <TouchableOpacity
+                      style={styles.linkActionButton}
+                      onPress={() => handleDeleteLink(link.id)}
+                      activeOpacity={0.7}>
+                      <IconSymbol size={18} name="trash" color="#FF3B30" />
+                      <Text style={[styles.linkActionText, { color: '#FF3B30' }]}>Delete</Text>
+                    </TouchableOpacity>
                   </View>
-                </TouchableOpacity>
+                </View>
               );
             })}
           </View>
@@ -530,6 +558,27 @@ const styles = StyleSheet.create({
   },
   linkTime: {
     fontSize: 11,
+  },
+  linkActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    marginTop: 8,
+  },
+  linkActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
+  },
+  linkActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  linkActionDivider: {
+    width: 1,
+    height: '100%',
   },
   // Charisma Entry Card Styles
   entryCard: {
