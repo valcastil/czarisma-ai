@@ -1,7 +1,7 @@
 import { CharismaEntry, UserProfile, UserStats } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/utils/logger';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SecureStorage } from '@/utils/secure-storage';
 
 const PROFILE_KEY = '@charisma_profile';
 const ENTRIES_KEY = '@charisma_entries';
@@ -12,12 +12,12 @@ const USER_COUNTER_KEY = '@charisma_user_counter';
 // Generate serial username based on user count
 const generateSerialUsername = async (): Promise<string> => {
   try {
-    const counterData = await AsyncStorage.getItem(USER_COUNTER_KEY);
+    const counterData = await SecureStorage.getItem(USER_COUNTER_KEY);
     let userCount = counterData ? parseInt(counterData, 10) : 0;
     userCount += 1; // Increment for new user
 
     // Save the updated count
-    await AsyncStorage.setItem(USER_COUNTER_KEY, userCount.toString());
+    await SecureStorage.setItem(USER_COUNTER_KEY, userCount.toString());
 
     // Generate username with 7-digit padding (e.g., user_0000001)
     const username = `user_${userCount.toString().padStart(7, '0')}`;
@@ -79,7 +79,7 @@ export const createDefaultProfile = async (): Promise<UserProfile> => {
 
 export const getProfile = async (): Promise<UserProfile> => {
   try {
-    const profileData = await AsyncStorage.getItem(PROFILE_KEY);
+    const profileData = await SecureStorage.getItem(PROFILE_KEY);
     if (profileData) {
       const parsedProfile = JSON.parse(profileData);
 
@@ -96,7 +96,7 @@ export const getProfile = async (): Promise<UserProfile> => {
           ...defaultProfile,
           id: parsedProfile.id || Date.now().toString(),
           username: username,
-          name: parsedProfile.name || 'Charisma Chat',
+          name: parsedProfile.name || 'CharApp',
           email: parsedProfile.email || 'user@example.com',
           password: parsedProfile.password || 'charisma123', // Use existing password or default
           phone: parsedProfile.phone,
@@ -138,7 +138,7 @@ export const getProfile = async (): Promise<UserProfile> => {
 
 export const saveProfile = async (profile: UserProfile): Promise<void> => {
   try {
-    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    await SecureStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   } catch (error) {
     console.error('Error saving profile:', error);
   }
@@ -400,7 +400,7 @@ export const exportUserData = async (): Promise<string> => {
   try {
     const [profile, entriesData] = await Promise.all([
       getProfile(),
-      AsyncStorage.getItem(ENTRIES_KEY),
+      SecureStorage.getItem(ENTRIES_KEY),
     ]);
 
     const exportData = {

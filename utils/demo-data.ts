@@ -1,11 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CharismaEntry } from '@/constants/theme';
+import { SecureStorage } from '@/utils/secure-storage';
 
 const ENTRIES_KEY = '@charisma_entries';
 
 export const createDemoCharismaEntries = async (): Promise<void> => {
   try {
-    const existingEntries = await AsyncStorage.getItem(ENTRIES_KEY);
+    const existingEntries = await SecureStorage.getItem(ENTRIES_KEY);
     if (existingEntries) {
       const entries: CharismaEntry[] = JSON.parse(existingEntries);
       if (entries.length > 0) {
@@ -62,7 +62,7 @@ export const createDemoCharismaEntries = async (): Promise<void> => {
       },
     ];
 
-    await AsyncStorage.setItem(ENTRIES_KEY, JSON.stringify(demoEntries));
+    await SecureStorage.setItem(ENTRIES_KEY, JSON.stringify(demoEntries));
     console.log('Demo charisma entries created successfully');
   } catch (error) {
     console.error('Error creating demo entries:', error);
@@ -71,7 +71,7 @@ export const createDemoCharismaEntries = async (): Promise<void> => {
 
 export const clearDemoEntries = async (): Promise<void> => {
   try {
-    await AsyncStorage.removeItem(ENTRIES_KEY);
+    await SecureStorage.removeItem(ENTRIES_KEY);
     console.log('Demo entries cleared');
   } catch (error) {
     console.error('Error clearing demo entries:', error);

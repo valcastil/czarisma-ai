@@ -255,7 +255,7 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
       <View style={styles.header}>
         <View style={styles.logoContainer}>
           <CharismaLogo size={50} />
-          <Text style={[styles.title, { color: colors.text }]}>Charisma Chat</Text>
+          <Text style={[styles.title, { color: colors.text }]}>CharApp</Text>
         </View>
 
         <TouchableOpacity

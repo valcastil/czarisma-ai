@@ -1,10 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Share } from 'react-native';
-import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
-import { Colors } from '@/constants/theme';
 import { exportUserData } from '@/utils/profile-utils';
+import React from 'react';
+import { Alert, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // Define valid icon names
 const iconNames = {
@@ -73,7 +71,7 @@ export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscr
       const exportData = await exportUserData();
       await Share.share({
         message: exportData,
-        title: 'Charisma Chat Data Export',
+        title: 'CharApp Data Export',
       });
     } catch (error) {
       Alert.alert('Export Failed', 'Unable to export data. Please try again.');

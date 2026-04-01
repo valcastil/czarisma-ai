@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Charisma Chat",
+    "name": "CharApp",
     "slug": "charisma-chat",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -121,7 +121,8 @@
           "speechRecognitionPermission": "This app needs access to speech recognition to convert your voice to text."
         }
       ],
-      "./plugins/withJetifier.js"
+      "./plugins/withJetifier.js",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

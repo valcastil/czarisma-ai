@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SecureStorage } from '@/utils/secure-storage';
 
 const PRO_STATUS_KEY = '@pro_status';
 const TRIAL_START_KEY = '@trial_start_date';
@@ -29,11 +29,11 @@ const isUserSignedIn = async (): Promise<boolean> => {
  */
 export const getLocalTrialStatus = async (): Promise<TrialStatus> => {
   try {
-    let trialStart = await AsyncStorage.getItem(LOCAL_TRIAL_START_KEY);
+    let trialStart = await SecureStorage.getItem(LOCAL_TRIAL_START_KEY);
     if (!trialStart) {
       // First time opening the app — start the trial now
       const now = Date.now();
-      await AsyncStorage.setItem(LOCAL_TRIAL_START_KEY, now.toString());
+      await SecureStorage.setItem(LOCAL_TRIAL_START_KEY, now.toString());
       trialStart = now.toString();
     }
 
@@ -151,7 +151,7 @@ export const checkProStatus = async (): Promise<boolean> => {
   if (FREE_MODE) return await hasAccess();
   try {
     // First check local storage for cached status
-    const cachedStatus = await AsyncStorage.getItem(PRO_STATUS_KEY);
+    const cachedStatus = await SecureStorage.getItem(PRO_STATUS_KEY);
     if (cachedStatus) {
       const status: ProStatus = JSON.parse(cachedStatus);
       // If not expired, return cached status
@@ -204,7 +204,7 @@ const saveProStatus = async (isPro: boolean, expiresAt?: string) => {
       isPro,
       expiresAt: expiresAt ? new Date(expiresAt).getTime() : Date.now() + 3600000, // 1 hour cache
     };
-    await AsyncStorage.setItem(PRO_STATUS_KEY, JSON.stringify(status));
+    await SecureStorage.setItem(PRO_STATUS_KEY, JSON.stringify(status));
   } catch (error) {
     console.error('Error saving pro status:', error);
   }
@@ -215,7 +215,7 @@ const saveProStatus = async (isPro: boolean, expiresAt?: string) => {
  */
 export const clearProStatus = async () => {
   try {
-    await AsyncStorage.removeItem(PRO_STATUS_KEY);
+    await SecureStorage.removeItem(PRO_STATUS_KEY);
   } catch (error) {
     console.error('Error clearing pro status:', error);
   }
@@ -366,7 +366,7 @@ export const checkKnownProUser = async (email?: string | null): Promise<boolean>
     
     if (isKnownPro) {
       // Store the Pro email for persistence
-      await AsyncStorage.setItem(PRO_EMAIL_KEY, emailToCheck.toLowerCase());
+      await SecureStorage.setItem(PRO_EMAIL_KEY, emailToCheck.toLowerCase());
     }
     
     return isKnownPro;
@@ -439,7 +439,7 @@ export const hasValidSubscription = async (userId: string): Promise<boolean> => 
 export const checkProStatusForUser = async (userId: string): Promise<boolean> => {
   try {
     const proKey = `@pro_status_${userId}`;
-    const isPro = await AsyncStorage.getItem(proKey);
+    const isPro = await SecureStorage.getItem(proKey);
     return isPro === 'true';
   } catch (error) {
     console.error('Error checking Pro status for user:', userId, error);
@@ -453,18 +453,18 @@ export const checkProStatusForUser = async (userId: string): Promise<boolean> =>
 export const getTrialStatusForUser = async (userId: string) => {
   try {
     const trialKey = `@trial_status_${userId}`;
-    const trialData = await AsyncStorage.getItem(trialKey);
+    const trialData = await SecureStorage.getItem(trialKey);
     
     if (!trialData) {
       // Default trial status for new users
-      const defaultTrial = {
+      const defaultTrial: TrialStatus = {
         isTrialActive: true,
         trialStartDate: Date.now(),
-        trialEndDate: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days from now
-        daysRemaining: 30,
+        trialEndDate: Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000,
+        daysRemaining: TRIAL_DURATION_DAYS,
         isExpired: false,
       };
-      await AsyncStorage.setItem(trialKey, JSON.stringify(defaultTrial));
+      await SecureStorage.setItem(trialKey, JSON.stringify(defaultTrial));
       return defaultTrial;
     }
     

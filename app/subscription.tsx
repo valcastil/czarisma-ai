@@ -120,7 +120,7 @@ export default function SubscriptionScreen() {
 
       // Initialize payment sheet - use setupIntent for trials, paymentIntent otherwise
       const sharedConfig = {
-        merchantDisplayName: 'Charisma Chat',
+        merchantDisplayName: 'CharApp',
         customerId: customer,
         customerEphemeralKeySecret: ephemeralKey,
         allowsDelayedPaymentMethods: true,

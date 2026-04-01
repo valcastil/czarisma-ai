@@ -2,6 +2,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/utils/logger';
+import { isRateLimited, recordAttempt } from '@/utils/rate-limiter';
 import { detectSecurityThreats, sanitizeInput, validateEmail, validatePassword } from '@/utils/security';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
@@ -39,6 +40,19 @@ export default function AuthSignInScreen() {
   const handleAuth = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    // Check rate limiting
+    const action = isSignUp ? 'SIGNUP' : 'LOGIN';
+    const rateLimitStatus = await isRateLimited(action, email);
+    
+    if (rateLimitStatus.isLimited) {
+      const resetTime = new Date(rateLimitStatus.resetTime!).toLocaleTimeString();
+      Alert.alert(
+        'Too Many Attempts',
+        `Please try again later. You can attempt again after ${resetTime}.`
+      );
       return;
     }
 
@@ -82,6 +96,9 @@ export default function AuthSignInScreen() {
 
     try {
       setLoading(true);
+      
+      // Record authentication attempt for rate limiting
+      await recordAttempt(action, email);
 
       if (isSignUp) {
         // Sign up with email confirmation enabled

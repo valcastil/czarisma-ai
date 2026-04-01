@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { getEntries as getSupabaseEntries, getProfile as getSupabaseProfile, updateProfile as updateSupabaseProfile } from '@/lib/supabase-service';
 import { trackAuth, trackError } from '@/lib/vexo-analytics';
 import { saveProfile } from '@/utils/profile-utils';
+import { SecureStorage } from '@/utils/secure-storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 
@@ -22,8 +23,8 @@ const syncDataToSupabase = async (): Promise<void> => {
 
     // Get local profile and entries
     const [profileData, entriesData] = await Promise.all([
-      AsyncStorage.getItem('@charisma_profile'),
-      AsyncStorage.getItem('@charisma_entries'),
+      SecureStorage.getItem('@charisma_profile'),
+      SecureStorage.getItem('@charisma_entries'),
     ]);
 
     if (profileData) {

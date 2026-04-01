@@ -203,7 +203,7 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-            Charisma Chat v{Constants.expoConfig?.version || '1.0.2'}
+            CharApp v{Constants.expoConfig?.version || '1.0.2'}
           </Text>
         </View>
       </ScrollView>

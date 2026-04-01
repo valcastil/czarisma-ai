@@ -1,14 +1,18 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SupabaseSecureStorage } from '@/utils/supabase-storage-adapter';
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 
 // Get credentials from environment variables
-const supabaseUrl = 'https://gdgbuvgmzaqeajwxhldr.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkZ2J1dmdtemFxZWFqd3hobGRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjAxNjQsImV4cCI6MjA3ODY5NjE2NH0.Cp2iEcqZe-2_ZvAQ5soG5kNtYlwWVHhwq_zjXvoY5w4';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Supabase credentials not found in environment variables');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    storage: SupabaseSecureStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,

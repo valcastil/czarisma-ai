@@ -1,19 +1,19 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
+    ActivityIndicator,
+    Alert,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { IconSymbol } from '../components/ui/icon-symbol';
 import { Colors } from '../constants/theme';
 import { useColorScheme } from '../hooks/use-color-scheme';
 import { validatePassword } from '../utils/profile-utils';
-import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function OnboardingPasswordScreen() {
   const colorScheme = useColorScheme();
@@ -64,7 +64,7 @@ export default function OnboardingPasswordScreen() {
         <View style={styles.logoContainer}>
           <Text style={[styles.logo, { color: colors.gold }]}>⚡</Text>
           <Text style={[styles.logoText, { color: colors.text }]}>
-            Charisma Chat
+            CharApp
           </Text>
         </View>
       </View>

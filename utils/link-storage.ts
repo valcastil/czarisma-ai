@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SecureStorage } from '@/utils/secure-storage';
 
 const SHARED_LINKS_KEY = '@charisma_shared_links';
 
@@ -71,7 +71,7 @@ export const isValidSocialLink = (url: string): boolean => {
  */
 export const getSharedLinks = async (): Promise<SharedLink[]> => {
   try {
-    const data = await AsyncStorage.getItem(SHARED_LINKS_KEY);
+    const data = await SecureStorage.getItem(SHARED_LINKS_KEY);
     if (!data) return [];
     return JSON.parse(data);
   } catch (error) {
@@ -226,7 +226,7 @@ export const addSharedLink = async (url: string): Promise<SharedLink> => {
   const link = await createLinkObject(url);
   const existing = await getSharedLinks();
   const updated = [link, ...existing];
-  await AsyncStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updated));
+  await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updated));
   return link;
 };
 
@@ -244,7 +244,7 @@ export const addMultipleLinks = async (urls: string[]): Promise<SharedLink[]> =>
   );
   const existing = await getSharedLinks();
   const updated = [...newLinks, ...existing];
-  await AsyncStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updated));
+  await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updated));
   return newLinks;
 };
 
@@ -254,7 +254,7 @@ export const addMultipleLinks = async (urls: string[]): Promise<SharedLink[]> =>
 export const deleteSharedLink = async (linkId: string): Promise<void> => {
   const existing = await getSharedLinks();
   const filtered = existing.filter((l) => l.id !== linkId);
-  await AsyncStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(filtered));
+  await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(filtered));
 };
 
 /**

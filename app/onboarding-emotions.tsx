@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import { CharismaLogo } from '@/components/charisma-logo';
+import { useTheme } from '@/hooks/use-theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const ONBOARDING_KEY = '@charisma_onboarding';
 
@@ -236,7 +235,7 @@ export default function OnboardingEmotionsScreen() {
       {/* Header with Logo and Title */}
       <View style={styles.header}>
         <CharismaLogo size={60} />
-        <Text style={[styles.appTitle, { color: colors.text }]}>Charisma Chat</Text>
+        <Text style={[styles.appTitle, { color: colors.text }]}>CharApp</Text>
       </View>
 
       {/* Question and Subtitle */}

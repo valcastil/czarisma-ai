@@ -799,7 +799,7 @@ export default function AddEntryScreen() {
         <CharismaLogo size={60} />
         <View style={styles.titleContainer}>
           <TouchableOpacity onPress={handleTitlePress} activeOpacity={0.7}>
-            <Text style={[styles.appTitle, { color: colors.text }]}>Charisma Chat</Text>
+            <Text style={[styles.appTitle, { color: colors.text }]}>CharApp</Text>
           </TouchableOpacity>
           {!canAccess && (
             <View style={[styles.proButtonsContainer]}>

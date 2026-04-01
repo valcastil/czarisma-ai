@@ -7,15 +7,18 @@
 
 import { Attachment, Conversation, Message, User } from '@/constants/message-types';
 import * as SupabaseMessageService from '@/lib/supabase-message-service';
+import { decryptMessage, encryptMessage } from '@/utils/encryption';
+import { sanitizeMessage } from '@/utils/input-sanitizer';
 import { logger } from '@/utils/logger';
 import { getProfile } from '@/utils/profile-utils';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isRateLimited, recordAttempt } from '@/utils/rate-limiter';
+import { SecureStorage } from '@/utils/secure-storage';
 
 const selfMessagesKey = (userId: string) => `@charisma_self_messages_${userId}`;
 
 const readSelfMessages = async (userId: string): Promise<Message[]> => {
   try {
-    const raw = await AsyncStorage.getItem(selfMessagesKey(userId));
+    const raw = await SecureStorage.getItem(selfMessagesKey(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -29,7 +32,7 @@ const appendSelfMessage = async (userId: string, message: Message): Promise<void
   try {
     const existing = await readSelfMessages(userId);
     const next = [...existing, message];
-    await AsyncStorage.setItem(selfMessagesKey(userId), JSON.stringify(next));
+    await SecureStorage.setItem(selfMessagesKey(userId), JSON.stringify(next));
   } catch (e) {
     // ignore
   }
@@ -133,7 +136,10 @@ export const sendMessage = async (
   attachment?: Attachment
 ): Promise<Message> => {
   try {
-    logger.log('sendMessage called:', { receiverId, contentLength: content.length });
+    // Sanitize and encrypt message content for security
+    const sanitizedContent = sanitizeMessage(content);
+    const encryptedContent = encryptMessage(sanitizedContent);
+    logger.log('sendMessage called:', { receiverId, contentLength: sanitizedContent.length });
     
     // Check for demo user or forced demo mode
     const isDemoReceiver = receiverId.startsWith('demo_');
@@ -151,6 +157,12 @@ export const sendMessage = async (
         senderUsername = currentUser.username;
         senderName = currentUser.name;
 
+        // Check message rate limiting
+        const rateLimitStatus = await isRateLimited('MESSAGE', senderId);
+        if (rateLimitStatus.isLimited) {
+          throw new Error('Rate limit exceeded. Please wait before sending more messages.');
+        }
+
         // Explicit SELF-CHAT handling: Supabase blocks sender_id == receiver_id.
         // Keep self-chat local-only so it works consistently on iOS + Android.
         if (receiverId === senderId) {
@@ -163,7 +175,7 @@ export const sendMessage = async (
             receiverId: receiverId,
             receiverUsername: receiverUsername,
             receiverName: receiverName,
-            content: content,
+            content: encryptedContent,
             timestamp: Date.now(),
             date: new Date().toLocaleDateString(),
             time: new Date().toLocaleTimeString('en-US', {
@@ -176,6 +188,7 @@ export const sendMessage = async (
           };
 
           await appendSelfMessage(senderId, localMessage);
+          await recordAttempt('MESSAGE', senderId);
           return localMessage;
         }
 
@@ -189,10 +202,11 @@ export const sendMessage = async (
           try {
             const message = await SupabaseMessageService.sendMessage(
               receiverId,
-              content,
+              encryptedContent,
               attachment
             );
             logger.log('Message sent successfully via Supabase');
+            await recordAttempt('MESSAGE', senderId);
             return message;
           } catch (e) {
             logger.error('Error sending message via Supabase:', e);
@@ -228,7 +242,7 @@ export const sendMessage = async (
       receiverId: receiverId,
       receiverUsername: receiverUsername,
       receiverName: receiverName,
-      content: content,
+      content: encryptedContent,
       timestamp: Date.now(),
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString('en-US', {
@@ -266,7 +280,11 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
     const me = await getCurrentUser();
     if (me && otherUserId === me.id) {
       const selfMsgs = await readSelfMessages(me.id);
-      return selfMsgs;
+      // Decrypt self messages for display
+      return selfMsgs.map(msg => ({
+        ...msg,
+        content: decryptMessage(msg.content)
+      }));
     }
 
     // Demo and contact users don't exist in Supabase — return empty
@@ -276,8 +294,14 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
 
     const messages = await SupabaseMessageService.getMessages(otherUserId);
 
+    // Decrypt message content for display
+    const decryptedMessages = messages.map(msg => ({
+      ...msg,
+      content: decryptMessage(msg.content)
+    }));
+
     // Mark unread messages as read
-    const unreadMessages = messages.filter(
+    const unreadMessages = decryptedMessages.filter(
       msg => !msg.isRead && !msg.isFromCurrentUser
     );
 
@@ -285,7 +309,7 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
       await markMessagesAsRead(unreadMessages.map(msg => msg.id));
     }
 
-    return messages;
+    return decryptedMessages;
   } catch (error) {
     logger.error('Error getting messages:', error);
     return [];

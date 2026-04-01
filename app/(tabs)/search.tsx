@@ -1,19 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, CharismaEntry } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CharismaEntry } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { SharedLink, getSharedLinks } from '@/utils/link-storage';
+import { SecureStorage } from '@/utils/secure-storage';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
 
@@ -412,42 +414,90 @@ interface SearchResult {
   matchedNotes?: boolean;
 }
 
+interface LinkSearchResult {
+  link: SharedLink;
+  matchedUrl?: boolean;
+  matchedLabel?: boolean;
+  matchedPlatform?: boolean;
+}
+
+const platformIcons: { [key: string]: string } = {
+  youtube: 'play.rectangle.fill',
+  instagram: 'camera.fill',
+  tiktok: 'music.note',
+  reels: 'film',
+  unknown: 'link',
+} as const;
+
 export default function SearchScreen() {
   const router = useRouter();
   const { colors } = useTheme();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [allEntries, setAllEntries] = useState<CharismaEntry[]>([]);
+  const [allLinks, setAllLinks] = useState<SharedLink[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [linkResults, setLinkResults] = useState<LinkSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    loadEntries();
+    loadData();
   }, []);
 
-  const loadEntries = async () => {
+  const loadData = async () => {
     try {
-      const entriesData = await AsyncStorage.getItem(ENTRIES_KEY);
+      const [entriesData, links] = await Promise.all([
+        SecureStorage.getItem(ENTRIES_KEY),
+        getSharedLinks(),
+      ]);
       const entries: CharismaEntry[] = entriesData ? JSON.parse(entriesData) : [];
       setAllEntries(entries);
+      setAllLinks(links);
     } catch (error) {
-      console.error('Error loading entries:', error);
-      Alert.alert('Error', 'Failed to load entries');
+      console.error('Error loading data:', error);
+      Alert.alert('Error', 'Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
-  const searchEntries = useCallback((query: string) => {
+  const searchAll = useCallback((query: string) => {
     if (!query.trim()) {
       setSearchResults([]);
+      setLinkResults([]);
       return;
     }
 
     setSearching(true);
     const lowercaseQuery = query.toLowerCase().trim();
 
+    // Search social links
+    const matchedLinks: LinkSearchResult[] = allLinks
+      .map(link => {
+        const matches: LinkSearchResult = { link };
+
+        if (link.url.toLowerCase().includes(lowercaseQuery)) {
+          matches.matchedUrl = true;
+        }
+        if (link.label.toLowerCase().includes(lowercaseQuery)) {
+          matches.matchedLabel = true;
+        }
+        if (link.platform.toLowerCase().includes(lowercaseQuery)) {
+          matches.matchedPlatform = true;
+        }
+
+        if (matches.matchedUrl || matches.matchedLabel || matches.matchedPlatform) {
+          return matches;
+        }
+        return null;
+      })
+      .filter((r): r is LinkSearchResult => r !== null)
+      .sort((a, b) => b.link.timestamp - a.link.timestamp);
+
+    setLinkResults(matchedLinks);
+
+    // Search charisma entries
     const results: SearchResult[] = allEntries
       .map(entry => {
         const matches: SearchResult = { entry };
@@ -503,19 +553,29 @@ export default function SearchScreen() {
 
     setSearchResults(results);
     setSearching(false);
-  }, [allEntries]);
+  }, [allEntries, allLinks]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      searchEntries(searchQuery);
+      searchAll(searchQuery);
     }, 300); // Debounce search
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, searchEntries]);
+  }, [searchQuery, searchAll]);
 
   const handleEntryPress = (entryId: string) => {
     router.push(`/entry/${entryId}`);
   };
+
+  const handleLinkPress = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('Error', 'Could not open this link');
+    }
+  };
+
+  const totalResults = searchResults.length + linkResults.length;
 
   const highlightMatch = (text: string, query: string) => {
     if (!query.trim()) return text;
@@ -549,7 +609,7 @@ export default function SearchScreen() {
           <IconSymbol size={20} name="magnifyingglass" color={colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search charisma, emotions, or notes..."
+            placeholder="Search entries, links, emotions, or notes..."
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -568,13 +628,13 @@ export default function SearchScreen() {
           <View style={styles.emptyState}>
             <IconSymbol size={48} name="magnifyingglass" color={colors.textSecondary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Enter a search term to find entries
+              Enter a search term to find entries and links
             </Text>
             <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              Try searching for charisma types, emotions, or keywords in your notes
+              Try searching for charisma types, emotions, notes, or social links
             </Text>
           </View>
-        ) : searchResults.length === 0 ? (
+        ) : totalResults === 0 ? (
           <View style={styles.emptyState}>
             <IconSymbol size={48} name="doc.text.magnifyingglass" color={colors.textSecondary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -587,9 +647,57 @@ export default function SearchScreen() {
         ) : (
           <>
             <Text style={[styles.resultsCount, { color: colors.textSecondary }]}>
-              Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+              Found {totalResults} result{totalResults !== 1 ? 's' : ''}
             </Text>
-            
+
+            {/* Social Link Results */}
+            {linkResults.length > 0 && (
+              <>
+                <Text style={[styles.sectionHeader, { color: colors.gold }]}>Social Links ({linkResults.length})</Text>
+                {linkResults.map((result) => (
+                  <TouchableOpacity
+                    key={result.link.id}
+                    style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => handleLinkPress(result.link.url)}
+                    activeOpacity={0.7}>
+                    <View style={styles.resultHeader}>
+                      <Text style={[styles.resultDate, { color: colors.textSecondary }]}>
+                        {result.link.date}
+                      </Text>
+                      <Text style={[styles.resultTime, { color: colors.textSecondary }]}>
+                        {result.link.time}
+                      </Text>
+                    </View>
+                    <View style={styles.charismaSection}>
+                      <IconSymbol size={28} name={platformIcons[result.link.platform] as any || 'link'} color={colors.gold} />
+                      <View style={styles.charismaTextContainer}>
+                        <Text style={[styles.charismaName, { color: colors.text }]}>
+                          {result.matchedLabel ? highlightMatch(result.link.label, searchQuery) : result.link.label}
+                        </Text>
+                        <Text style={[styles.subCharisma, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {result.matchedUrl ? highlightMatch(result.link.url, searchQuery) : result.link.url}
+                        </Text>
+                      </View>
+                    </View>
+                    {result.matchedPlatform && (
+                      <View style={styles.emotionsSection}>
+                        <Text style={[styles.emotionTag, { backgroundColor: colors.gold, color: '#000000' }]}>
+                          {result.link.platform}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.arrowIndicator}>
+                      <IconSymbol size={16} name="arrow.up.right" color={colors.textSecondary} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            {/* Charisma Entry Results */}
+            {searchResults.length > 0 && (
+              <Text style={[styles.sectionHeader, { color: colors.gold }]}>Charisma Entries ({searchResults.length})</Text>
+            )}
             {searchResults.map((result) => (
               <TouchableOpacity
                 key={result.entry.id}
@@ -739,6 +847,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
     fontStyle: 'italic',
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+    marginTop: 8,
   },
   resultCard: {
     borderRadius: 12,

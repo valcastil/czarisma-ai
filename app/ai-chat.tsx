@@ -87,7 +87,7 @@ const getFreePeriodStatus = async (): Promise<{ daysUsed: number; daysRemaining:
 };
 
 const INITIAL_GREETINGS = [
-    "Hello! I am your Charisma Chat. How can I help you improve your social skills today?",
+    "Hello! I am your CharApp. How can I help you improve your social skills today?",
     "Hi there! Ready to boost your confidence and charm? Let's chat!",
     "Welcome! I'm here to help you master your social interactions. What's on your mind?",
     "Greetings! Let's work on unlocking your full charismatic potential today.",
@@ -371,7 +371,7 @@ export default function AIChatScreen() {
             >
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-                        <Text style={[styles.modalTitle, { color: colors.text }]}>Subscribe to Charisma Chat</Text>
+                        <Text style={[styles.modalTitle, { color: colors.text }]}>Subscribe to CharApp</Text>
                         <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
                             Choose a payment channel and scan the QR code to transfer payment.
                         </Text>
@@ -445,7 +445,7 @@ export default function AIChatScreen() {
                 >
                     <IconSymbol name="chevron.left" size={28} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: colors.text }]}>Charisma Chat</Text>
+                <Text style={[styles.title, { color: colors.text }]}>CharApp</Text>
 
                 <TouchableOpacity onPress={toggleSpeaker} style={styles.speakerButton}>
                     <IconSymbol
