@@ -1,16 +1,20 @@
 import { CharismaLogo } from '@/components/charisma-logo';
+import { PasteLinkModal } from '@/components/paste-link-modal';
 import { SubscriptionStatusBanner } from '@/components/subscription-status-banner';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, SharedLink } from '@/utils/link-storage';
 import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Image,
     ScrollView,
     Share,
     StyleSheet,
@@ -35,20 +39,28 @@ export default function HomeScreen() {
     statusMessage: string;
     userEmail: string | null;
   } | null>(null);
-  // Shared links feature - temporarily disabled until rebuild
-  // const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
-  // const [selectedLink, setSelectedLink] = useState<SharedLink | null>(null);
-  // const [showLinkDetail, setShowLinkDetail] = useState(false);
+  const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
+  const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
+
+  const params = useLocalSearchParams<{ openPasteLink?: string }>();
+
+  // Open paste link modal when navigated with param
+  useEffect(() => {
+    if (params.openPasteLink === 'true') {
+      setShowPasteLinkModal(true);
+    }
+  }, [params.openPasteLink]);
 
   useEffect(() => {
     loadData();
-    // loadSharedLinks(); // Disabled until rebuild
+    loadSharedLinks();
   }, []);
 
   // Refresh data when screen comes into focus (after sign-in)
   useFocusEffect(
     useCallback(() => {
       loadData();
+      loadSharedLinks();
     }, [])
   );
 
@@ -68,7 +80,7 @@ export default function HomeScreen() {
     useCallback(() => {
       loadData();
       loadSubscriptionInfo();
-      // loadSharedLinks(); // Disabled until rebuild
+      loadSharedLinks();
     }, [])
   );
 
@@ -81,15 +93,72 @@ export default function HomeScreen() {
     }
   };
 
-  // Shared links feature - disabled until rebuild
-  // const loadSharedLinks = async () => {
-  //   try {
-  //     const links = await LinkStorageService.getSharedLinks('unread');
-  //     setSharedLinks(links);
-  //   } catch (error) {
-  //     console.error('Error loading shared links:', error);
-  //   }
-  // };
+  const loadSharedLinks = async () => {
+    try {
+      const links = await getSharedLinks();
+      setSharedLinks(links);
+    } catch (error) {
+      console.error('Error loading shared links:', error);
+    }
+  };
+
+  const handleDeleteLink = async (linkId: string) => {
+    Alert.alert(
+      'Delete Link',
+      'Remove this link?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteSharedLink(linkId);
+              await loadSharedLinks();
+            } catch (error) {
+              console.error('Error deleting link:', error);
+              Alert.alert('Error', 'Failed to delete link');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleOpenLink = async (url: string) => {
+    try {
+      await WebBrowser.openBrowserAsync(url, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        controlsColor: colors.gold,
+      });
+    } catch {
+      Alert.alert('Error', 'Could not open link');
+    }
+  };
+
+  const handleShareEntry = async (entry: CharismaEntry, event: any) => {
+    event.stopPropagation();
+    try {
+      const emotions = entry.emotionEmojis?.join(' ') || '';
+      const message = `
+🌟 Charisma Entry - ${entry.date}
+
+${entry.charismaEmoji || ''} ${entry.majorCharisma}
+${entry.subCharisma ? `Sub: ${entry.subCharisma}` : ''}
+
+${emotions ? `Emotions: ${emotions}` : ''}
+
+${entry.notes ? `Notes: ${entry.notes}` : ''}
+      `.trim();
+
+      await Share.share({
+        message: message,
+      });
+    } catch (error) {
+      console.error('Error sharing entry:', error);
+      Alert.alert('Error', 'Failed to share entry');
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -155,61 +224,6 @@ export default function HomeScreen() {
     }
   };
 
-  const handleShareEntry = async (entry: CharismaEntry, event: any) => {
-    event.stopPropagation();
-    try {
-      const emotions = entry.emotionEmojis?.join(' ') || '';
-      const message = `
-🌟 Charisma Entry - ${entry.date}
-
-${entry.charismaEmoji || ''} ${entry.majorCharisma}
-${entry.subCharisma ? `Sub: ${entry.subCharisma}` : ''}
-
-${emotions ? `Emotions: ${emotions}` : ''}
-
-${entry.notes ? `Notes: ${entry.notes}` : ''}
-      `.trim();
-
-      await Share.share({
-        message: message,
-      });
-    } catch (error) {
-      console.error('Error sharing entry:', error);
-      Alert.alert('Error', 'Failed to share entry');
-    }
-  };
-
-  // Shared links handlers - disabled until rebuild
-  // const handleLinkPress = (link: SharedLink) => {
-  //   setSelectedLink(link);
-  //   setShowLinkDetail(true);
-  // };
-
-  // const handleLinkDelete = async (linkId: string) => {
-  //   try {
-  //     await LinkStorageService.deleteLink(linkId);
-  //     await loadSharedLinks();
-  //     Alert.alert('Success', 'Link deleted');
-  //   } catch (error) {
-  //     console.error('Error deleting link:', error);
-  //     Alert.alert('Error', 'Failed to delete link');
-  //   }
-  // };
-
-  // const handleLinkDetailDelete = async () => {
-  //   if (!selectedLink) return;
-  //   
-  //   try {
-  //     await LinkStorageService.deleteLink(selectedLink.id);
-  //     setShowLinkDetail(false);
-  //     setSelectedLink(null);
-  //     await loadSharedLinks();
-  //     Alert.alert('Success', 'Link deleted');
-  //   } catch (error) {
-  //     console.error('Error deleting link:', error);
-  //     Alert.alert('Error', 'Failed to delete link');
-  //   }
-  // };
 
   if (loading) {
     return (
@@ -259,16 +273,58 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
       {/* Subscription Status Banner */}
       <SubscriptionStatusBanner />
 
-      {/* Shared Links Queue - Disabled until rebuild */}
-      {/* <LinkQueue
-        links={sharedLinks}
-        onLinkPress={handleLinkPress}
-        onLinkDelete={handleLinkDelete}
-      /> */}
-
-      {/* Entries List */}
+      {/* Main Content */}
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {entries.length === 0 ? (
+        {/* Social Links Section */}
+        {sharedLinks.length > 0 && (
+          <View style={styles.sectionContainer}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Social Links</Text>
+            {sharedLinks.map((link) => {
+              const platformColor = getPlatformColor(link.platform);
+              const emoji = getPlatformEmoji(link.platform);
+              return (
+                <TouchableOpacity
+                  key={link.id}
+                  style={[styles.linkCard, { backgroundColor: colors.card }]}
+                  onPress={() => handleOpenLink(link.url)}
+                  onLongPress={() => handleDeleteLink(link.id)}
+                  activeOpacity={0.7}>
+                  {/* Thumbnail */}
+                  {link.thumbnail ? (
+                    <Image
+                      source={{ uri: link.thumbnail }}
+                      style={styles.linkThumbnail}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.linkThumbnailPlaceholder, { backgroundColor: platformColor + '15' }]}>
+                      <Text style={styles.linkPlaceholderEmoji}>{emoji}</Text>
+                    </View>
+                  )}
+                  {/* Link Info */}
+                  <View style={styles.linkInfo}>
+                    <View style={[styles.linkPlatformTag, { backgroundColor: platformColor + '20' }]}>
+                      <Text style={styles.linkPlatformEmoji}>{emoji}</Text>
+                      <Text style={[styles.linkPlatformLabel, { color: platformColor }]}>{link.label}</Text>
+                    </View>
+                    <Text style={[styles.linkUrl, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {link.url}
+                    </Text>
+                    <View style={styles.linkFooter}>
+                      <Text style={[styles.linkTime, { color: colors.textSecondary }]}>
+                        {link.date} {link.time}
+                      </Text>
+                      <IconSymbol size={14} name="arrow.up.right" color={colors.gold} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Charisma Entries Section */}
+        {entries.length === 0 && sharedLinks.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               No charisma entries yet.
@@ -278,78 +334,82 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
             </Text>
           </View>
         ) : (
-          entries.map((entry) => (
-            <TouchableOpacity
-              key={entry.id}
-              style={[styles.entryCard, { backgroundColor: colors.card }]}
-              onPress={() => router.push(`/entry/${entry.id}`)}>
-              {/* Header with Date and Time */}
-              <View style={styles.entryHeader}>
-                <Text style={[styles.entryDate, { color: colors.textSecondary }]}>
-                  {entry.date}
-                </Text>
-                {entry.time && (
-                  <Text style={[styles.entryTime, { color: colors.textSecondary }]}>
-                    {entry.time}
-                  </Text>
-                )}
-              </View>
+          entries.length > 0 && (
+            <View style={styles.sectionContainer}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Charisma Entries</Text>
+              {entries.map((entry) => (
+                <TouchableOpacity
+                  key={entry.id}
+                  style={[styles.entryCard, { backgroundColor: colors.card }]}
+                  onPress={() => router.push(`/entry/${entry.id}`)}>
+                  {/* Header with Date and Time */}
+                  <View style={styles.entryHeader}>
+                    <Text style={[styles.entryDate, { color: colors.textSecondary }]}>
+                      {entry.date}
+                    </Text>
+                    {entry.time && (
+                      <Text style={[styles.entryTime, { color: colors.textSecondary }]}>
+                        {entry.time}
+                      </Text>
+                    )}
+                  </View>
 
-              {/* Charisma Section with Large Emoji */}
-              <View style={styles.charismaSection}>
-                {entry.charismaEmoji && (
-                  <Text style={styles.charismaEmoji}>{entry.charismaEmoji}</Text>
-                )}
-                <View style={styles.charismaTextContainer}>
-                  <Text style={[styles.entryTitle, { color: colors.text }]}>
-                    {entry.majorCharisma}
-                  </Text>
-                  {entry.subCharisma && (
-                    <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>
-                      {entry.subCharisma}
+                  {/* Charisma Section with Large Emoji */}
+                  <View style={styles.charismaSection}>
+                    {entry.charismaEmoji && (
+                      <Text style={styles.charismaEmoji}>{entry.charismaEmoji}</Text>
+                    )}
+                    <View style={styles.charismaTextContainer}>
+                      <Text style={[styles.entryTitle, { color: colors.text }]}>
+                        {entry.majorCharisma}
+                      </Text>
+                      {entry.subCharisma && (
+                        <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>
+                          {entry.subCharisma}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Emotion Emojis */}
+                  {entry.emotionEmojis && entry.emotionEmojis.length > 0 && (
+                    <View style={styles.emotionsContainer}>
+                      {entry.emotionEmojis.map((emojiItem, index) => (
+                        <Text key={index} style={styles.emotionEmoji}>
+                          {emojiItem}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Notes */}
+                  {entry.notes && (
+                    <Text
+                      style={[styles.entryNotes, { color: colors.textSecondary }]}>
+                      {entry.notes}
                     </Text>
                   )}
-                </View>
-              </View>
 
-              {/* Emotion Emojis */}
-              {entry.emotionEmojis && entry.emotionEmojis.length > 0 && (
-                <View style={styles.emotionsContainer}>
-                  {entry.emotionEmojis.map((emoji, index) => (
-                    <Text key={index} style={styles.emotionEmoji}>
-                      {emoji}
-                    </Text>
-                  ))}
-                </View>
-              )}
-
-              {/* Notes */}
-              {entry.notes && (
-                <Text
-                  style={[styles.entryNotes, { color: colors.textSecondary }]}>
-                  {entry.notes}
-                </Text>
-              )}
-
-              {/* Share Button */}
-              <TouchableOpacity
-                style={styles.shareButton}
-                onPress={(e) => handleShareEntry(entry, e)}
-                activeOpacity={0.7}>
-                <IconSymbol size={20} name="paperplane.fill" color={colors.gold} />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))
+                  {/* Share Button */}
+                  <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={(e) => handleShareEntry(entry, e)}
+                    activeOpacity={0.7}>
+                    <IconSymbol size={20} name="paperplane.fill" color={colors.gold} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )
         )}
       </ScrollView>
 
-      {/* Link Detail Modal - Disabled until rebuild */}
-      {/* <LinkDetailModal
-        visible={showLinkDetail}
-        link={selectedLink}
-        onClose={() => setShowLinkDetail(false)}
-        onDelete={handleLinkDetailDelete}
-      /> */}
+      {/* Paste Link Modal */}
+      <PasteLinkModal
+        visible={showPasteLinkModal}
+        onClose={() => setShowPasteLinkModal(false)}
+        onLinkAdded={loadSharedLinks}
+      />
 
     </View>
   );
@@ -396,6 +456,14 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 20,
   },
+  sectionContainer: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -411,6 +479,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  // Social Link Card Styles
+  linkCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  linkThumbnail: {
+    width: '100%',
+    height: 180,
+  },
+  linkThumbnailPlaceholder: {
+    width: '100%',
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  linkPlaceholderEmoji: {
+    fontSize: 36,
+  },
+  linkInfo: {
+    padding: 12,
+    gap: 6,
+  },
+  linkPlatformTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+  },
+  linkPlatformEmoji: {
+    fontSize: 12,
+  },
+  linkPlatformLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  linkUrl: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  linkFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  linkTime: {
+    fontSize: 11,
+  },
+  // Charisma Entry Card Styles
   entryCard: {
     borderRadius: 12,
     padding: 16,

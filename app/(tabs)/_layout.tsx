@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -56,7 +56,21 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
             // Let's intercept "explore" if that's the intention.
             if (route.name === 'explore') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/onboarding-charisma');
+              Alert.alert(
+                'What would you like to do?',
+                '',
+                [
+                  {
+                    text: 'Add Charisma Entry',
+                    onPress: () => router.push('/onboarding-charisma'),
+                  },
+                  {
+                    text: 'Paste Social Link',
+                    onPress: () => router.push({ pathname: '/(tabs)', params: { openPasteLink: 'true' } }),
+                  },
+                  { text: 'Cancel', style: 'cancel' },
+                ]
+              );
             } else if (route.name === 'messages') {
               // Check if user is authenticated before accessing messages
               const user = await getCurrentUser();
