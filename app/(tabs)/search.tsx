@@ -419,6 +419,7 @@ interface LinkSearchResult {
   matchedUrl?: boolean;
   matchedLabel?: boolean;
   matchedPlatform?: boolean;
+  matchedTitle?: boolean;
 }
 
 const platformIcons: { [key: string]: string } = {
@@ -486,8 +487,11 @@ export default function SearchScreen() {
         if (link.platform.toLowerCase().includes(lowercaseQuery)) {
           matches.matchedPlatform = true;
         }
+        if (link.title && link.title.toLowerCase().includes(lowercaseQuery)) {
+          matches.matchedTitle = true;
+        }
 
-        if (matches.matchedUrl || matches.matchedLabel || matches.matchedPlatform) {
+        if (matches.matchedUrl || matches.matchedLabel || matches.matchedPlatform || matches.matchedTitle) {
           return matches;
         }
         return null;
@@ -674,6 +678,11 @@ export default function SearchScreen() {
                         <Text style={[styles.charismaName, { color: colors.text }]}>
                           {result.matchedLabel ? highlightMatch(result.link.label, searchQuery) : result.link.label}
                         </Text>
+                        {result.link.title && (
+                          <Text style={[styles.subCharisma, { color: colors.text }]} numberOfLines={2}>
+                            {result.matchedTitle ? highlightMatch(result.link.title, searchQuery) : result.link.title}
+                          </Text>
+                        )}
                         <Text style={[styles.subCharisma, { color: colors.textSecondary }]} numberOfLines={1}>
                           {result.matchedUrl ? highlightMatch(result.link.url, searchQuery) : result.link.url}
                         </Text>

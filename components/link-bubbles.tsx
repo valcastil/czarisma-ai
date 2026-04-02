@@ -1,16 +1,16 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
-import { getPlatformColor, getPlatformEmoji, SharedLink } from '@/utils/link-storage';
+import { getPlatformColor, getPlatformEmoji, LinkPlatform, SharedLink } from '@/utils/link-storage';
 import * as Linking from 'expo-linking';
 import React, { useMemo } from 'react';
 import {
-    Alert,
-    FlatList,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface LinkFeedProps {
@@ -49,9 +49,32 @@ export function LinkFeed({ links, onDelete }: LinkFeedProps) {
     </View>
   );
 
+  const getTitleFallback = (url: string, platform: LinkPlatform, label: string): string => {
+    try {
+      const u = new URL(url);
+      const path = u.pathname.replace(/^\//, '').replace(/\/$/, '');
+      if (platform === 'youtube') {
+        const id = path.replace('shorts/', '').replace('watch', '').slice(0, 20);
+        return `YouTube Video ${id ? '• ' + id : ''}`;
+      }
+      if (platform === 'tiktok') {
+        const parts = path.split('/');
+        const videoId = parts.find(p => /^\d+$/.test(p));
+        return `TikTok Video${videoId ? ' • ' + videoId.slice(-8) : ''}`;
+      }
+      if (platform === 'reels' || platform === 'instagram') {
+        return `${label} Video`;
+      }
+      return path.split('/').pop() || 'Untitled';
+    } catch {
+      return 'Untitled Video';
+    }
+  };
+
   const renderItem = ({ item, index }: { item: SharedLink; index: number }) => {
     const platformColor = getPlatformColor(item.platform);
     const emoji = getPlatformEmoji(item.platform);
+    const displayTitle = item.title || getTitleFallback(item.url, item.platform, item.label);
 
     // Date separator logic for inverted list
     const nextItem = reversedLinks[index + 1];
@@ -87,8 +110,13 @@ export function LinkFeed({ links, onDelete }: LinkFeedProps) {
               <Text style={[styles.platformLabel, { color: platformColor }]}>{item.label}</Text>
             </View>
 
+            {/* Title — always visible below platform name */}
+            <Text style={[styles.titleText, { color: colors.text }]} numberOfLines={2}>
+              {displayTitle}
+            </Text>
+
             {/* URL */}
-            <Text style={[styles.urlText, { color: colors.text }]} numberOfLines={2}>
+            <Text style={[styles.urlText, { color: colors.textSecondary }]} numberOfLines={1}>
               {item.url}
             </Text>
 
@@ -193,6 +221,11 @@ const styles = StyleSheet.create({
   platformLabel: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  titleText: {
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
   },
   urlText: {
     fontSize: 13,

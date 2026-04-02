@@ -4,7 +4,7 @@ import { SubscriptionStatusBanner } from '@/components/subscription-status-banne
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, SharedLink } from '@/utils/link-storage';
+import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, refreshMissingTitles, SharedLink } from '@/utils/link-storage';
 import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -97,6 +97,13 @@ export default function HomeScreen() {
     try {
       const links = await getSharedLinks();
       setSharedLinks(links);
+
+      // Backfill titles for old links that don't have them
+      const didUpdate = await refreshMissingTitles();
+      if (didUpdate) {
+        const refreshed = await getSharedLinks();
+        setSharedLinks(refreshed);
+      }
     } catch (error) {
       console.error('Error loading shared links:', error);
     }

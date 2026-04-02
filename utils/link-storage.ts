@@ -9,6 +9,7 @@ export interface SharedLink {
   url: string;
   platform: LinkPlatform;
   label: string;
+  title: string | null;
   thumbnail: string | null;
   timestamp: number;
   date: string;
@@ -96,10 +97,33 @@ const extractYouTubeId = (url: string): string | null => {
   return null;
 };
 
+interface LinkMetadata {
+  thumbnail: string | null;
+  title: string | null;
+}
+
 /**
- * Fetch thumbnail using Microlink API (handles Facebook, Instagram, TikTok reliably)
+ * Fetch title via noembed.com (supports YouTube, TikTok, Instagram, Facebook, etc.)
  */
-const fetchThumbnailViaApi = async (url: string): Promise<string | null> => {
+const fetchTitleViaNoEmbed = async (url: string): Promise<string | null> => {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
+    const response = await fetch(apiUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    const json = await response.json();
+    if (json.title) return json.title;
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Fetch metadata via Microlink API
+ */
+const fetchMetadataViaApi = async (url: string): Promise<LinkMetadata> => {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
@@ -107,24 +131,21 @@ const fetchThumbnailViaApi = async (url: string): Promise<string | null> => {
     const response = await fetch(apiUrl, { signal: controller.signal });
     clearTimeout(timeout);
     const json = await response.json();
-    if (json.status === 'success' && json.data?.image?.url) {
-      return json.data.image.url;
+    const result: LinkMetadata = { thumbnail: null, title: null };
+    if (json.status === 'success') {
+      result.title = json.data?.title || null;
+      result.thumbnail = json.data?.image?.url || json.data?.video?.poster || null;
     }
-    // Fallback: try video thumbnail if image not found
-    if (json.status === 'success' && json.data?.video?.poster) {
-      return json.data.video.poster;
-    }
-    return null;
-  } catch (error) {
-    console.log('Microlink API failed for:', url);
-    return null;
+    return result;
+  } catch {
+    return { thumbnail: null, title: null };
   }
 };
 
 /**
- * Fallback: try direct HTML fetch for og:image
+ * Fallback: try direct HTML fetch for og:image and og:title
  */
-const fetchOgImageDirect = async (url: string): Promise<string | null> => {
+const fetchMetadataDirect = async (url: string): Promise<LinkMetadata> => {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
@@ -137,41 +158,74 @@ const fetchOgImageDirect = async (url: string): Promise<string | null> => {
     });
     clearTimeout(timeout);
     const html = await response.text();
-    const ogMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+
+    const ogImage = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
       || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-    if (ogMatch && ogMatch[1]) {
-      return ogMatch[1];
-    }
-    return null;
+
+    const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i)
+      || html.match(/<title[^>]*>([^<]+)<\/title>/i);
+
+    return {
+      thumbnail: ogImage?.[1] || null,
+      title: ogTitle?.[1]?.trim() || null,
+    };
   } catch {
-    return null;
+    return { thumbnail: null, title: null };
   }
 };
 
 /**
- * Fetch thumbnail: tries Microlink API first, then direct HTML scraping as fallback
+ * Fetch title only — tries noembed first (most reliable), then Microlink, then direct HTML
  */
-const fetchOgImage = async (url: string): Promise<string | null> => {
-  // Try Microlink API first (most reliable for Facebook, Instagram, TikTok)
-  const apiResult = await fetchThumbnailViaApi(url);
-  if (apiResult) return apiResult;
-  // Fallback to direct HTML fetch
-  return await fetchOgImageDirect(url);
+const fetchTitleOnly = async (url: string): Promise<string | null> => {
+  // 1. noembed.com — works great for YouTube, TikTok, Instagram, Facebook
+  const noembedTitle = await fetchTitleViaNoEmbed(url);
+  if (noembedTitle) return noembedTitle;
+
+  // 2. Microlink
+  const microlinkResult = await fetchMetadataViaApi(url);
+  if (microlinkResult.title) return microlinkResult.title;
+
+  // 3. Direct HTML scraping
+  const directResult = await fetchMetadataDirect(url);
+  return directResult.title;
 };
 
 /**
- * Get thumbnail URL for a link
+ * Fetch metadata: combines multiple strategies for thumbnail + title
  */
-export const getThumbnail = async (url: string, platform: LinkPlatform): Promise<string | null> => {
+const fetchLinkMetadata = async (url: string, platform: LinkPlatform): Promise<LinkMetadata> => {
+  // For YouTube, we can build the thumbnail directly
+  let youtubeThumbnail: string | null = null;
   if (platform === 'youtube') {
     const videoId = extractYouTubeId(url);
-    if (videoId) return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    if (videoId) youtubeThumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
   }
-  // For Facebook, Instagram, TikTok — fetch og:image from the page
-  if (platform === 'reels' || platform === 'instagram' || platform === 'tiktok') {
-    return await fetchOgImage(url);
+
+  // Fetch title via noembed (most reliable for social platforms)
+  const noembedTitle = await fetchTitleViaNoEmbed(url);
+
+  // If we already have the title and a YouTube thumbnail, skip other APIs
+  if (noembedTitle && youtubeThumbnail) {
+    return { thumbnail: youtubeThumbnail, title: noembedTitle };
   }
-  return null;
+
+  // Try Microlink for thumbnail (and title if noembed missed it)
+  const apiResult = await fetchMetadataViaApi(url);
+  const title = noembedTitle || apiResult.title;
+  const thumbnail = youtubeThumbnail || apiResult.thumbnail;
+
+  if (title || thumbnail) {
+    return { thumbnail, title };
+  }
+
+  // Final fallback: direct HTML scraping
+  const directResult = await fetchMetadataDirect(url);
+  return {
+    thumbnail: youtubeThumbnail || directResult.thumbnail,
+    title: directResult.title,
+  };
 };
 
 /**
@@ -198,12 +252,13 @@ export const parseLinksFromText = (text: string): string[] => {
 const createLinkObject = async (url: string): Promise<SharedLink> => {
   const { platform, label } = detectPlatform(url.trim());
   const now = new Date();
-  const thumbnail = await getThumbnail(url.trim(), platform);
+  const { thumbnail, title } = await fetchLinkMetadata(url.trim(), platform);
   return {
     id: `link_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     url: url.trim(),
     platform,
     label,
+    title,
     thumbnail,
     timestamp: now.getTime(),
     date: now.toLocaleDateString('en-US', {
@@ -255,6 +310,43 @@ export const deleteSharedLink = async (linkId: string): Promise<void> => {
   const existing = await getSharedLinks();
   const filtered = existing.filter((l) => l.id !== linkId);
   await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(filtered));
+};
+
+/**
+ * Refresh missing titles for existing links in the background.
+ * Returns true if any links were updated.
+ */
+export const refreshMissingTitles = async (): Promise<boolean> => {
+  try {
+    const links = await getSharedLinks();
+    const linksNeedingTitle = links.filter(l => !l.title);
+    if (linksNeedingTitle.length === 0) return false;
+
+    let updated = false;
+    const updatedLinks = await Promise.all(
+      links.map(async (link) => {
+        if (link.title) return link;
+        try {
+          const title = await fetchTitleOnly(link.url);
+          if (title) {
+            updated = true;
+            return { ...link, title };
+          }
+        } catch {
+          // Skip failed fetches
+        }
+        return link;
+      })
+    );
+
+    if (updated) {
+      await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updatedLinks));
+    }
+    return updated;
+  } catch (error) {
+    console.error('Error refreshing missing titles:', error);
+    return false;
+  }
 };
 
 /**
