@@ -1,4 +1,19 @@
-import CryptoJS from 'crypto-js';
+// Polyfill crypto.getRandomValues BEFORE loading crypto-js
+// (crypto-js caches its crypto detection at import time, so order matters)
+const ExpoCrypto = require('expo-crypto');
+if (typeof global.crypto === 'undefined') {
+  (global as any).crypto = {};
+}
+if (typeof global.crypto.getRandomValues === 'undefined') {
+  (global.crypto as any).getRandomValues = (array: Uint8Array) => {
+    const randomBytes = ExpoCrypto.getRandomBytes(array.length);
+    array.set(randomBytes);
+    return array;
+  };
+}
+
+// Now safe to load crypto-js after polyfill is in place
+const CryptoJS = require('crypto-js');
 
 /**
  * Encryption utilities for end-to-end encryption of sensitive data
@@ -29,10 +44,14 @@ export const decrypt = (encryptedText: string): string => {
   try {
     const bytes = CryptoJS.AES.decrypt(encryptedText, ENCRYPTION_KEY);
     const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+    // If decryption produces empty string, the input was likely plain text
+    if (!decrypted) {
+      return encryptedText;
+    }
     return decrypted;
   } catch (error) {
-    console.error('Decryption error:', error);
-    return encryptedText; // Fallback to encrypted text if decryption fails
+    // Malformed UTF-8 or other errors mean the content is plain text — return as-is
+    return encryptedText;
   }
 };
 

@@ -1,7 +1,7 @@
 import { CharismaLogo } from '@/components/charisma-logo';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
-import { checkProStatus, isProCharisma } from '@/utils/subscription-utils';
+import { checkPaidProStatus, checkProStatus, isProCharisma } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -304,6 +304,7 @@ export default function OnboardingCharismaScreen() {
   const { colors } = useTheme();
   const [selectedCharisma, setSelectedCharisma] = useState<string | null>(null);
   const [isPro, setIsPro] = useState(false);
+  const [isPaidPro, setIsPaidPro] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [shuffledCategories, setShuffledCategories] = useState<CharismaCategory[]>([]);
 
@@ -330,13 +331,16 @@ export default function OnboardingCharismaScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserEmail = session?.user?.email || null;
       const proStatus = await checkProStatus();
+      const paidProStatus = await checkPaidProStatus();
 
       setIsPro(proStatus);
+      setIsPaidPro(paidProStatus);
       setUserEmail(currentUserEmail);
     } catch (error) {
       console.error('Error loading Pro status:', error);
       // Set safe defaults to prevent crashes
       setIsPro(false);
+      setIsPaidPro(false);
       setUserEmail(null);
     }
   };
@@ -384,7 +388,7 @@ export default function OnboardingCharismaScreen() {
         <CharismaLogo size={50} />
         <View style={styles.titleContainer}>
           <Text style={[styles.appTitle, { color: colors.text }]}>CharApp</Text>
-          {isPro && userEmail && (
+          {isPaidPro && userEmail && (
             <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
               <Text style={styles.proStatusText}>PRO</Text>
             </View>

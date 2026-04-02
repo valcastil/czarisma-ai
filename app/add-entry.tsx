@@ -3,7 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
-import { canAccessFeatures, checkProStatus, checkTrialExpirationAndRedirect, getTrialStatus, setProStatusForTesting, TrialStatus } from '@/utils/subscription-utils';
+import { canAccessFeatures, checkPaidProStatus, checkProStatus, checkTrialExpirationAndRedirect, getTrialStatus, setProStatusForTesting, TrialStatus } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -508,6 +508,7 @@ export default function AddEntryScreen() {
   const [saving, setSaving] = useState(false);
   const [showQuotesModal, setShowQuotesModal] = useState(false);
   const [isPro, setIsPro] = useState(false);
+  const [isPaidPro, setIsPaidPro] = useState(false);
   const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
   const [canAccess, setCanAccess] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -531,10 +532,12 @@ export default function AddEntryScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserEmail = session?.user?.email || null;
       const proStatus = await checkProStatus();
+      const paidProStatus = await checkPaidProStatus();
       const trial = await getTrialStatus();
       const hasAccess = await canAccessFeatures(router);
 
       setIsPro(proStatus);
+      setIsPaidPro(paidProStatus);
       setTrialStatus(trial);
       setCanAccess(hasAccess);
       setUserEmail(currentUserEmail);
@@ -561,6 +564,7 @@ export default function AddEntryScreen() {
       setCanAccess(false);
       setUserEmail(null);
       setIsPro(false);
+      setIsPaidPro(false);
     }
   };
 
@@ -818,7 +822,7 @@ export default function AddEntryScreen() {
               </Text>
             </View>
           )}
-          {isPro && userEmail && (
+          {isPaidPro && userEmail && (
             <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
               <Text style={styles.proStatusText}>PRO</Text>
             </View>

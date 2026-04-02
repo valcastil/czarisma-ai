@@ -19,6 +19,7 @@ import {
   updateConversation,
   updateMessageReactions,
 } from '@/utils/message-utils';
+import { checkPaidProStatus } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -52,6 +53,7 @@ export default function ChatScreen() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [canChat, setCanChat] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isPro, setIsPro] = useState(false);
   const [otherUser, setOtherUser] = useState<User>({
     id,
     username,
@@ -156,10 +158,14 @@ export default function ChatScreen() {
       const currentUserEmail = session?.user?.email || null;
       setCanChat(!!session);
       setUserEmail(currentUserEmail);
+      // Check actual paid pro status (QR code subscription)
+      const proStatus = await checkPaidProStatus();
+      setIsPro(proStatus);
     } catch (error) {
       console.error('Error checking subscription status:', error);
       setCanChat(false);
       setUserEmail(null);
+      setIsPro(false);
     }
   };
 
@@ -893,7 +899,7 @@ export default function ChatScreen() {
             onPress={handleMenuPress}
             activeOpacity={0.7}>
             <IconSymbol size={24} name="ellipsis" color={(canChat && userEmail) ? colors.text : colors.textSecondary} />
-            {(canChat && userEmail) && (
+            {isPro && (
               <View style={[
                 styles.proBadge,
                 { backgroundColor: colors.gold }

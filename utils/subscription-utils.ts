@@ -119,7 +119,8 @@ export const refreshProStatus = async (): Promise<boolean> => {
  * Use this for premium-only features like entry editing
  */
 export const checkPaidProStatus = async (): Promise<boolean> => {
-  if (FREE_MODE) return await hasAccess();
+  // Always check Supabase for actual paid subscription, regardless of FREE_MODE.
+  // This ensures the PRO badge only shows for users who paid via QR code.
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
