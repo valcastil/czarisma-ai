@@ -10,6 +10,7 @@ export interface SharedLink {
   platform: LinkPlatform;
   label: string;
   title: string | null;
+  description: string | null;
   thumbnail: string | null;
   timestamp: number;
   date: string;
@@ -100,6 +101,7 @@ const extractYouTubeId = (url: string): string | null => {
 interface LinkMetadata {
   thumbnail: string | null;
   title: string | null;
+  description: string | null;
 }
 
 /**
@@ -131,14 +133,15 @@ const fetchMetadataViaApi = async (url: string): Promise<LinkMetadata> => {
     const response = await fetch(apiUrl, { signal: controller.signal });
     clearTimeout(timeout);
     const json = await response.json();
-    const result: LinkMetadata = { thumbnail: null, title: null };
+    const result: LinkMetadata = { thumbnail: null, title: null, description: null };
     if (json.status === 'success') {
       result.title = json.data?.title || null;
+      result.description = json.data?.description || null;
       result.thumbnail = json.data?.image?.url || json.data?.video?.poster || null;
     }
     return result;
   } catch {
-    return { thumbnail: null, title: null };
+    return { thumbnail: null, title: null, description: null };
   }
 };
 
@@ -166,12 +169,17 @@ const fetchMetadataDirect = async (url: string): Promise<LinkMetadata> => {
       || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i)
       || html.match(/<title[^>]*>([^<]+)<\/title>/i);
 
+    const ogDescription = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i)
+      || html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+
     return {
       thumbnail: ogImage?.[1] || null,
       title: ogTitle?.[1]?.trim() || null,
+      description: ogDescription?.[1]?.trim() || null,
     };
   } catch {
-    return { thumbnail: null, title: null };
+    return { thumbnail: null, title: null, description: null };
   }
 };
 
@@ -208,16 +216,19 @@ const fetchLinkMetadata = async (url: string, platform: LinkPlatform): Promise<L
 
   // If we already have the title and a YouTube thumbnail, skip other APIs
   if (noembedTitle && youtubeThumbnail) {
-    return { thumbnail: youtubeThumbnail, title: noembedTitle };
+    // Still try to get description from Microlink
+    const apiResult = await fetchMetadataViaApi(url);
+    return { thumbnail: youtubeThumbnail, title: noembedTitle, description: apiResult.description };
   }
 
   // Try Microlink for thumbnail (and title if noembed missed it)
   const apiResult = await fetchMetadataViaApi(url);
   const title = noembedTitle || apiResult.title;
+  const description = apiResult.description;
   const thumbnail = youtubeThumbnail || apiResult.thumbnail;
 
   if (title || thumbnail) {
-    return { thumbnail, title };
+    return { thumbnail, title, description };
   }
 
   // Final fallback: direct HTML scraping
@@ -225,6 +236,7 @@ const fetchLinkMetadata = async (url: string, platform: LinkPlatform): Promise<L
   return {
     thumbnail: youtubeThumbnail || directResult.thumbnail,
     title: directResult.title,
+    description: directResult.description,
   };
 };
 
@@ -252,13 +264,14 @@ export const parseLinksFromText = (text: string): string[] => {
 const createLinkObject = async (url: string): Promise<SharedLink> => {
   const { platform, label } = detectPlatform(url.trim());
   const now = new Date();
-  const { thumbnail, title } = await fetchLinkMetadata(url.trim(), platform);
+  const { thumbnail, title, description } = await fetchLinkMetadata(url.trim(), platform);
   return {
     id: `link_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     url: url.trim(),
     platform,
     label,
     title,
+    description,
     thumbnail,
     timestamp: now.getTime(),
     date: now.toLocaleDateString('en-US', {

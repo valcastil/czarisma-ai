@@ -144,7 +144,7 @@ export default function HomeScreen() {
 
   const handleShareLink = async (link: SharedLink) => {
     try {
-      const message = `Check out this ${link.label}: ${link.url}`;
+      const message = `Check out this ${link.label}: ${link.url}\n\nForwarded from CzarApp`;
       await Share.share({ message });
     } catch (error) {
       console.error('Error sharing link:', error);
@@ -177,6 +177,8 @@ ${entry.subCharisma ? `Sub: ${entry.subCharisma}` : ''}
 ${emotions ? `Emotions: ${emotions}` : ''}
 
 ${entry.notes ? `Notes: ${entry.notes}` : ''}
+
+Forwarded from CzarApp
       `.trim();
 
       await Share.share({
@@ -345,6 +347,16 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
                         <Text style={styles.linkPlatformEmoji}>{emoji}</Text>
                         <Text style={[styles.linkPlatformLabel, { color: platformColor }]}>{link.label}</Text>
                       </View>
+                      {link.title && (
+                        <Text style={[styles.linkTitle, { color: colors.text }]} numberOfLines={2}>
+                          {link.title}
+                        </Text>
+                      )}
+                      {link.description && (
+                        <Text style={[styles.linkDescription, { color: colors.textSecondary }]} numberOfLines={3}>
+                          {link.description}
+                        </Text>
+                      )}
                       <Text style={[styles.linkUrl, { color: colors.textSecondary }]} numberOfLines={1}>
                         {link.url}
                       </Text>
@@ -352,9 +364,15 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
                         <Text style={[styles.linkTime, { color: colors.textSecondary }]}>
                           {link.date} {link.time}
                         </Text>
-                        <IconSymbol size={14} name="arrow.up.right" color={colors.gold} />
                       </View>
                     </View>
+                  </TouchableOpacity>
+                  {/* Share Button */}
+                  <TouchableOpacity
+                    style={styles.linkShareButton}
+                    onPress={() => handleShareLink(link)}
+                    activeOpacity={0.7}>
+                    <IconSymbol size={20} name="paperplane.fill" color={colors.gold} />
                   </TouchableOpacity>
                   {/* Action Buttons */}
                   <View style={[styles.linkActions, { borderTopColor: colors.border }]}>
@@ -615,6 +633,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  linkTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+    marginTop: 4,
+    paddingRight: 30,
+  },
+  linkDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 2,
+    paddingRight: 30,
+  },
   linkUrl: {
     fontSize: 12,
     lineHeight: 16,
@@ -703,6 +734,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingRight: 50,
     marginBottom: 8,
+  },
+  linkShareButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
   },
   shareButton: {
     position: 'absolute',

@@ -55,9 +55,9 @@ function RootLayoutContent() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="modal" />
-        <Stack.Screen name="onboarding-charisma" />
-        <Stack.Screen name="onboarding-emotions" />
-        <Stack.Screen name="add-entry" />
+        <Stack.Screen name="onboarding-charisma" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+        <Stack.Screen name="onboarding-emotions" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+        <Stack.Screen name="add-entry" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="subscription" />
         <Stack.Screen name="auth-sign-in" />
