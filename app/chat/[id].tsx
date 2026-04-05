@@ -12,31 +12,30 @@ import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { formatCharismaEntryForMessage } from '@/utils/charisma-share-utils';
 import {
-  getCurrentUser,
-  getMessages,
-  sendMessage,
-  subscribeToMessages,
-  updateConversation,
-  updateMessageReactions,
+    getCurrentUser,
+    getMessages,
+    sendMessage,
+    subscribeToMessages,
+    updateConversation,
+    updateMessageReactions,
 } from '@/utils/message-utils';
-import { checkPaidProStatus } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 export default function ChatScreen() {
@@ -53,7 +52,6 @@ export default function ChatScreen() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [canChat, setCanChat] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isPro, setIsPro] = useState(false);
   const [otherUser, setOtherUser] = useState<User>({
     id,
     username,
@@ -158,14 +156,10 @@ export default function ChatScreen() {
       const currentUserEmail = session?.user?.email || null;
       setCanChat(!!session);
       setUserEmail(currentUserEmail);
-      // Check actual paid pro status (QR code subscription)
-      const proStatus = await checkPaidProStatus();
-      setIsPro(proStatus);
     } catch (error) {
       console.error('Error checking subscription status:', error);
       setCanChat(false);
       setUserEmail(null);
-      setIsPro(false);
     }
   };
 
@@ -899,14 +893,6 @@ export default function ChatScreen() {
             onPress={handleMenuPress}
             activeOpacity={0.7}>
             <IconSymbol size={24} name="ellipsis" color={(canChat && userEmail) ? colors.text : colors.textSecondary} />
-            {isPro && (
-              <View style={[
-                styles.proBadge,
-                { backgroundColor: colors.gold }
-              ]}>
-                <Text style={styles.proBadgeText} numberOfLines={1}>PRO</Text>
-              </View>
-            )}
           </TouchableOpacity>
         </View>
       </View>
