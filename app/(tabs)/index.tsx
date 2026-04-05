@@ -9,18 +9,18 @@ import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Linking,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -41,8 +41,11 @@ export default function HomeScreen() {
   } | null>(null);
   const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
   const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const pendingScrollToEntries = useRef(false);
+  const entriesSectionY = useRef(0);
 
-  const params = useLocalSearchParams<{ openPasteLink?: string }>();
+  const params = useLocalSearchParams<{ openPasteLink?: string; scrollToEntries?: string }>();
 
   // Open paste link modal when navigated with param
   useEffect(() => {
@@ -50,6 +53,13 @@ export default function HomeScreen() {
       setShowPasteLinkModal(true);
     }
   }, [params.openPasteLink]);
+
+  // Flag scroll when navigated with scrollToEntries param
+  useEffect(() => {
+    if (params.scrollToEntries === 'true') {
+      pendingScrollToEntries.current = true;
+    }
+  }, [params.scrollToEntries]);
 
   useEffect(() => {
     loadData();
@@ -208,6 +218,7 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
           parsedEntries = [];
         }
         setEntries(parsedEntries);
+
       }
       if (onboardingData) {
         try {
@@ -262,7 +273,7 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
       <View style={styles.header}>
         <View style={styles.logoContainer}>
           <CharismaLogo size={50} />
-          <Text style={[styles.title, { color: colors.text }]}>CharApp</Text>
+          <Text style={[styles.title, { color: colors.text }]}>CzarApp</Text>
         </View>
 
         <TouchableOpacity
@@ -292,11 +303,22 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
       <SubscriptionStatusBanner />
 
       {/* Main Content */}
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView ref={scrollViewRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Social Links Section */}
         {sharedLinks.length > 0 && (
           <View style={styles.sectionContainer}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Social Links</Text>
+            <View style={styles.sectionTitleRow}>
+              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Social Links</Text>
+              {entries.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => scrollViewRef.current?.scrollTo({ y: entriesSectionY.current, animated: true })}
+                  style={styles.scrollToTopButton}
+                  activeOpacity={0.7}>
+                  <IconSymbol size={14} name="arrow.down" color={colors.gold} />
+                  <Text style={[styles.scrollToTopText, { color: colors.gold }]}>Entries</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             {sharedLinks.map((link) => {
               const platformColor = getPlatformColor(link.platform);
               const emoji = getPlatformEmoji(link.platform);
@@ -359,84 +381,106 @@ ${entry.notes ? `Notes: ${entry.notes}` : ''}
         )}
 
         {/* Charisma Entries Section */}
-        {entries.length === 0 && sharedLinks.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              No charisma entries yet.
-            </Text>
-            <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              Tap the + button to add your first entry!
-            </Text>
-          </View>
-        ) : (
-          entries.length > 0 && (
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Charisma Entries</Text>
-              {entries.map((entry) => (
-                <TouchableOpacity
-                  key={entry.id}
-                  style={[styles.entryCard, { backgroundColor: colors.card }]}
-                  onPress={() => router.push(`/entry/${entry.id}`)}>
-                  {/* Header with Date and Time */}
-                  <View style={styles.entryHeader}>
-                    <Text style={[styles.entryDate, { color: colors.textSecondary }]}>
-                      {entry.date}
-                    </Text>
-                    {entry.time && (
-                      <Text style={[styles.entryTime, { color: colors.textSecondary }]}>
-                        {entry.time}
+        <View onLayout={(e) => {
+          const y = e.nativeEvent.layout.y;
+          entriesSectionY.current = y;
+          if (pendingScrollToEntries.current) {
+            pendingScrollToEntries.current = false;
+            setTimeout(() => {
+              scrollViewRef.current?.scrollTo({ y, animated: true });
+            }, 100);
+          }
+        }}>
+          {entries.length === 0 && sharedLinks.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                No charisma entries yet.
+              </Text>
+              <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+                Tap the + button to add your first entry!
+              </Text>
+            </View>
+          ) : (
+            entries.length > 0 && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Charisma Entries</Text>
+                  {sharedLinks.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => scrollViewRef.current?.scrollTo({ y: 0, animated: true })}
+                      style={styles.scrollToTopButton}
+                      activeOpacity={0.7}>
+                      <IconSymbol size={14} name="arrow.up" color={colors.gold} />
+                      <Text style={[styles.scrollToTopText, { color: colors.gold }]}>Social Links</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {entries.map((entry) => (
+                  <TouchableOpacity
+                    key={entry.id}
+                    style={[styles.entryCard, { backgroundColor: colors.card }]}
+                    onPress={() => router.push(`/entry/${entry.id}`)}>
+                    {/* Header with Date and Time */}
+                    <View style={styles.entryHeader}>
+                      <Text style={[styles.entryDate, { color: colors.textSecondary }]}>
+                        {entry.date}
                       </Text>
-                    )}
-                  </View>
-
-                  {/* Charisma Section with Large Emoji */}
-                  <View style={styles.charismaSection}>
-                    {entry.charismaEmoji && (
-                      <Text style={styles.charismaEmoji}>{entry.charismaEmoji}</Text>
-                    )}
-                    <View style={styles.charismaTextContainer}>
-                      <Text style={[styles.entryTitle, { color: colors.text }]}>
-                        {entry.majorCharisma}
-                      </Text>
-                      {entry.subCharisma && (
-                        <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>
-                          {entry.subCharisma}
+                      {entry.time && (
+                        <Text style={[styles.entryTime, { color: colors.textSecondary }]}>
+                          {entry.time}
                         </Text>
                       )}
                     </View>
-                  </View>
 
-                  {/* Emotion Emojis */}
-                  {entry.emotionEmojis && entry.emotionEmojis.length > 0 && (
-                    <View style={styles.emotionsContainer}>
-                      {entry.emotionEmojis.map((emojiItem, index) => (
-                        <Text key={index} style={styles.emotionEmoji}>
-                          {emojiItem}
+                    {/* Charisma Section with Large Emoji */}
+                    <View style={styles.charismaSection}>
+                      {entry.charismaEmoji && (
+                        <Text style={styles.charismaEmoji}>{entry.charismaEmoji}</Text>
+                      )}
+                      <View style={styles.charismaTextContainer}>
+                        <Text style={[styles.entryTitle, { color: colors.text }]}>
+                          {entry.majorCharisma}
                         </Text>
-                      ))}
+                        {entry.subCharisma && (
+                          <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>
+                            {entry.subCharisma}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  )}
 
-                  {/* Notes */}
-                  {entry.notes && (
-                    <Text
-                      style={[styles.entryNotes, { color: colors.textSecondary }]}>
-                      {entry.notes}
-                    </Text>
-                  )}
+                    {/* Emotion Emojis */}
+                    {entry.emotionEmojis && entry.emotionEmojis.length > 0 && (
+                      <View style={styles.emotionsContainer}>
+                        {entry.emotionEmojis.map((emojiItem, index) => (
+                          <Text key={index} style={styles.emotionEmoji}>
+                            {emojiItem}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
 
-                  {/* Share Button */}
-                  <TouchableOpacity
-                    style={styles.shareButton}
-                    onPress={(e) => handleShareEntry(entry, e)}
-                    activeOpacity={0.7}>
-                    <IconSymbol size={20} name="paperplane.fill" color={colors.gold} />
+                    {/* Notes */}
+                    {entry.notes && (
+                      <Text
+                        style={[styles.entryNotes, { color: colors.textSecondary }]}>
+                        {entry.notes}
+                      </Text>
+                    )}
+
+                    {/* Share Button */}
+                    <TouchableOpacity
+                      style={styles.shareButton}
+                      onPress={(e) => handleShareEntry(entry, e)}
+                      activeOpacity={0.7}>
+                      <IconSymbol size={20} name="paperplane.fill" color={colors.gold} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )
-        )}
+                ))}
+              </View>
+            )
+          )}
+        </View>
       </ScrollView>
 
       {/* Paste Link Modal */}
@@ -498,6 +542,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 12,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  scrollToTopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  scrollToTopText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyState: {
     flex: 1,

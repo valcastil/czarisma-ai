@@ -387,7 +387,7 @@ export default function OnboardingCharismaScreen() {
       <View style={styles.header}>
         <CharismaLogo size={50} />
         <View style={styles.titleContainer}>
-          <Text style={[styles.appTitle, { color: colors.text }]}>CharApp</Text>
+          <Text style={[styles.appTitle, { color: colors.text }]}>CzarApp</Text>
           {isPaidPro && userEmail && (
             <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
               <Text style={styles.proStatusText}>PRO</Text>
@@ -398,8 +398,8 @@ export default function OnboardingCharismaScreen() {
 
       {/* Question and Subtitle */}
       <View style={styles.questionSection}>
-        <Text style={[styles.question, { color: colors.text }]}>How's your Charisma today?</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Choose 1 charisma</Text>
+        <Text style={[styles.question, { color: colors.text }]}>If you want to be a Czar, master your Czarisma first.</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Choose 1 Charisma</Text>
       </View>
 
       {/* Charisma Options by Category */}

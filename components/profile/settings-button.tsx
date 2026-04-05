@@ -71,7 +71,7 @@ export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscr
       const exportData = await exportUserData();
       await Share.share({
         message: exportData,
-        title: 'CharApp Data Export',
+        title: 'CzarApp Data Export',
       });
     } catch (error) {
       Alert.alert('Export Failed', 'Unable to export data. Please try again.');

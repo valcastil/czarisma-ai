@@ -235,7 +235,7 @@ export default function OnboardingEmotionsScreen() {
       {/* Header with Logo and Title */}
       <View style={styles.header}>
         <CharismaLogo size={60} />
-        <Text style={[styles.appTitle, { color: colors.text }]}>CharApp</Text>
+        <Text style={[styles.appTitle, { color: colors.text }]}>CzarApp</Text>
       </View>
 
       {/* Question and Subtitle */}

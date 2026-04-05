@@ -785,8 +785,8 @@ export default function AddEntryScreen() {
       await AsyncStorage.removeItem('@temp_selected_charisma');
       await AsyncStorage.removeItem('@temp_selected_emotions');
 
-      // Navigate back to home
-      router.push('/(tabs)');
+      // Navigate back to home and scroll to entries
+      router.push({ pathname: '/(tabs)', params: { scrollToEntries: 'true' } });
     } catch (error) {
       console.error('Error saving entry:', error);
     } finally {
@@ -803,7 +803,7 @@ export default function AddEntryScreen() {
         <CharismaLogo size={60} />
         <View style={styles.titleContainer}>
           <TouchableOpacity onPress={handleTitlePress} activeOpacity={0.7}>
-            <Text style={[styles.appTitle, { color: colors.text }]}>CharApp</Text>
+            <Text style={[styles.appTitle, { color: colors.text }]}>CzarApp</Text>
           </TouchableOpacity>
           {!canAccess && (
             <View style={[styles.proButtonsContainer]}>
