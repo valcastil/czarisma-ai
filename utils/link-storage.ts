@@ -326,24 +326,48 @@ export const deleteSharedLink = async (linkId: string): Promise<void> => {
 };
 
 /**
- * Refresh missing titles for existing links in the background.
+ * Refresh missing titles AND thumbnails for existing links in the background.
  * Returns true if any links were updated.
  */
 export const refreshMissingTitles = async (): Promise<boolean> => {
   try {
     const links = await getSharedLinks();
-    const linksNeedingTitle = links.filter(l => !l.title);
-    if (linksNeedingTitle.length === 0) return false;
+    // Check for missing titles OR missing thumbnails (common for TikTok/Instagram)
+    const linksNeedingUpdate = links.filter(l => !l.title || !l.thumbnail);
+    if (linksNeedingUpdate.length === 0) return false;
 
     let updated = false;
     const updatedLinks = await Promise.all(
       links.map(async (link) => {
-        if (link.title) return link;
+        // Skip if already has both title and thumbnail
+        if (link.title && link.thumbnail) return link;
+
         try {
-          const title = await fetchTitleOnly(link.url);
-          if (title) {
+          const metadata = await fetchLinkMetadata(link.url, link.platform);
+          let hasUpdate = false;
+          const updatedLink = { ...link };
+
+          // Update title if missing and we found one
+          if (!link.title && metadata.title) {
+            updatedLink.title = metadata.title;
+            hasUpdate = true;
+          }
+
+          // Update thumbnail if missing and we found one
+          if (!link.thumbnail && metadata.thumbnail) {
+            updatedLink.thumbnail = metadata.thumbnail;
+            hasUpdate = true;
+          }
+
+          // Update description if missing and we found one
+          if (!link.description && metadata.description) {
+            updatedLink.description = metadata.description;
+            hasUpdate = true;
+          }
+
+          if (hasUpdate) {
             updated = true;
-            return { ...link, title };
+            return updatedLink;
           }
         } catch {
           // Skip failed fetches

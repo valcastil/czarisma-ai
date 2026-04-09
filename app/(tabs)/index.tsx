@@ -4,6 +4,7 @@ import { PasteLinkModal } from '@/components/paste-link-modal';
 import { SubscriptionStatusBanner } from '@/components/subscription-status-banner';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
+import { useCzarScroll } from '@/hooks/use-czar-scroll';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, refreshMissingTitles, SharedLink } from '@/utils/link-storage';
 import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
@@ -16,6 +17,8 @@ import {
     Alert,
     Image,
     Linking,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
     ScrollView,
     Share,
     StyleSheet,
@@ -30,6 +33,7 @@ const ONBOARDING_KEY = '@charisma_onboarding';
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { czarVisible, onScroll } = useCzarScroll({ scrollThreshold: 5 });
   const [entries, setEntries] = useState<CharismaEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -306,7 +310,12 @@ Forwarded from CzarApp
       <SubscriptionStatusBanner />
 
       {/* Main Content */}
-      <ScrollView ref={scrollViewRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        onScroll={onScroll}
+        scrollEventThrottle={16}>
         {/* Social Links Section */}
         {sharedLinks.length > 0 && (
           <View style={styles.sectionContainer}>
@@ -507,6 +516,9 @@ Forwarded from CzarApp
           mood="search"
           position="floating"
           message="What are we looking for today?"
+          visible={czarVisible}
+          autoHideDelay={5}
+          appearDelay={3}
           onPress={() => {
             // Czar reacts when tapped - wiggles and talks
           }}

@@ -1,6 +1,6 @@
 import { useTheme } from '@/hooks/use-theme';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Animated, Easing, Image, PanResponder, StyleSheet, Text, TouchableOpacity, View, Dimensions } from 'react-native';
 
 interface CzarCompanionProps {
   message?: string;
@@ -9,6 +9,13 @@ interface CzarCompanionProps {
   mood?: 'happy' | 'thinking' | 'excited' | 'encouraging' | 'search' | 'profile' | 'surprised' | 'sleepy';
   showMessage?: boolean;
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'floating';
+  autoHideDelay?: number;
+  appearDelay?: number;
+  visible?: boolean;
+  onHide?: () => void;
+  intelligent?: boolean; // New: enables smart context-aware behavior
+  onDismiss?: () => void; // New: callback when user dismisses Czar
+  onInteract?: () => void; // New: callback when user taps or drags Czar
 }
 
 const messages = {
@@ -25,6 +32,14 @@ const messages = {
 // Czar image - Tsar portrait
 const CZAR_IMAGE = require('@/assets/images/czar.png');
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const sizeStyles = {
+  small: { width: 70, height: 70 },
+  medium: { width: 100, height: 100 },
+  large: { width: 130, height: 130 },
+};
+
 export function CzarCompanion({
   message,
   onPress,
@@ -32,23 +47,148 @@ export function CzarCompanion({
   mood = 'happy',
   showMessage = true,
   position = 'floating',
+  autoHideDelay = 5,
+  appearDelay = 3,
+  visible: controlledVisible,
+  onHide,
+  intelligent = false,
+  onDismiss,
+  onInteract,
 }: CzarCompanionProps) {
   const { colors } = useTheme();
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const mouthScaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
+  // Draggable position state
+  const pan = useRef(new Animated.ValueXY()).current;
+  const [isDragging, setIsDragging] = useState(false);
+  const lastPosition = useRef({ x: 0, y: 0 });
   const [displayMessage, setDisplayMessage] = useState(message || messages[mood][0]);
   const [messageIndex, setMessageIndex] = useState(0);
   const [isTalking, setIsTalking] = useState(false);
   const [isWiggling, setIsWiggling] = useState(false);
+  const [isVisible, setIsVisible] = useState(controlledVisible ?? false);
+  const [hasAppeared, setHasAppeared] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const sizeStyles = {
-    small: { width: 70, height: 70 },
-    medium: { width: 100, height: 100 },
-    large: { width: 130, height: 130 },
-  };
-
+  // Get current size based on prop
   const currentSize = sizeStyles[size];
+
+  // Handle interaction - defined early for panResponder
+  const handlePress = useCallback(() => {
+    // Trigger wiggle animation
+    setIsWiggling(true);
+
+    // Start talking animation
+    setIsTalking(true);
+
+    // In intelligent mode, tapping dismisses Czar
+    if (intelligent) {
+      onDismiss?.();
+    } else {
+      // Cycle through messages in normal mode
+      const moodMessages = messages[mood];
+      const nextIndex = (messageIndex + 1) % moodMessages.length;
+      setMessageIndex(nextIndex);
+      setDisplayMessage(moodMessages[nextIndex]);
+    }
+
+    onPress?.();
+    onInteract?.();
+  }, [intelligent, onDismiss, onPress, onInteract, mood, messageIndex]);
+
+  // Hide czar function
+  const hideCzar = useCallback(() => {
+    setIsVisible(false);
+    onHide?.();
+  }, [onHide]);
+
+  // Create PanResponder for dragging - simplified approach
+  const panResponder = React.useMemo(() => {
+    let startX = 0;
+    let startY = 0;
+    let didDrag = false;
+
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        setIsDragging(true);
+        startX = 0;
+        startY = 0;
+        didDrag = false;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // Track if this is an actual drag vs tap
+        if (Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5) {
+          if (!didDrag) {
+            didDrag = true;
+            onInteract?.(); // Notify that user started dragging
+          }
+        }
+
+        // Update position
+        pan.setValue({
+          x: gestureState.dx,
+          y: gestureState.dy,
+        });
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        setIsDragging(false);
+
+        // Update last position with current values
+        lastPosition.current.x += gestureState.dx;
+        lastPosition.current.y += gestureState.dy;
+
+        // Keep within bounds after release
+        const padding = 20;
+        const maxX = SCREEN_WIDTH - currentSize.width - padding;
+        const maxY = SCREEN_HEIGHT - currentSize.height - padding;
+
+        const boundedX = Math.max(padding, Math.min(lastPosition.current.x, maxX));
+        const boundedY = Math.max(padding, Math.min(lastPosition.current.y, maxY));
+
+        lastPosition.current = { x: boundedX, y: boundedY };
+
+        // Animate to bounded position
+        Animated.spring(pan, {
+          toValue: { x: boundedX, y: boundedY },
+          useNativeDriver: false,
+          friction: 8,
+        }).start();
+
+        // If it was a tap (minimal movement), trigger onPress
+        if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
+          handlePress();
+        }
+      },
+      onPanResponderTerminate: () => {
+        setIsDragging(false);
+      },
+    });
+  }, [pan, handlePress, onInteract, currentSize.width, currentSize.height]);
+
+  // Handle controlled visibility prop
+  useEffect(() => {
+    if (controlledVisible !== undefined) {
+      setIsVisible(controlledVisible);
+    }
+  }, [controlledVisible]);
+
+  // Update message when prop changes (for intelligent mode)
+  useEffect(() => {
+    if (message && intelligent) {
+      setDisplayMessage(message);
+      // Start talking animation when message changes
+      setIsTalking(true);
+    }
+  }, [message, intelligent]);
 
   // Position styles for different placements
   const positionStyles = {
@@ -58,6 +198,78 @@ export function CzarCompanion({
     'bottom-left': { position: 'absolute' as const, bottom: 100, left: 20 },
     'floating': {}, // Default floating in place
   };
+
+  // Initial delayed appearance
+  useEffect(() => {
+    if (hasAppeared || controlledVisible !== undefined) return;
+
+    appearTimerRef.current = setTimeout(() => {
+      setIsVisible(true);
+      setHasAppeared(true);
+    }, appearDelay * 1000);
+
+    return () => {
+      if (appearTimerRef.current) {
+        clearTimeout(appearTimerRef.current);
+      }
+    };
+  }, [appearDelay, hasAppeared, controlledVisible]);
+
+  // Auto-hide timer when visible
+  useEffect(() => {
+    if (!isVisible || autoHideDelay <= 0) return;
+
+    // Clear any existing timer
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+
+    // Set new hide timer
+    hideTimerRef.current = setTimeout(() => {
+      hideCzar();
+    }, autoHideDelay * 1000);
+
+    return () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
+    };
+  }, [isVisible, autoHideDelay]);
+
+  // Show/hide animation
+  useEffect(() => {
+    if (isVisible) {
+      Animated.parallel([
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.8,
+          duration: 200,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isVisible, opacityAnim, scaleAnim]);
 
   // Floating/hovering animation (like Duolingo owl)
   useEffect(() => {
@@ -162,103 +374,107 @@ export function CzarCompanion({
     };
   }, [isTalking, mouthScaleAnim]);
 
-  // Handle interaction
-  const handlePress = () => {
-    // Trigger wiggle animation
-    setIsWiggling(true);
-    
-    // Start talking animation
-    setIsTalking(true);
-
-    // Cycle through messages
-    const moodMessages = messages[mood];
-    const nextIndex = (messageIndex + 1) % moodMessages.length;
-    setMessageIndex(nextIndex);
-    setDisplayMessage(moodMessages[nextIndex]);
-
-    onPress?.();
-  };
-
   const rotateInterpolate = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
   return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.8} style={[styles.container, positionStyles[position]]}>
-      <View style={styles.companionWrapper}>
-        {/* Speech Bubble */}
-        {showMessage && (
-          <View style={[styles.speechBubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.speechText, { color: colors.text }]} numberOfLines={2}>
-              {displayMessage}
-            </Text>
-          </View>
-        )}
-
-        {/* Czar Character Container */}
-        <Animated.View
-          style={[
-            styles.czarContainer,
-            {
-              transform: [
-                { translateY: bounceAnim },
-              ],
-            },
-          ]}
-        >
-          {/* Main circular image (like Duolingo owl) */}
-          <Animated.View
-            style={[
-              styles.czarBody,
-              {
-                width: currentSize.width,
-                height: currentSize.height,
-                transform: [
-                  { rotate: rotateInterpolate },
-                ],
-              },
-            ]}
-          >
-            <Image
-              source={CZAR_IMAGE}
-              style={[styles.czarImage, { width: currentSize.width, height: currentSize.height }]}
-              resizeMode="cover"
-            />
-          </Animated.View>
-          
-          {/* Animated Mouth - positioned on the face */}
-          <Animated.View
-            style={[
-              styles.mouthWrapper,
-              {
-                transform: [
-                  { scale: mouthScaleAnim },
-                ],
-                opacity: mouthScaleAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 1],
-                }),
-              },
-            ]}
-          >
-            <View style={styles.mouth}>
-              <View style={styles.mouthInner}>
-                <View style={styles.teethTop} />
-                <View style={styles.tongue} />
-              </View>
+    <Animated.View
+      style={[
+        styles.wrapper,
+        positionStyles[position],
+        {
+          opacity: opacityAnim,
+          transform: [
+            { translateX: pan.x },
+            { translateY: pan.y },
+            { scale: scaleAnim },
+          ],
+        },
+      ]}
+      pointerEvents={isVisible ? 'auto' : 'none'}
+      {...panResponder.panHandlers}
+    >
+      <View style={styles.container}>
+        <View style={styles.companionWrapper}>
+          {/* Speech Bubble */}
+          {showMessage && (
+            <View style={[styles.speechBubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.speechText, { color: colors.text }]} numberOfLines={2}>
+                {displayMessage}
+              </Text>
             </View>
-          </Animated.View>
+          )}
 
-          {/* Base/stand shadow (like Duolingo owl sits on something) */}
-          <View style={[styles.shadowBase, { width: currentSize.width * 0.8 }]} />
-        </Animated.View>
+          {/* Czar Character Container */}
+          <Animated.View
+            style={[
+              styles.czarContainer,
+              {
+                transform: [
+                  { translateY: bounceAnim },
+                ],
+              },
+            ]}
+          >
+            {/* Main circular image (like Duolingo owl) */}
+            <Animated.View
+              style={[
+                styles.czarBody,
+                {
+                  width: currentSize.width,
+                  height: currentSize.height,
+                  transform: [
+                    { rotate: rotateInterpolate },
+                  ],
+                },
+              ]}
+            >
+              <Image
+                source={CZAR_IMAGE}
+                style={[styles.czarImage, { width: currentSize.width, height: currentSize.height }]}
+                resizeMode="cover"
+              />
+            </Animated.View>
+
+            {/* Animated Mouth - positioned on the face */}
+            <Animated.View
+              style={[
+                styles.mouthWrapper,
+                {
+                  transform: [
+                    { scale: mouthScaleAnim },
+                  ],
+                  opacity: mouthScaleAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 1],
+                  }),
+                },
+              ]}
+            >
+              <View style={styles.mouth}>
+                <View style={styles.mouthInner}>
+                  <View style={styles.teethTop} />
+                  <View style={styles.tongue} />
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Base/stand shadow (like Duolingo owl sits on something) */}
+            <View style={[styles.shadowBase, { width: currentSize.width * 0.8 }]} />
+          </Animated.View>
+        </View>
       </View>
-    </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: {
     alignItems: 'center',
     justifyContent: 'center',

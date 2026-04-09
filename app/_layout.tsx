@@ -1,12 +1,14 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { IntelligentCzar } from '@/components/intelligent-czar';
 import { Colors } from '@/constants/theme';
+import { CzarProvider, useCzar } from '@/contexts/czar-context';
 import { ThemeProvider, useColorScheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
 import { initializeRevenueCat } from '@/lib/revenuecat';
@@ -25,6 +27,17 @@ function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
   const router = useRouter();
+  const pathname = usePathname();
+  const { setCurrentScreen } = useCzar();
+
+  // Track screen changes for Czar context
+  useEffect(() => {
+    if (pathname) {
+      // Extract screen name from pathname (remove leading slash)
+      const screenName = pathname.replace(/^\//, '').split('/')[0] || 'index';
+      setCurrentScreen(screenName);
+    }
+  }, [pathname, setCurrentScreen]);
 
   // Check auth state and trial status after navigation is ready
   // Signed-in users: free access. Non-signed-in: 30-day trial, then must sign up.
@@ -74,6 +87,8 @@ function RootLayoutContent() {
         />
       </Stack>
       <StatusBar style="light" />
+      {/* Intelligent Czar - appears after inactivity on any screen */}
+      <IntelligentCzar />
     </NavigationThemeProvider>
   );
 }
@@ -103,7 +118,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
         <ThemeProvider>
-          <RootLayoutContent />
+          <CzarProvider>
+            <RootLayoutContent />
+          </CzarProvider>
         </ThemeProvider>
       </StripeProvider>
     </SafeAreaProvider>
