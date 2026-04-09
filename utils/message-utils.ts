@@ -359,7 +359,13 @@ export const getConversations = async (): Promise<Conversation[]> => {
     const selfMsgs = await readSelfMessages(me.id);
     if (selfMsgs.length === 0) return baseConversations;
 
-    const last = selfMsgs[selfMsgs.length - 1];
+    // Decrypt self messages for display
+    const decryptedSelfMsgs = selfMsgs.map(msg => ({
+      ...msg,
+      content: decryptMessage(msg.content)
+    }));
+
+    const last = decryptedSelfMsgs[decryptedSelfMsgs.length - 1];
 
     let selfName = me.name;
     let selfUsername = me.username;

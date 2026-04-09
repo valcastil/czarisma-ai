@@ -65,6 +65,7 @@ export default function ChatScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [currentUserPhoto, setCurrentUserPhoto] = useState<string | null>(null);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [messageToForward, setMessageToForward] = useState<Message | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
@@ -84,6 +85,7 @@ export default function ChatScreen() {
     loadSubscriptionStatus();
     loadMuteStatus();
     loadProfilePhoto();
+    loadCurrentUserPhoto();
     loadTextColor();
 
     // Subscribe to real-time messages
@@ -486,35 +488,16 @@ export default function ChatScreen() {
     }
   };
 
-  const handlePickPhoto = async () => {
+  const loadCurrentUserPhoto = async () => {
     try {
-      const { MediaPickerService } = await import('@/lib/media-picker-service');
-      const photo = await MediaPickerService.pickImageWithAdjustableCrop();
-      
-      if (photo?.uri) {
-        setProfilePhoto(photo.uri);
-
-        // Save to AsyncStorage
-        const photoKey = `@profile_photo_${otherUser.id}`;
-        await AsyncStorage.setItem(photoKey, photo.uri);
-
-        Alert.alert('Success', 'Profile photo updated successfully!');
+      const me = await getCurrentUser();
+      if (me) {
+        const photoKey = `@profile_photo_${me.id}`;
+        const savedPhoto = await AsyncStorage.getItem(photoKey);
+        setCurrentUserPhoto(savedPhoto);
       }
     } catch (error) {
-      console.error('Error picking photo:', error);
-      Alert.alert('Error', 'Failed to update profile photo. Please try again.');
-    }
-  };
-
-  const handleRemovePhoto = async () => {
-    try {
-      setProfilePhoto(null);
-      const photoKey = `@profile_photo_${otherUser.id}`;
-      await AsyncStorage.removeItem(photoKey);
-      Alert.alert('Success', 'Profile photo removed successfully!');
-    } catch (error) {
-      console.error('Error removing photo:', error);
-      Alert.alert('Error', 'Failed to remove profile photo. Please try again.');
+      console.error('Error loading current user photo:', error);
     }
   };
 
@@ -703,6 +686,20 @@ export default function ChatScreen() {
           styles.messageContainer,
           isFromCurrentUser ? styles.messageRight : styles.messageLeft
         ]}>
+          {/* Avatar for received messages (left side) */}
+          {!isFromCurrentUser && (
+            profilePhoto ? (
+              <Image source={{ uri: profilePhoto }} style={styles.messageAvatar} />
+            ) : (
+              <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.gold }]}>
+                <Text style={styles.messageAvatarText}>
+                  {otherUser.name?.charAt(0).toUpperCase() || '?'}
+                </Text>
+              </View>
+            )
+          )}
+
+          <View style={styles.messageBubbleWrapper}>
           {isForwarded && (
             <View style={styles.forwardedLabel}>
               <IconSymbol size={12} name="arrowshape.turn.up.forward" color={colors.textSecondary} />
@@ -827,6 +824,20 @@ export default function ChatScreen() {
               ))}
             </View>
           )}
+          </View>
+
+          {/* Avatar for sent messages (right side) */}
+          {isFromCurrentUser && (
+            currentUserPhoto ? (
+              <Image source={{ uri: currentUserPhoto }} style={styles.messageAvatar} />
+            ) : (
+              <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.gold }]}>
+                <Text style={styles.messageAvatarText}>
+                  {currentUser?.name?.charAt(0).toUpperCase() || '?'}
+                </Text>
+              </View>
+            )
+          )}
         </View>
       </TouchableOpacity>
       </>
@@ -864,6 +875,19 @@ export default function ChatScreen() {
           activeOpacity={0.7}>
           <IconSymbol size={24} name="chevron.left" color={colors.text} />
         </TouchableOpacity>
+
+        {profilePhoto ? (
+          <Image
+            source={{ uri: profilePhoto }}
+            style={styles.headerAvatar}
+          />
+        ) : (
+          <View style={[styles.headerAvatarPlaceholder, { backgroundColor: colors.gold }]}>
+            <Text style={styles.headerAvatarText}>
+              {otherUser.name?.charAt(0).toUpperCase() || '?'}
+            </Text>
+          </View>
+        )}
 
         <View style={styles.headerInfo}>
           <Text style={[styles.headerName, { color: colors.text }]}>
@@ -1143,11 +1167,6 @@ export default function ChatScreen() {
                           <IconSymbol size={40} name="person" color={colors.text} />
                         </View>
                       )}
-                      <TouchableOpacity
-                        style={[styles.photoEditButton, { backgroundColor: colors.gold }]}
-                        onPress={profilePhoto ? handleRemovePhoto : handlePickPhoto}>
-                        <IconSymbol size={16} name="camera" color="#000000" />
-                      </TouchableOpacity>
                     </View>
                     <Text style={[styles.profileName, { color: colors.text }]}>
                       {otherUser.name}
@@ -1308,6 +1327,25 @@ const styles = StyleSheet.create({
     padding: 4,
     marginRight: 12,
   },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  headerAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerAvatarText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
   headerInfo: {
     flex: 1,
   },
@@ -1372,15 +1410,38 @@ const styles = StyleSheet.create({
   },
   messageContainer: {
     marginVertical: 4,
-  },
-  messageLeft: {
-    alignItems: 'flex-start',
-  },
-  messageRight: {
+    flexDirection: 'row',
     alignItems: 'flex-end',
   },
+  messageLeft: {
+    justifyContent: 'flex-start',
+  },
+  messageRight: {
+    justifyContent: 'flex-end',
+  },
+  messageAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 6,
+  },
+  messageAvatarPlaceholder: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageAvatarText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  messageBubbleWrapper: {
+    maxWidth: '80%',
+  },
   messageBubble: {
-    maxWidth: '90%',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 20,

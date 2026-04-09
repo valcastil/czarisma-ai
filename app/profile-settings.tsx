@@ -1,8 +1,10 @@
+import { CzarCompanion } from '@/components/czar-companion';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { UserProfile } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { registerCurrentUser } from '@/utils/message-utils';
+import { getCurrentUser, registerCurrentUser } from '@/utils/message-utils';
 import { getProfile, updateProfile } from '@/utils/profile-utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -97,6 +99,21 @@ export default function ProfileSettingsScreen() {
         avatar: avatarUri,
       });
       setProfile(updated);
+
+      // Sync avatar to AsyncStorage so chat screens can use it
+      try {
+        const me = await getCurrentUser();
+        if (me) {
+          const photoKey = `@profile_photo_${me.id}`;
+          if (avatarUri) {
+            await AsyncStorage.setItem(photoKey, avatarUri);
+          } else {
+            await AsyncStorage.removeItem(photoKey);
+          }
+        }
+      } catch (photoSyncErr) {
+        console.error('Error syncing avatar to AsyncStorage:', photoSyncErr);
+      }
       
       // Register/sync user profile to ensure messaging system has latest data
       try {
@@ -156,6 +173,19 @@ export default function ProfileSettingsScreen() {
         >
           <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Czar AI Companion - Duolingo-style floating mascot */}
+      <View style={styles.czarContainer}>
+        <CzarCompanion
+          size="medium"
+          mood="profile"
+          position="floating"
+          message="Looking good!"
+          onPress={() => {
+            // Czar reacts when tapped - wiggles and talks
+          }}
+        />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -254,9 +284,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  czarContainer: {
+    position: 'absolute',
+    top: 96,
+    right: 16,
+    zIndex: 100,
+  },
   header: {
-    height: 56,
+    height: 96,
     paddingHorizontal: 16,
+    paddingTop: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

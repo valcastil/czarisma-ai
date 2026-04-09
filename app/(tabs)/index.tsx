@@ -1,4 +1,5 @@
 import { CharismaLogo } from '@/components/charisma-logo';
+import { CzarCompanion } from '@/components/czar-companion';
 import { PasteLinkModal } from '@/components/paste-link-modal';
 import { SubscriptionStatusBanner } from '@/components/subscription-status-banner';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -11,16 +12,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    Linking,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -471,9 +472,7 @@ Forwarded from CzarApp
                     {entry.emotionEmojis && entry.emotionEmojis.length > 0 && (
                       <View style={styles.emotionsContainer}>
                         {entry.emotionEmojis.map((emojiItem, index) => (
-                          <Text key={index} style={styles.emotionEmoji}>
-                            {emojiItem}
-                          </Text>
+                          <Text key={index} style={styles.emotionEmoji}>{emojiItem}</Text>
                         ))}
                       </View>
                     )}
@@ -501,11 +500,29 @@ Forwarded from CzarApp
         </View>
       </ScrollView>
 
+      {/* Czar AI Companion - Duolingo-style floating mascot */}
+      <View style={styles.czarContainer}>
+        <CzarCompanion
+          size="medium"
+          mood="search"
+          position="floating"
+          message="What are we looking for today?"
+          onPress={() => {
+            // Czar reacts when tapped - wiggles and talks
+          }}
+        />
+      </View>
+
       {/* Paste Link Modal */}
       <PasteLinkModal
         visible={showPasteLinkModal}
         onClose={() => setShowPasteLinkModal(false)}
-        onLinkAdded={loadSharedLinks}
+        onLinkAdded={() => {
+          loadSharedLinks();
+          setTimeout(() => {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+          }, 300);
+        }}
       />
 
     </View>
@@ -695,6 +712,12 @@ const styles = StyleSheet.create({
   },
   entryDate: {
     fontSize: 12,
+  },
+  czarContainer: {
+    position: 'absolute',
+    top: 120,
+    right: 20,
+    zIndex: 100,
   },
   entryTime: {
     fontSize: 12,

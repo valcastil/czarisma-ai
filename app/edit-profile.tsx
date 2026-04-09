@@ -1,21 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  Alert,
-  KeyboardAvoidingView,
-  Platform
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { UserProfile } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { Colors } from '@/constants/theme';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getProfile, updateProfile } from '@/utils/profile-utils';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -439,14 +438,7 @@ export default function EditProfileScreen() {
         <Text style={[styles.title, { color: colors.text }]}>
           Edit Profile - {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
         </Text>
-        <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: colors.gold }]}
-          onPress={handleSave}
-          disabled={saving}>
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Saving...' : 'Save'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.placeholder} />
       </View>
 
       {renderTabs()}
@@ -454,7 +446,19 @@ export default function EditProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         {activeTab === 'basic' && renderBasicInfo()}
         {activeTab === 'personal' && renderPersonalInfo()}
+        <View style={styles.bottomPadding} />
       </ScrollView>
+      
+      <View style={styles.bottomSaveContainer}>
+        <TouchableOpacity
+          style={[styles.bottomSaveButton, { backgroundColor: colors.gold }]}
+          onPress={handleSave}
+          disabled={saving}>
+          <Text style={styles.saveButtonText}>
+            {saving ? 'Saving...' : 'Save'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -476,7 +480,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 60,
+    paddingTop: 120,
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
@@ -490,10 +494,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginRight: 40, // Balance the back button
   },
+  placeholder: {
+    width: 60, // Same width as the original save button
+  },
   saveButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+  },
+  bottomSaveContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: 30, // Extra padding for safe area
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  bottomSaveButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  bottomPadding: {
+    height: 20, // Space above the bottom save button
   },
   saveButtonText: {
     fontSize: 14,

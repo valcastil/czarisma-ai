@@ -1,4 +1,5 @@
 import { Attachment, Conversation, Message, User } from '@/constants/message-types';
+import { decryptMessage } from '@/utils/encryption';
 import { logger } from '@/utils/logger';
 import { supabase } from './supabase';
 
@@ -570,7 +571,7 @@ export const subscribeToMessages = (
                     receiverId: data.receiver_id,
                     receiverUsername: data.receiver.username,
                     receiverName: data.receiver.name,
-                    content: data.content,
+                    content: decryptMessage(data.content),
                     timestamp: new Date(data.created_at).getTime(),
                     date: new Date(data.created_at).toLocaleDateString(),
                     time: new Date(data.created_at).toLocaleTimeString('en-US', {
@@ -699,7 +700,7 @@ export const getConversations = async (): Promise<Conversation[]> => {
             participantLastSeen: conv.participant.last_seen ? new Date(conv.participant.last_seen).getTime() : undefined,
             lastMessage: {
                 id: conv.last_message_id || '',
-                content: conv.last_message_content || '',
+                content: decryptMessage(conv.last_message_content || ''),
                 timestamp: conv.last_message_timestamp ? new Date(conv.last_message_timestamp).getTime() : Date.now(),
                 isFromCurrentUser: conv.last_message_sender_id === session.user.id,
                 senderId: conv.last_message_sender_id || '',
@@ -787,7 +788,7 @@ export const subscribeToConversations = (
                                 participantLastSeen: data.participant?.last_seen ? new Date(data.participant.last_seen).getTime() : undefined,
                                 lastMessage: {
                                     id: data.last_message_id || '',
-                                    content: data.last_message_content || '',
+                                    content: decryptMessage(data.last_message_content || ''),
                                     timestamp: data.last_message_timestamp ? new Date(data.last_message_timestamp).getTime() : Date.now(),
                                     isFromCurrentUser: data.last_message_sender_id === userId,
                                     senderId: data.last_message_sender_id || '',

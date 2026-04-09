@@ -8,6 +8,7 @@ import {
     registerCurrentUser,
     subscribeToConversations,
 } from '@/utils/message-utils';
+import { getProfile } from '@/utils/profile-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -16,6 +17,7 @@ import {
     ActivityIndicator,
     Alert,
     FlatList,
+    Image,
     Modal,
     Pressable,
     RefreshControl,
@@ -34,6 +36,7 @@ export default function MessagesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
+  const [profilePhotos, setProfilePhotos] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     initializeMessages();
@@ -96,8 +99,38 @@ export default function MessagesScreen() {
     try {
       const userConversations = await getConversations();
       setConversations(userConversations);
+      // Load profile photos for all participants
+      loadProfilePhotos(userConversations);
     } catch (error) {
       console.error('Error loading conversations:', error);
+    }
+  };
+
+  const loadProfilePhotos = async (convos: Conversation[]) => {
+    try {
+      const photos: Record<string, string | null> = {};
+      // Load the current user's own profile avatar
+      try {
+        const profile = await getProfile();
+        if (profile.avatar && profile.id) {
+          photos[profile.id] = profile.avatar;
+        }
+      } catch {
+        // Ignore profile load errors
+      }
+      // Load profile photos for all conversation participants
+      await Promise.all(
+        convos.map(async (convo) => {
+          if (!photos[convo.participantId]) {
+            const photoKey = `@profile_photo_${convo.participantId}`;
+            const photo = await AsyncStorage.getItem(photoKey);
+            photos[convo.participantId] = photo;
+          }
+        })
+      );
+      setProfilePhotos(photos);
+    } catch (error) {
+      console.error('Error loading profile photos:', error);
     }
   };
 
@@ -280,11 +313,18 @@ export default function MessagesScreen() {
       activeOpacity={0.7}>
 
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, { backgroundColor: colors.gold }]}>
-          <Text style={styles.avatarText}>
-            {item.participantName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        {profilePhotos[item.participantId] ? (
+          <Image
+            source={{ uri: profilePhotos[item.participantId]! }}
+            style={styles.avatarPhoto}
+          />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: colors.gold }]}>
+            <Text style={styles.avatarText}>
+              {item.participantName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
         {item.participantIsOnline ? (
           <View style={styles.onlineDot} />
         ) : null}
@@ -508,6 +548,11 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarPhoto: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   avatarText: {
     fontSize: 20,

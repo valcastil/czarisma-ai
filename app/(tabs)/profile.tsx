@@ -128,7 +128,7 @@ export default function ProfileScreen() {
   );
 
   const handleEditProfile = () => {
-    router.push('/edit-profile?tab=basic');
+    router.push('/profile-settings');
   };
 
   const handleSettings = () => {
