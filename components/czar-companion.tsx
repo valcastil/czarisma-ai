@@ -30,7 +30,7 @@ const messages = {
 };
 
 // Czar image - Tsar portrait
-const CZAR_IMAGE = require('@/assets/images/Czar Nicholas.svg');
+const CZAR_IMAGE = require('@/assets/images/czar.png');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
