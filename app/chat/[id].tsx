@@ -86,7 +86,7 @@ export default function ChatScreen() {
     initializeChat();
     loadSubscriptionStatus();
     loadMuteStatus();
-    loadProfilePhoto();
+    // loadProfilePhoto() is not needed here - initializeChat sets profilePhoto from Supabase data
     loadCurrentUserPhoto();
     loadTextColor();
 
@@ -144,6 +144,14 @@ export default function ChatScreen() {
       console.error('Error loading text color:', error);
     }
   };
+
+  // Set profile photo when otherUser data arrives from Supabase
+  useEffect(() => {
+    if (otherUser.avatarUrl && !profilePhoto) {
+      console.log('otherUser updated with avatarUrl, setting profile photo:', otherUser.avatarUrl);
+      setProfilePhoto(otherUser.avatarUrl);
+    }
+  }, [otherUser.avatarUrl]);
 
   const handleSelectTextColor = async (color: string) => {
     try {
@@ -680,6 +688,14 @@ export default function ChatScreen() {
     const nextItem = reversedMessages[index + 1];
     const showDateSeparator = !nextItem || nextItem.date !== item.date;
     const isFromCurrentUser = item.isFromCurrentUser;
+
+    // Debug avatar state for received messages
+    if (!isFromCurrentUser && index === 0) {
+      console.log('=== Message Avatar Debug ===');
+      console.log('Profile photo state:', profilePhoto);
+      console.log('Other user avatarUrl:', otherUser.avatarUrl);
+      console.log('Has avatar:', !!(profilePhoto || otherUser.avatarUrl));
+    }
     const isForwarded = item.content.startsWith('📩 Forwarded from');
     const showActions = selectedMessageId === item.id;
     const showReactionPicker = reactionMessageId === item.id;

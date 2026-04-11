@@ -95,26 +95,7 @@ export default function ProfileSettingsScreen() {
       
       console.log('Saving profile with avatar:', avatarUri ? 'Yes' : 'No');
       
-      // Test avatar bucket setup if avatar is being set
-      if (avatarUri && avatarUri !== profile.avatar) {
-        console.log('Testing avatar bucket setup...');
-        try {
-          const { setupAvatarsBucket } = await import('@/utils/avatar-setup');
-          const bucketReady = await setupAvatarsBucket();
-          if (!bucketReady) {
-            Alert.alert(
-              'Storage Setup Required',
-              'The avatars storage bucket needs to be set up. Please run the SQL migration: supabase/migrations/20241230_create_avatars_bucket.sql',
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-        } catch (setupError) {
-          console.error('Error setting up avatars bucket:', setupError);
-        }
-      }
-      
-      // Update profile (this now syncs to Supabase automatically)
+      // Update profile (this now syncs to Supabase automatically, including avatar upload)
       const updated = await updateProfile({
         name: trimmedName,
         bio: about.trim(),

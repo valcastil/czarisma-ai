@@ -2,18 +2,23 @@
 
 Run these SQL commands in your Supabase SQL Editor (https://supabase.com/dashboard/project/gdgbuvgmzaqeajwxhldr/sql)
 
-## Step 1: Create Avatars Bucket
+## Step 1: Create/Update Avatars Bucket (MUST be public)
 
 ```sql
--- Create avatars storage bucket
+-- Create avatars storage bucket as PUBLIC so avatars are accessible to all users
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'avatars',
   'avatars',
-  false, -- Private bucket
+  true, -- MUST be public for avatars to display for other users
   5242880, -- 5MB limit for avatars
   ARRAY['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-) ON CONFLICT (id) DO NOTHING;
+) ON CONFLICT (id) DO UPDATE SET public = true;
+```
+
+**If the bucket already exists but is private**, run this to make it public:
+```sql
+UPDATE storage.buckets SET public = true WHERE id = 'avatars';
 ```
 
 ## Step 2: Create RLS Policies

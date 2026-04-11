@@ -148,6 +148,11 @@ export default function MessagesScreen() {
   }, []);
 
   const handleConversationPress = (conversation: Conversation) => {
+    console.log('=== Conversation Press Debug ===');
+    console.log('Participant ID:', conversation.participantId);
+    console.log('Participant Name:', conversation.participantName);
+    console.log('Participant Avatar URL:', conversation.participantAvatarUrl);
+    
     router.push({
       pathname: '/chat/[id]',
       params: {

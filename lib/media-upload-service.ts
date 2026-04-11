@@ -269,11 +269,7 @@ export class MediaUploadService {
         });
 
       if (error) {
-        console.error('Supabase storage error:', {
-          message: error.message,
-          statusCode: error.statusCode,
-          error: error.error
-        });
+        console.error('Supabase storage error:', error.message);
         throw new Error(`Storage upload failed: ${error.message}`);
       }
 
@@ -281,17 +277,43 @@ export class MediaUploadService {
 
       onProgress?.(90);
 
-      // Get public URL
+      // Get the avatar URL - try public URL first, fall back to signed URL
+      let avatarUrl: string;
+      
       const { data: { publicUrl } } = supabase.storage
         .from(this.AVATAR_BUCKET_NAME)
         .getPublicUrl(fileName);
 
-      console.log('Public URL generated:', publicUrl);
+      // Test if public URL is accessible
+      try {
+        const response = await fetch(publicUrl, { method: 'HEAD' });
+        if (response.ok) {
+          console.log('Public URL is accessible:', publicUrl);
+          avatarUrl = publicUrl;
+        } else {
+          console.log('Public URL not accessible (status:', response.status, '), trying signed URL...');
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from(this.AVATAR_BUCKET_NAME)
+            .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiry
+          
+          if (signedError) {
+            console.error('Error creating signed URL:', signedError);
+            avatarUrl = publicUrl; // Fall back to public URL anyway
+          } else {
+            console.log('Signed URL generated:', signedData.signedUrl);
+            avatarUrl = signedData.signedUrl;
+          }
+        }
+      } catch (fetchError) {
+        console.log('Could not test public URL, using it as fallback:', publicUrl);
+        avatarUrl = publicUrl;
+      }
 
       onProgress?.(100);
 
       console.log('=== Avatar upload completed successfully ===');
-      return publicUrl;
+      console.log('Final avatar URL:', avatarUrl);
+      return avatarUrl;
     } catch (error) {
       console.error('=== Avatar upload failed ===');
       console.error('Error details:', error);

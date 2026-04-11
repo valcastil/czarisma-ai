@@ -1,9 +1,9 @@
--- Create avatars storage bucket
+-- Create avatars storage bucket (public so avatars are accessible to all users)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'avatars',
   'avatars',
-  false, -- Private bucket
+  true, -- Public bucket so avatars are accessible without signed URLs
   5242880, -- 5MB limit for avatars
   ARRAY['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 ) ON CONFLICT (id) DO NOTHING;

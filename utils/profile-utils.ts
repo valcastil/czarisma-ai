@@ -184,6 +184,11 @@ export const updateProfile = async (updates: Partial<UserProfile>): Promise<User
               supabaseUpdates.avatar_url = avatarUrl;
               console.log('Avatar uploaded successfully to Supabase storage:', avatarUrl);
               logger.info('Avatar uploaded to Supabase storage:', avatarUrl);
+              
+              // Update local profile with the public URL so it works across devices
+              updatedProfile.avatar = avatarUrl;
+              await saveProfile(updatedProfile);
+              console.log('Local profile updated with Supabase avatar URL');
             } catch (uploadError) {
               console.error('Failed to upload avatar to Supabase storage:', uploadError);
               logger.error('Failed to upload avatar to Supabase storage:', uploadError);
