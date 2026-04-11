@@ -278,6 +278,8 @@ export const updateOnlineStatus = async (isOnline: boolean): Promise<void> => {
  */
 export const getUserProfile = async (userId: string): Promise<User | null> => {
     try {
+        logger.info('Fetching user profile for userId:', userId);
+        
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
@@ -288,6 +290,14 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
             logger.error('Error fetching user profile by ID:', error);
             throw error;
         }
+
+        logger.info('User profile fetched:', {
+            id: data.id,
+            username: data.username,
+            name: data.name,
+            avatar_url: data.avatar_url,
+            is_online: data.is_online
+        });
 
         return {
             id: data.id,
@@ -529,11 +539,25 @@ export const subscribeToMessages = (
     onNewMessage: (message: Message) => void
 ): (() => void) => {
     let currentUserId: string | null = null;
+    let channel: any = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_DELAY_MS = 3000;
+    const HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
 
     const handleMessageChange = async (payload: any) => {
         try {
+            logger.info('Raw payload received:', { 
+                eventType: payload.eventType, 
+                messageId: payload.new?.id,
+                oldReactions: payload.old?.reactions,
+                newReactions: payload.new?.reactions
+            });
+
             // Fetch the complete message with sender/receiver info
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('messages')
                 .select(`
             *,
@@ -543,61 +567,183 @@ export const subscribeToMessages = (
                 .eq('id', payload.new.id)
                 .single();
 
-            if (data) {
-                const { data: { session } } = await supabase.auth.getSession();
-                const userId = session?.user.id;
-
-                // Only process messages that involve the current conversation
-                const isRelevantMessage = 
-                    (data.sender_id === otherUserId && data.receiver_id === userId) ||
-                    (data.sender_id === userId && data.receiver_id === otherUserId);
-
-                if (!isRelevantMessage) {
-                    return;
-                }
-
-                logger.info('Received realtime message:', {
-                    messageId: data.id,
-                    from: data.sender_id,
-                    to: data.receiver_id,
-                    isFromOther: data.sender_id === otherUserId
-                });
-
-                onNewMessage({
-                    id: data.id,
-                    senderId: data.sender_id,
-                    senderUsername: data.sender.username,
-                    senderName: data.sender.name,
-                    receiverId: data.receiver_id,
-                    receiverUsername: data.receiver.username,
-                    receiverName: data.receiver.name,
-                    content: decryptMessage(data.content),
-                    timestamp: new Date(data.created_at).getTime(),
-                    date: new Date(data.created_at).toLocaleDateString(),
-                    time: new Date(data.created_at).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                    }),
-                    isRead: data.is_read,
-                    isFromCurrentUser: data.sender_id === userId,
-                    reactions: data.reactions || [],
-                    attachment: data.attachment_type ? {
-                        type: data.attachment_type,
-                        url: data.attachment_url,
-                        name: data.attachment_name,
-                        size: data.attachment_size,
-                        mimeType: data.attachment_mime_type,
-                        thumbnailUrl: data.attachment_thumbnail_url,
-                        duration: data.attachment_duration,
-                        width: data.attachment_width,
-                        height: data.attachment_height,
-                    } : undefined,
-                });
+            if (error) {
+                logger.error('Error fetching message:', error);
+                return;
             }
+
+            if (!data) {
+                logger.warn('No data found for message:', payload.new.id);
+                return;
+            }
+
+            const { data: { session } } = await supabase.auth.getSession();
+            const userId = session?.user.id;
+
+            logger.info('Checking message relevance:', {
+                messageId: data.id,
+                senderId: data.sender_id,
+                receiverId: data.receiver_id,
+                otherUserId,
+                userId,
+                reactions: data.reactions
+            });
+
+            // Only process messages that involve the current conversation
+            const isRelevantMessage = 
+                (data.sender_id === otherUserId && data.receiver_id === userId) ||
+                (data.sender_id === userId && data.receiver_id === otherUserId);
+
+            if (!isRelevantMessage) {
+                logger.info('Message not relevant, skipping:', data.id);
+                return;
+            }
+
+            logger.info('Processing realtime message:', {
+                messageId: data.id,
+                from: data.sender_id,
+                to: data.receiver_id,
+                isFromOther: data.sender_id === otherUserId,
+                reactions: data.reactions,
+                eventType: payload.eventType
+            });
+
+            onNewMessage({
+                id: data.id,
+                senderId: data.sender_id,
+                senderUsername: data.sender.username,
+                senderName: data.sender.name,
+                receiverId: data.receiver_id,
+                receiverUsername: data.receiver.username,
+                receiverName: data.receiver.name,
+                content: decryptMessage(data.content),
+                timestamp: new Date(data.created_at).getTime(),
+                date: new Date(data.created_at).toLocaleDateString(),
+                time: new Date(data.created_at).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                }),
+                isRead: data.is_read,
+                isFromCurrentUser: data.sender_id === userId,
+                reactions: data.reactions || [],
+                attachment: data.attachment_type ? {
+                    type: data.attachment_type,
+                    url: data.attachment_url,
+                    name: data.attachment_name,
+                    size: data.attachment_size,
+                    mimeType: data.attachment_mime_type,
+                    thumbnailUrl: data.attachment_thumbnail_url,
+                    duration: data.attachment_duration,
+                    width: data.attachment_width,
+                    height: data.attachment_height,
+                } : undefined,
+            });
         } catch (error) {
             logger.error('Error handling realtime message:', error);
         }
+    };
+
+    // Clear all timers
+    const clearTimers = () => {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+        }
+    };
+
+    // Setup heartbeat to keep connection alive
+    const setupHeartbeat = () => {
+        heartbeatTimer = setInterval(() => {
+            if (channel && channel.state === 'joined') {
+                // Send heartbeat by calling a lightweight operation
+                channel.send({ type: 'heartbeat' });
+            }
+        }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    // Reconnect function
+    const reconnect = () => {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            logger.error('Max reconnection attempts reached - giving up');
+            return;
+        }
+
+        reconnectAttempts++;
+        logger.info(`Attempting to reconnect... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+        // Clean up old channel
+        if (channel) {
+            supabase.removeChannel(channel);
+        }
+
+        // Create new channel
+        createChannel();
+    };
+
+    // Create channel function
+    const createChannel = () => {
+        // Create unique channel name
+        const channelName = `messages:${otherUserId}:${Date.now()}`;
+        
+        channel = supabase
+            .channel(channelName)
+            // Listen for messages FROM the other user (incoming messages)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `sender_id=eq.${otherUserId}`,
+                },
+                handleMessageChange
+            )
+            // Listen for messages TO the other user (outgoing messages from current user)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `receiver_id=eq.${otherUserId}`,
+                },
+                handleMessageChange
+            )
+            // Listen for message updates (reactions, read status)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'messages',
+                },
+                handleMessageChange
+            )
+            .subscribe((status) => {
+                logger.info('Realtime subscription status:', status);
+                
+                if (status === 'SUBSCRIBED') {
+                    logger.info('Bidirectional message sync active for:', { otherUserId, channelName });
+                    reconnectAttempts = 0; // Reset counter on successful connection
+                    setupHeartbeat();
+                } else if (status === 'CHANNEL_ERROR') {
+                    logger.error('Realtime channel error - scheduling reconnect');
+                    clearTimers();
+                    reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
+                } else if (status === 'TIMED_OUT') {
+                    logger.error('Realtime subscription timed out - scheduling reconnect');
+                    clearTimers();
+                    reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
+                } else if (status === 'CLOSED') {
+                    logger.warn('Realtime channel closed');
+                    clearTimers();
+                }
+            });
     };
 
     // Get current user ID for filtering
@@ -612,59 +758,16 @@ export const subscribeToMessages = (
         }
     })();
 
-    // Create unique channel name to avoid conflicts between multiple chat screens
-    const channelName = `messages:${otherUserId}:${Date.now()}`;
-    
-    const channel = supabase
-        .channel(channelName)
-        // Listen for messages FROM the other user (incoming messages)
-        .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'messages',
-                filter: `sender_id=eq.${otherUserId}`,
-            },
-            handleMessageChange
-        )
-        // Listen for messages TO the other user (outgoing messages from current user)
-        // This ensures sender sees their own message in realtime
-        .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'messages',
-                filter: `receiver_id=eq.${otherUserId}`,
-            },
-            handleMessageChange
-        )
-        // Listen for message updates (reactions, read status)
-        .on(
-            'postgres_changes',
-            {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'messages',
-            },
-            handleMessageChange
-        )
-        .subscribe((status) => {
-            logger.info('Realtime subscription status:', status);
-            if (status === 'SUBSCRIBED') {
-                logger.info('Bidirectional message sync active for:', { otherUserId, channelName });
-            } else if (status === 'CHANNEL_ERROR') {
-                logger.error('Realtime channel error - messages may not sync properly');
-            } else if (status === 'TIMED_OUT') {
-                logger.error('Realtime subscription timed out - attempting reconnect');
-            }
-        });
+    // Initial channel creation
+    createChannel();
 
     // Return unsubscribe function
     return () => {
         logger.info('Unsubscribing from messages channel');
-        supabase.removeChannel(channel);
+        clearTimers();
+        if (channel) {
+            supabase.removeChannel(channel);
+        }
     };
 };
 
@@ -680,16 +783,27 @@ export const getConversations = async (): Promise<Conversation[]> => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return [];
 
+        logger.info('Fetching conversations for user:', session.user.id);
+
         const { data, error } = await supabase
             .from('conversations')
             .select(`
         *,
-        participant:participant_id(username, name, is_online, last_seen)
+        participant:participant_id(username, name, is_online, last_seen, avatar_url)
       `)
             .eq('user_id', session.user.id)
             .order('updated_at', { ascending: false });
 
         if (error) throw error;
+
+        logger.info('Conversations fetched:', data.length);
+        data.forEach(conv => {
+            logger.info('Conversation participant:', {
+                participantId: conv.participant_id,
+                participantUsername: conv.participant.username,
+                participantAvatarUrl: conv.participant.avatar_url
+            });
+        });
 
         return data.map(conv => ({
             id: conv.id,
@@ -698,6 +812,7 @@ export const getConversations = async (): Promise<Conversation[]> => {
             participantName: conv.participant.name,
             participantIsOnline: conv.participant.is_online,
             participantLastSeen: conv.participant.last_seen ? new Date(conv.participant.last_seen).getTime() : undefined,
+            participantAvatarUrl: conv.participant.avatar_url,
             lastMessage: {
                 id: conv.last_message_id || '',
                 content: decryptMessage(conv.last_message_content || ''),
@@ -747,15 +862,50 @@ export const deleteConversation = async (participantId: string): Promise<void> =
 export const subscribeToConversations = (
     onUpdate: (conversation: Conversation) => void
 ): (() => void) => {
-    // Get current user ID synchronously from cache or return empty unsubscribe
     let channel: any = null;
+    let userId: string | null = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_DELAY_MS = 3000;
+    const HEARTBEAT_INTERVAL_MS = 30000;
 
-    (async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+    const clearTimers = () => {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+        }
+    };
 
-        const userId = session.user.id;
+    const setupHeartbeat = () => {
+        heartbeatTimer = setInterval(() => {
+            if (channel && channel.state === 'joined') {
+                channel.send({ type: 'heartbeat' });
+            }
+        }, HEARTBEAT_INTERVAL_MS);
+    };
 
+    const reconnect = () => {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            logger.error('Conversations: Max reconnection attempts reached');
+            return;
+        }
+        reconnectAttempts++;
+        logger.info(`Conversations: Attempting reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        if (channel) {
+            supabase.removeChannel(channel);
+        }
+        createChannel();
+    };
+
+    const createChannel = () => {
+        if (!userId) return;
+        
         channel = supabase
             .channel(`conversations:${userId}`)
             .on(
@@ -768,12 +918,11 @@ export const subscribeToConversations = (
                 },
                 async (payload) => {
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                        // Fetch the complete conversation with participant info
                         const { data } = await supabase
                             .from('conversations')
                             .select(`
                   *,
-                  participant:participant_id(username, name, is_online, last_seen)
+                  participant:participant_id(username, name, is_online, last_seen, avatar_url)
                 `)
                             .eq('id', payload.new.id)
                             .single();
@@ -786,6 +935,7 @@ export const subscribeToConversations = (
                                 participantName: data.participant?.name || '',
                                 participantIsOnline: data.participant?.is_online || false,
                                 participantLastSeen: data.participant?.last_seen ? new Date(data.participant.last_seen).getTime() : undefined,
+                                participantAvatarUrl: data.participant?.avatar_url,
                                 lastMessage: {
                                     id: data.last_message_id || '',
                                     content: decryptMessage(data.last_message_content || ''),
@@ -808,11 +958,31 @@ export const subscribeToConversations = (
                     }
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                logger.info('Conversations realtime status:', status);
+                if (status === 'SUBSCRIBED') {
+                    reconnectAttempts = 0;
+                    setupHeartbeat();
+                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    clearTimers();
+                    reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
+                } else if (status === 'CLOSED') {
+                    clearTimers();
+                }
+            });
+    };
+
+    // Initialize
+    (async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        userId = session.user.id;
+        createChannel();
     })();
 
     // Return unsubscribe function
     return () => {
+        clearTimers();
         if (channel) {
             supabase.removeChannel(channel);
         }
@@ -849,15 +1019,30 @@ export const updateMessageReactions = async (
     reactions: string[]
 ): Promise<boolean> => {
     try {
-        const { error } = await supabase
+        // Validate session first
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            logger.error('Cannot update reactions: No active session');
+            return false;
+        }
+
+        logger.info('Updating reactions:', { messageId, reactions, userId: session.user.id });
+
+        const { data, error } = await supabase
             .from('messages')
             .update({ reactions })
-            .eq('id', messageId);
+            .eq('id', messageId)
+            .select();
 
-        if (error) throw error;
+        if (error) {
+            logger.error('Supabase error updating reactions:', error);
+            throw error;
+        }
+
+        logger.info('Reactions updated successfully:', { messageId, data });
         return true;
     } catch (error) {
-        console.error('Error updating message reactions:', error);
+        logger.error('Error updating message reactions:', error);
         return false;
     }
 };

@@ -108,26 +108,33 @@ export default function MessagesScreen() {
 
   const loadProfilePhotos = async (convos: Conversation[]) => {
     try {
+      console.log('=== loadProfilePhotos called ===');
+      console.log('Conversations:', convos.map(c => ({
+        id: c.id,
+        participantId: c.participantId,
+        participantName: c.participantName,
+        participantAvatarUrl: c.participantAvatarUrl
+      })));
+      
       const photos: Record<string, string | null> = {};
       // Load the current user's own profile avatar
       try {
         const profile = await getProfile();
+        console.log('Current user profile:', profile ? { id: profile.id, avatar: profile.avatar } : null);
         if (profile.avatar && profile.id) {
           photos[profile.id] = profile.avatar;
         }
-      } catch {
-        // Ignore profile load errors
+      } catch (error) {
+        console.error('Error loading current user profile:', error);
       }
-      // Load profile photos for all conversation participants
-      await Promise.all(
-        convos.map(async (convo) => {
-          if (!photos[convo.participantId]) {
-            const photoKey = `@profile_photo_${convo.participantId}`;
-            const photo = await AsyncStorage.getItem(photoKey);
-            photos[convo.participantId] = photo;
-          }
-        })
-      );
+      // Load profile photos for all conversation participants from Supabase data
+      convos.forEach((convo) => {
+        console.log(`Processing conversation ${convo.id}: participant ${convo.participantId} has avatarUrl:`, convo.participantAvatarUrl);
+        if (convo.participantAvatarUrl) {
+          photos[convo.participantId] = convo.participantAvatarUrl;
+        }
+      });
+      console.log('Final photos object:', photos);
       setProfilePhotos(photos);
     } catch (error) {
       console.error('Error loading profile photos:', error);
@@ -147,6 +154,7 @@ export default function MessagesScreen() {
         id: conversation.participantId,
         username: conversation.participantUsername,
         name: conversation.participantName,
+        avatarUrl: conversation.participantAvatarUrl || '',
       },
     });
   };
@@ -313,9 +321,9 @@ export default function MessagesScreen() {
       activeOpacity={0.7}>
 
       <View style={styles.avatarContainer}>
-        {profilePhotos[item.participantId] ? (
+        {(profilePhotos[item.participantId] || item.participantAvatarUrl) ? (
           <Image
-            source={{ uri: profilePhotos[item.participantId]! }}
+            source={{ uri: profilePhotos[item.participantId] || item.participantAvatarUrl }}
             style={styles.avatarPhoto}
           />
         ) : (
@@ -513,6 +521,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  debugButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   newMessageButton: {
     width: 36,

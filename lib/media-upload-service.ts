@@ -6,6 +6,7 @@ export { Attachment };
 
 export class MediaUploadService {
   private static BUCKET_NAME = 'message-attachments';
+  private static AVATAR_BUCKET_NAME = 'avatars';
   private static MAX_FILE_SIZE = 50 * 1024 * 1024;
 
   static async uploadImage(
@@ -209,6 +210,95 @@ export class MediaUploadService {
     return extensions[mimeType] || 'bin';
   }
 
+  static async uploadAvatar(
+    uri: string,
+    userId: string,
+    onProgress?: (progress: number) => void
+  ): Promise<string> {
+    try {
+      console.log('=== Starting avatar upload ===');
+      console.log('URI:', uri);
+      console.log('User ID:', userId);
+      
+      onProgress?.(10);
+
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      console.log('File info:', fileInfo);
+      
+      if (!fileInfo.exists) {
+        console.error('Avatar file not found at URI:', uri);
+        throw new Error('Avatar file not found');
+      }
+
+      // Check file size (max 5MB for avatars)
+      if (fileInfo.size > 5 * 1024 * 1024) {
+        console.error('File too large:', fileInfo.size, 'bytes');
+        throw new Error('Avatar file is too large (max 5MB)');
+      }
+
+      onProgress?.(30);
+
+      // Convert to base64
+      console.log('Converting file to base64...');
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: 'base64',
+      });
+      console.log('Base64 length:', base64.length);
+
+      onProgress?.(60);
+
+      // Convert base64 to byte array
+      console.log('Converting base64 to byte array...');
+      const byteCharacters = atob(base64);
+      const byteArray = new Uint8Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteArray[i] = byteCharacters.charCodeAt(i);
+      }
+      console.log('Byte array created, size:', byteArray.length);
+
+      // Upload to avatars bucket
+      const fileName = `${userId}/avatar_${Date.now()}.jpg`;
+      console.log('Uploading to bucket:', this.AVATAR_BUCKET_NAME);
+      console.log('File name:', fileName);
+      
+      const { data, error } = await supabase.storage
+        .from(this.AVATAR_BUCKET_NAME)
+        .upload(fileName, byteArray, {
+          contentType: 'image/jpeg',
+          upsert: true, // Overwrite existing avatar
+        });
+
+      if (error) {
+        console.error('Supabase storage error:', {
+          message: error.message,
+          statusCode: error.statusCode,
+          error: error.error
+        });
+        throw new Error(`Storage upload failed: ${error.message}`);
+      }
+
+      console.log('Upload successful:', data);
+
+      onProgress?.(90);
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from(this.AVATAR_BUCKET_NAME)
+        .getPublicUrl(fileName);
+
+      console.log('Public URL generated:', publicUrl);
+
+      onProgress?.(100);
+
+      console.log('=== Avatar upload completed successfully ===');
+      return publicUrl;
+    } catch (error) {
+      console.error('=== Avatar upload failed ===');
+      console.error('Error details:', error);
+      throw new Error(`Failed to upload avatar: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   static async deleteMedia(url: string): Promise<void> {
     try {
       const path = url.split(`${this.BUCKET_NAME}/`)[1];
@@ -219,6 +309,36 @@ export class MediaUploadService {
         .remove([path]);
     } catch (error) {
       console.error('Error deleting media:', error);
+    }
+  }
+
+  static async deleteAvatar(userId: string): Promise<void> {
+    try {
+      // List all avatar files for this user
+      const { data: files, error: listError } = await supabase.storage
+        .from(this.AVATAR_BUCKET_NAME)
+        .list(`${userId}/`);
+
+      if (listError) {
+        console.error('Error listing avatar files:', listError);
+        return;
+      }
+
+      // Delete all avatar files for this user
+      if (files && files.length > 0) {
+        const filePaths = files.map(file => `${userId}/${file.name}`);
+        const { error: deleteError } = await supabase.storage
+          .from(this.AVATAR_BUCKET_NAME)
+          .remove(filePaths);
+
+        if (deleteError) {
+          console.error('Error deleting avatar files:', deleteError);
+        } else {
+          console.log('Avatar files deleted successfully');
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting avatar:', error);
     }
   }
 }

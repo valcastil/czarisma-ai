@@ -54,6 +54,7 @@ export interface Conversation {
   participantName: string;
   participantIsOnline?: boolean;
   participantLastSeen?: number;
+  participantAvatarUrl?: string;
   lastMessage: Message;
   unreadCount: number;
   updatedAt: number;

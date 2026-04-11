@@ -50,6 +50,13 @@ export const getCurrentUser = async (): Promise<User | null> => {
 };
 
 /**
+ * Get user profile by ID
+ */
+export const getUserProfile = async (userId: string): Promise<User | null> => {
+  return await SupabaseMessageService.getUserProfile(userId);
+};
+
+/**
  * Get all registered users (excluding current user)
  */
 export const getRegisteredUsers = async (): Promise<User[]> => {

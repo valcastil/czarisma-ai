@@ -23,22 +23,59 @@ export function useSharedLinks(status?: 'unread' | 'read' | 'archived' | 'shared
     loadLinks();
   }, [status]);
 
-  // Set up real-time subscription
+  // Set up real-time subscription with reconnection logic
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
+    let reconnectAttempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_DELAY_MS = 3000;
+    const HEARTBEAT_INTERVAL_MS = 30000;
 
-    const setupRealtimeSubscription = async () => {
+    const clearTimers = () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+    };
+
+    const setupHeartbeat = () => {
+      heartbeatTimer = setInterval(() => {
+        if (channel && (channel as any).state === 'joined') {
+          (channel as any).send({ type: 'heartbeat' });
+        }
+      }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    const reconnect = () => {
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.error('Shared links: Max reconnection attempts reached');
+        return;
+      }
+      reconnectAttempts++;
+      console.log(`Shared links: Attempting reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      createChannel();
+    };
+
+    const createChannel = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Subscribe to changes in shared_links table for current user
         channel = supabase
           .channel('shared-links-changes')
           .on(
             'postgres_changes',
             {
-              event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+              event: '*',
               schema: 'public',
               table: 'shared_links',
               filter: `user_id=eq.${user.id}`,
@@ -50,16 +87,27 @@ export function useSharedLinks(status?: 'unread' | 'read' | 'archived' | 'shared
           )
           .subscribe((status) => {
             console.log('Subscription status:', status);
+            if (status === 'SUBSCRIBED') {
+              reconnectAttempts = 0;
+              setupHeartbeat();
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              clearTimers();
+              reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
+            } else if (status === 'CLOSED') {
+              clearTimers();
+            }
           });
       } catch (error) {
         console.error('Error setting up real-time subscription:', error);
+        reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
       }
     };
 
-    setupRealtimeSubscription();
+    createChannel();
 
     // Cleanup subscription on unmount
     return () => {
+      clearTimers();
       if (channel) {
         supabase.removeChannel(channel);
       }

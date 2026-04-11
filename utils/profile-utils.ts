@@ -159,13 +159,54 @@ export const updateProfile = async (updates: Partial<UserProfile>): Promise<User
         logger.info('Syncing profile updates to Supabase...', {
           name: updates.name,
           bio: updates.bio,
-          avatar: updates.avatar
+          hasAvatar: !!updates.avatar
         });
         
         const supabaseUpdates: any = {};
         if (updates.name !== undefined) supabaseUpdates.name = updates.name;
         if (updates.bio !== undefined) supabaseUpdates.bio = updates.bio;
-        if (updates.avatar !== undefined) supabaseUpdates.avatar_url = updates.avatar;
+        
+        // Handle avatar upload if changed
+        if (updates.avatar !== undefined && updates.avatar !== currentProfile.avatar) {
+          console.log('Avatar changed, processing update...');
+          console.log('New avatar:', updates.avatar ? 'Present' : 'Null');
+          console.log('Current avatar:', currentProfile.avatar ? 'Present' : 'Null');
+          
+          if (updates.avatar) {
+            // Upload new avatar to Supabase storage
+            try {
+              console.log('Starting avatar upload...');
+              const { MediaUploadService } = await import('../lib/media-upload-service');
+              const avatarUrl = await MediaUploadService.uploadAvatar(
+                updates.avatar,
+                session.user.id
+              );
+              supabaseUpdates.avatar_url = avatarUrl;
+              console.log('Avatar uploaded successfully to Supabase storage:', avatarUrl);
+              logger.info('Avatar uploaded to Supabase storage:', avatarUrl);
+            } catch (uploadError) {
+              console.error('Failed to upload avatar to Supabase storage:', uploadError);
+              logger.error('Failed to upload avatar to Supabase storage:', uploadError);
+              // Don't throw - still update other fields
+            }
+          } else {
+            // Remove avatar
+            try {
+              console.log('Removing avatar from Supabase storage...');
+              const { MediaUploadService } = await import('../lib/media-upload-service');
+              await MediaUploadService.deleteAvatar(session.user.id);
+              supabaseUpdates.avatar_url = null;
+              console.log('Avatar removed from Supabase storage');
+              logger.info('Avatar removed from Supabase storage');
+            } catch (deleteError) {
+              console.error('Failed to remove avatar from Supabase storage:', deleteError);
+              logger.error('Failed to remove avatar from Supabase storage:', deleteError);
+              // Don't throw - still update other fields
+            }
+          }
+        } else {
+          console.log('Avatar not changed, skipping upload');
+        }
         
         if (Object.keys(supabaseUpdates).length > 0) {
           const { error: updateError } = await supabase

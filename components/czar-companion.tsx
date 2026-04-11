@@ -30,7 +30,7 @@ const messages = {
 };
 
 // Czar image - Tsar portrait
-const CZAR_IMAGE = require('@/assets/images/czar.png');
+const CZAR_IMAGE = require('@/assets/images/Czar Nicholas.svg');
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -156,12 +156,19 @@ export function CzarCompanion({
 
         lastPosition.current = { x: boundedX, y: boundedY };
 
-        // Animate to bounded position
-        Animated.spring(pan, {
-          toValue: { x: boundedX, y: boundedY },
-          useNativeDriver: false,
-          friction: 8,
-        }).start();
+        // Animate to bounded position using separate springs for x and y
+        Animated.parallel([
+          Animated.spring(pan.x, {
+            toValue: boundedX,
+            useNativeDriver: false,
+            friction: 8,
+          }),
+          Animated.spring(pan.y, {
+            toValue: boundedY,
+            useNativeDriver: false,
+            friction: 8,
+          }),
+        ]).start();
 
         // If it was a tap (minimal movement), trigger onPress
         if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
@@ -244,13 +251,13 @@ export function CzarCompanion({
           toValue: 1,
           duration: 300,
           easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(scaleAnim, {
           toValue: 1,
           friction: 8,
           tension: 40,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     } else {
@@ -259,13 +266,13 @@ export function CzarCompanion({
           toValue: 0,
           duration: 200,
           easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(scaleAnim, {
           toValue: 0.8,
           duration: 200,
           easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     }
@@ -279,13 +286,13 @@ export function CzarCompanion({
           toValue: -12,
           duration: 800,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(bounceAnim, {
           toValue: 0,
           duration: 800,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     );
@@ -302,22 +309,22 @@ export function CzarCompanion({
       Animated.timing(rotateAnim, {
         toValue: -0.1,
         duration: 100,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(rotateAnim, {
         toValue: 0.1,
         duration: 100,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(rotateAnim, {
         toValue: -0.1,
         duration: 100,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(rotateAnim, {
         toValue: 0,
         duration: 100,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]);
     wiggle.start();
@@ -339,25 +346,25 @@ export function CzarCompanion({
           toValue: 1,
           duration: 150,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(mouthScaleAnim, {
           toValue: 0.3,
           duration: 150,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(mouthScaleAnim, {
           toValue: 1,
           duration: 200,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(mouthScaleAnim, {
           toValue: 0,
           duration: 150,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     );
@@ -434,7 +441,7 @@ export function CzarCompanion({
               <Image
                 source={CZAR_IMAGE}
                 style={[styles.czarImage, { width: currentSize.width, height: currentSize.height }]}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             </Animated.View>
 
@@ -474,10 +481,12 @@ const styles = StyleSheet.create({
   wrapper: {
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   container: {
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   companionWrapper: {
     alignItems: 'center',

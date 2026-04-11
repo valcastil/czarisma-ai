@@ -14,6 +14,7 @@ import { formatCharismaEntryForMessage } from '@/utils/charisma-share-utils';
 import {
     getCurrentUser,
     getMessages,
+    getUserProfile,
     sendMessage,
     subscribeToMessages,
     updateConversation,
@@ -43,7 +44,7 @@ export default function ChatScreen() {
   const params = useLocalSearchParams();
   const { colors } = useTheme();
 
-  const { id, username, name } = params as { id: string; username: string; name: string };
+  const { id, username, name, avatarUrl } = params as { id: string; username: string; name: string; avatarUrl?: string };
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState('');
@@ -56,6 +57,7 @@ export default function ChatScreen() {
     id,
     username,
     name,
+    avatarUrl: avatarUrl || undefined,
     isOnline: false,
   });
   const [showMediaAttachmentModal, setShowMediaAttachmentModal] = useState(false);
@@ -90,13 +92,20 @@ export default function ChatScreen() {
 
     // Subscribe to real-time messages
     const unsubscribe = subscribeToMessages(id, (newMessage) => {
+      console.log('Realtime message received:', {
+        messageId: newMessage.id,
+        reactions: newMessage.reactions,
+        content: newMessage.content?.substring(0, 50)
+      });
       setMessages(prev => {
         // Check if message already exists
         const exists = prev.some(m => m.id === newMessage.id);
         if (!exists) {
+          console.log('Adding new message to list:', newMessage.id);
           return [...prev, newMessage];
         }
         // Update existing message (for reactions)
+        console.log('Updating existing message:', newMessage.id, 'reactions:', newMessage.reactions);
         return prev.map(m => m.id === newMessage.id ? newMessage : m);
       });
     });
@@ -168,13 +177,54 @@ export default function ChatScreen() {
 
   const initializeChat = async () => {
     try {
-      const [currentUserData, chatMessages] = await Promise.all([
+      console.log('=== initializeChat called ===');
+      console.log('Initial params:', { id, username, name, avatarUrl });
+      
+      const [currentUserData, chatMessages, otherUserData] = await Promise.all([
         getCurrentUser(),
         getMessages(id),
+        getUserProfile(id), // Fetch other user's profile including avatar
       ]);
+
+      console.log('Fetched data:', {
+        currentUserData: currentUserData ? { id: currentUserData.id, avatarUrl: currentUserData.avatarUrl } : null,
+        otherUserData: otherUserData ? { id: otherUserData.id, avatarUrl: otherUserData.avatarUrl } : null
+      });
 
       setCurrentUser(currentUserData);
       setMessages(chatMessages);
+
+      // Update otherUser with fetched profile data including avatarUrl
+      if (otherUserData) {
+        console.log('Updating otherUser with fetched data:', {
+          id: otherUserData.id,
+          username: otherUserData.username,
+          name: otherUserData.name,
+          avatarUrl: otherUserData.avatarUrl
+        });
+        
+        setOtherUser({
+          id: otherUserData.id,
+          username: otherUserData.username,
+          name: otherUserData.name,
+          avatarUrl: otherUserData.avatarUrl,
+          isOnline: otherUserData.isOnline,
+          lastSeen: otherUserData.lastSeen,
+        });
+        // Set profile photo from Supabase avatar (prefer fetched data over passed params)
+        if (otherUserData.avatarUrl) {
+          console.log('Setting profile photo from Supabase:', otherUserData.avatarUrl);
+          setProfilePhoto(otherUserData.avatarUrl);
+        } else {
+          console.log('No avatarUrl in fetched profile data');
+        }
+      } else {
+        console.log('No otherUserData fetched');
+        if (avatarUrl) {
+          console.log('Using passed avatarUrl as fallback:', avatarUrl);
+          setProfilePhoto(avatarUrl);
+        }
+      }
 
       // If no current user (not authenticated), create a demo user for testing
       if (!currentUserData) {
@@ -369,28 +419,43 @@ export default function ChatScreen() {
   };
 
   const handleAddReaction = async (messageId: string, emoji: string) => {
+    console.log('handleAddReaction called:', { messageId, emoji });
+    
+    // Find the message and calculate new reactions first
+    const message = messages.find(m => m.id === messageId);
+    if (!message) {
+      console.warn('Message not found:', messageId);
+      return;
+    }
+
+    const currentReactions = message.reactions || [];
+    const updatedReactions = currentReactions.includes(emoji)
+      ? currentReactions.filter(r => r !== emoji) // Remove if exists (toggle off)
+      : [...currentReactions, emoji]; // Add if not exists
+    
+    console.log('Updating reactions:', { 
+      messageId, 
+      currentReactions, 
+      updatedReactions,
+      action: currentReactions.includes(emoji) ? 'remove' : 'add'
+    });
+
     // Update local state immediately for responsive UI
-    let updatedReactions: string[] = [];
-    setMessages(prev => prev.map(msg => {
-      if (msg.id === messageId) {
-        const reactions = msg.reactions || [];
-        if (reactions.includes(emoji)) {
-          updatedReactions = reactions.filter(r => r !== emoji);
-          return { ...msg, reactions: updatedReactions };
-        } else {
-          updatedReactions = [...reactions, emoji];
-          return { ...msg, reactions: updatedReactions };
-        }
-      }
-      return msg;
-    }));
+    setMessages(prev => prev.map(msg =>
+      msg.id === messageId ? { ...msg, reactions: updatedReactions } : msg
+    ));
     setReactionMessageId(null);
 
     // Persist to Supabase for real-time sync
     try {
-      await updateMessageReactions(messageId, updatedReactions);
+      const result = await updateMessageReactions(messageId, updatedReactions);
+      console.log('updateMessageReactions result:', result);
     } catch (error) {
       console.error('Error updating reactions:', error);
+      // Revert on error
+      setMessages(prev => prev.map(msg =>
+        msg.id === messageId ? { ...msg, reactions: currentReactions } : msg
+      ));
     }
   };
 
@@ -480,6 +545,12 @@ export default function ChatScreen() {
 
   const loadProfilePhoto = async () => {
     try {
+      // First check if we already have avatarUrl from Supabase profile
+      if (otherUser.avatarUrl) {
+        setProfilePhoto(otherUser.avatarUrl);
+        return;
+      }
+      // Fallback to AsyncStorage for local-only users
       const photoKey = `@profile_photo_${otherUser.id}`;
       const savedPhoto = await AsyncStorage.getItem(photoKey);
       setProfilePhoto(savedPhoto);
@@ -492,6 +563,12 @@ export default function ChatScreen() {
     try {
       const me = await getCurrentUser();
       if (me) {
+        // Use Supabase avatarUrl if available
+        if (me.avatarUrl) {
+          setCurrentUserPhoto(me.avatarUrl);
+          return;
+        }
+        // Fallback to AsyncStorage for local-only users
         const photoKey = `@profile_photo_${me.id}`;
         const savedPhoto = await AsyncStorage.getItem(photoKey);
         setCurrentUserPhoto(savedPhoto);
@@ -688,8 +765,8 @@ export default function ChatScreen() {
         ]}>
           {/* Avatar for received messages (left side) */}
           {!isFromCurrentUser && (
-            profilePhoto ? (
-              <Image source={{ uri: profilePhoto }} style={styles.messageAvatar} />
+            (profilePhoto || otherUser.avatarUrl) ? (
+              <Image source={{ uri: profilePhoto || otherUser.avatarUrl }} style={styles.messageAvatar} />
             ) : (
               <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.gold }]}>
                 <Text style={styles.messageAvatarText}>
@@ -828,8 +905,8 @@ export default function ChatScreen() {
 
           {/* Avatar for sent messages (right side) */}
           {isFromCurrentUser && (
-            currentUserPhoto ? (
-              <Image source={{ uri: currentUserPhoto }} style={styles.messageAvatar} />
+            (currentUserPhoto || currentUser?.avatarUrl) ? (
+              <Image source={{ uri: currentUserPhoto || currentUser?.avatarUrl }} style={styles.messageAvatar} />
             ) : (
               <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.gold }]}>
                 <Text style={styles.messageAvatarText}>
@@ -876,9 +953,9 @@ export default function ChatScreen() {
           <IconSymbol size={24} name="chevron.left" color={colors.text} />
         </TouchableOpacity>
 
-        {profilePhoto ? (
+        {(profilePhoto || otherUser.avatarUrl) ? (
           <Image
-            source={{ uri: profilePhoto }}
+            source={{ uri: profilePhoto || otherUser.avatarUrl }}
             style={styles.headerAvatar}
           />
         ) : (
@@ -1160,8 +1237,8 @@ export default function ChatScreen() {
                   {/* Profile Header Section */}
                   <View style={styles.profileHeaderSection}>
                     <View style={styles.profileAvatarContainer}>
-                      {profilePhoto ? (
-                        <Image source={{ uri: profilePhoto }} style={styles.profilePhoto} />
+                      {(profilePhoto || otherUser.avatarUrl) ? (
+                        <Image source={{ uri: profilePhoto || otherUser.avatarUrl }} style={styles.profilePhoto} />
                       ) : (
                         <View style={[styles.profileAvatar, { backgroundColor: colors.card }]}>
                           <IconSymbol size={40} name="person" color={colors.text} />

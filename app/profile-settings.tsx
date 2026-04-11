@@ -80,6 +80,7 @@ export default function ProfileSettingsScreen() {
     ]);
   };
 
+  
   const handleSave = async () => {
     if (!profile) return;
 
@@ -92,41 +93,53 @@ export default function ProfileSettingsScreen() {
     try {
       setSaving(true);
       
+      console.log('Saving profile with avatar:', avatarUri ? 'Yes' : 'No');
+      
+      // Test avatar bucket setup if avatar is being set
+      if (avatarUri && avatarUri !== profile.avatar) {
+        console.log('Testing avatar bucket setup...');
+        try {
+          const { setupAvatarsBucket } = await import('@/utils/avatar-setup');
+          const bucketReady = await setupAvatarsBucket();
+          if (!bucketReady) {
+            Alert.alert(
+              'Storage Setup Required',
+              'The avatars storage bucket needs to be set up. Please run the SQL migration: supabase/migrations/20241230_create_avatars_bucket.sql',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+        } catch (setupError) {
+          console.error('Error setting up avatars bucket:', setupError);
+        }
+      }
+      
       // Update profile (this now syncs to Supabase automatically)
       const updated = await updateProfile({
         name: trimmedName,
         bio: about.trim(),
         avatar: avatarUri,
       });
+      
+      console.log('Profile saved successfully');
       setProfile(updated);
+      Alert.alert('Success', 'Profile updated and synced successfully!');
 
-      // Sync avatar to AsyncStorage so chat screens can use it
+      // Sync avatar to AsyncStorage so chat screens can use it immediately
       try {
         const me = await getCurrentUser();
         if (me) {
           const photoKey = `@profile_photo_${me.id}`;
           if (avatarUri) {
             await AsyncStorage.setItem(photoKey, avatarUri);
+            console.log('Avatar synced to AsyncStorage:', avatarUri);
           } else {
             await AsyncStorage.removeItem(photoKey);
+            console.log('Avatar removed from AsyncStorage');
           }
         }
       } catch (photoSyncErr) {
         console.error('Error syncing avatar to AsyncStorage:', photoSyncErr);
-      }
-      
-      // Register/sync user profile to ensure messaging system has latest data
-      try {
-        await registerCurrentUser();
-        Alert.alert('Success', 'Profile updated and synced successfully.');
-      } catch (syncError) {
-        console.error('Profile sync error:', syncError);
-        // Profile was saved locally, but sync failed
-        Alert.alert(
-          'Partially Saved',
-          'Profile saved locally but could not sync to server. Your changes will sync when you reconnect.',
-          [{ text: 'OK' }]
-        );
       }
     } catch (e) {
       console.error('Profile update error:', e);
@@ -165,7 +178,10 @@ export default function ProfileSettingsScreen() {
         <TouchableOpacity
           style={[
             styles.saveButton,
-            { backgroundColor: colors.gold, opacity: hasChanges && !saving ? 1 : 0.5 },
+            { 
+              backgroundColor: hasChanges ? colors.gold : colors.border,
+              opacity: hasChanges ? 1 : 0.6
+            }
           ]}
           onPress={handleSave}
           disabled={!hasChanges || saving}
