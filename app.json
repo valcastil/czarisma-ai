@@ -7,7 +7,7 @@
     "icon": "./assets/images/adaptive-icon.png",
     "scheme": "charismachat",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "owner": "frznfrg",
     "runtimeVersion": {
       "policy": "appVersion"
