@@ -387,7 +387,7 @@ export default function OnboardingCharismaScreen() {
       <View style={styles.header}>
         <CharismaLogo size={50} />
         <View style={styles.titleContainer}>
-          <Text style={[styles.appTitle, { color: colors.text }]}>CzarApp</Text>
+          <Text style={[styles.appTitle, { color: colors.text }]}>Czar AI</Text>
           {isPaidPro && userEmail && (
             <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
               <Text style={styles.proStatusText}>PRO</Text>

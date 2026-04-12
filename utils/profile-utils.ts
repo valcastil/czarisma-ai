@@ -96,7 +96,7 @@ export const getProfile = async (): Promise<UserProfile> => {
           ...defaultProfile,
           id: parsedProfile.id || Date.now().toString(),
           username: username,
-          name: parsedProfile.name || 'CzarApp',
+          name: parsedProfile.name || 'Czar AI',
           email: parsedProfile.email || 'user@example.com',
           password: parsedProfile.password || 'charisma123', // Use existing password or default
           phone: parsedProfile.phone,

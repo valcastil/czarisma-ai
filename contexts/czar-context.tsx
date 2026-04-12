@@ -116,7 +116,7 @@ const screenMessages: Record<string, string[]> = {
     "Why did the text message break up with the email? It wanted a quicker response! 💌😂",
   ],
   'modal': [
-    "Welcome to CzarApp! Your charisma journey starts NOW! 🎬",
+    "Welcome to Czar AI! Your charisma journey starts NOW! 🎬",
     "The Czar is in! Ready to guide you to greatness! 👑",
     "Fun fact: You've just opened the most charismatic app ever created. Coincidence? I think not! 😎",
   ],

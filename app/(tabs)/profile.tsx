@@ -208,7 +208,7 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-            CzarApp v{Constants.expoConfig?.version || '1.0.2'}
+            Czar AI v{Constants.expoConfig?.version || '1.0.2'}
           </Text>
         </View>
       </ScrollView>

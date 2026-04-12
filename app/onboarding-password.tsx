@@ -64,7 +64,7 @@ export default function OnboardingPasswordScreen() {
         <View style={styles.logoContainer}>
           <Text style={[styles.logo, { color: colors.gold }]}>⚡</Text>
           <Text style={[styles.logoText, { color: colors.text }]}>
-            CzarApp
+            Czar AI
           </Text>
         </View>
       </View>

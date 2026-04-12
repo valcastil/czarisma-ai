@@ -149,7 +149,7 @@ export default function HomeScreen() {
 
   const handleShareLink = async (link: SharedLink) => {
     try {
-      const message = `Check out this ${link.label}: ${link.url}\n\nForwarded from CzarApp`;
+      const message = `Check out this ${link.label}: ${link.url}\n\nForwarded from Czar AI`;
       await Share.share({ message });
     } catch (error) {
       console.error('Error sharing link:', error);
@@ -183,7 +183,7 @@ ${emotions ? `Emotions: ${emotions}` : ''}
 
 ${entry.notes ? `Notes: ${entry.notes}` : ''}
 
-Forwarded from CzarApp
+Forwarded from Czar AI
       `.trim();
 
       await Share.share({
@@ -280,7 +280,7 @@ Forwarded from CzarApp
       <View style={styles.header}>
         <View style={styles.logoContainer}>
           <CharismaLogo size={50} />
-          <Text style={[styles.title, { color: colors.text }]}>CzarApp</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Czar AI</Text>
         </View>
 
         <TouchableOpacity

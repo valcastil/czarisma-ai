@@ -132,7 +132,7 @@ export default function SubscriptionScreen() {
 
       // Initialize payment sheet - use setupIntent for trials, paymentIntent otherwise
       const sharedConfig = {
-        merchantDisplayName: 'CzarApp',
+        merchantDisplayName: 'Czar AI',
         customerId: customer,
         customerEphemeralKeySecret: ephemeralKey,
         allowsDelayedPaymentMethods: true,
@@ -227,7 +227,7 @@ export default function SubscriptionScreen() {
           </Text>
           <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
             {requiresPro 
-              ? 'Thanks for using CzarApp! Your free trial has ended. Subscribe to PRO to continue accessing all premium features.'
+              ? 'Thanks for using Czar AI! Your free trial has ended. Subscribe to PRO to continue accessing all premium features.'
               : 'Get unlimited access to all premium features and take your charisma tracking to the next level'}
           </Text>
         </View>

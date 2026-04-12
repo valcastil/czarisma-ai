@@ -136,7 +136,7 @@ export default function SubscriptionsInfoScreen() {
                 7-Day Free Trial
               </Text>
               <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
-                Start using CzarApp immediately with full access to all features for 7 days. No credit card required.
+                Start using Czar AI immediately with full access to all features for 7 days. No credit card required.
               </Text>
             </View>
           </View>

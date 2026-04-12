@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ErrorBoundary } from '@/components/error-boundary';
 import { IntelligentCzar } from '@/components/intelligent-czar';
 import { TrialExpiredModal } from '@/components/trial-expired-modal';
 import { Colors } from '@/constants/theme';
@@ -128,18 +129,34 @@ export default function RootLayout() {
   // Initialize new services on app start
   useEffect(() => {
     const initializeServices = async () => {
-      await initializeSupabase();
+      try {
+        // Initialize Supabase first (critical)
+        await initializeSupabase();
 
-      // Initialize Gemini AI
-      initializeGemini();
-      
-      // Initialize Vexo Analytics
-      initializeVexo();
-      
-      // Initialize RevenueCat
-      await initializeRevenueCat();
-      
-      console.log('All services initialized');
+        // Initialize other services with error handling
+        try {
+          initializeGemini();
+        } catch (error) {
+          console.warn('Failed to initialize Gemini AI:', error);
+        }
+        
+        try {
+          initializeVexo();
+        } catch (error) {
+          console.warn('Failed to initialize Vexo Analytics:', error);
+        }
+        
+        try {
+          await initializeRevenueCat();
+        } catch (error) {
+          console.warn('Failed to initialize RevenueCat:', error);
+        }
+        
+        console.log('Core services initialized successfully');
+      } catch (error) {
+        console.error('Critical error during service initialization:', error);
+        // Don't crash the app, continue with limited functionality
+      }
     };
 
     initializeServices();
@@ -147,13 +164,15 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-        <ThemeProvider>
-          <CzarProvider>
-            <RootLayoutContent />
-          </CzarProvider>
-        </ThemeProvider>
-      </StripeProvider>
+      <ErrorBoundary>
+        <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
+          <ThemeProvider>
+            <CzarProvider>
+              <RootLayoutContent />
+            </CzarProvider>
+          </ThemeProvider>
+        </StripeProvider>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

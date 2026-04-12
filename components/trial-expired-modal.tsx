@@ -31,8 +31,8 @@ export function TrialExpiredModal({ visible, daysRemaining, onClose }: TrialExpi
     : 'Your Free Trial Has Expired';
   
   const message = isExpiringSoon
-    ? 'Sign up now to continue using CzarApp and get 3 months FREE access to all features!'
-    : 'Your 7-day free trial has ended. Sign up to continue using CzarApp and get 3 months FREE access to all Pro features!';
+    ? 'Sign up now to continue using Czar AI and get 3 months FREE access to all features!'
+    : 'Your 7-day free trial has ended. Sign up to continue using Czar AI and get 3 months FREE access to all Pro features!';
 
   return (
     <Modal

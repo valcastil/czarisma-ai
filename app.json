@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "CzarApp",
+    "name": "Czar AI",
     "slug": "charisma-chat",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/adaptive-icon.png",
     "scheme": "charismachat",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "owner": "frznfrg",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -28,7 +28,9 @@
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos and videos.",
         "NSUserActivityTypes": [
           "NSUserActivityTypeBrowsingWeb"
-        ]
+        ],
+        "UIBackgroundModes": ["background-processing"],
+        "UIRequiredDeviceCapabilities": ["armv7"]
       }
     },
     "android": {
@@ -126,7 +128,7 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
       "router": {},
