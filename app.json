@@ -29,8 +29,7 @@
         "NSUserActivityTypes": [
           "NSUserActivityTypeBrowsingWeb"
         ],
-        "UIBackgroundModes": ["background-processing"],
-        "UIRequiredDeviceCapabilities": ["armv7"]
+                "UIRequiredDeviceCapabilities": ["armv7"]
       }
     },
     "android": {
