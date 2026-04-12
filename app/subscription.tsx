@@ -13,6 +13,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { getSignedUpTrialStatus, needsProSubscription } from '@/utils/subscription-utils';
 
 interface SubscriptionPlan {
   id: string;
@@ -62,9 +63,12 @@ export default function SubscriptionScreen() {
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string>('yearly');
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null);
+  const [requiresPro, setRequiresPro] = useState(false);
 
   useEffect(() => {
     checkAuthStatus();
+    checkTrialStatus();
   }, []);
 
   // Refresh auth status when screen is focused (e.g., after sign-out)
@@ -81,6 +85,14 @@ export default function SubscriptionScreen() {
     } else {
       setUserEmail(null);
     }
+  };
+
+  const checkTrialStatus = async () => {
+    const needsPro = await needsProSubscription();
+    setRequiresPro(needsPro);
+    
+    const trialStatus = await getSignedUpTrialStatus();
+    setTrialDaysRemaining(trialStatus.daysRemaining);
   };
 
   const handleSubscribe = async (planId: string) => {
@@ -209,14 +221,26 @@ export default function SubscriptionScreen() {
         contentContainerStyle={styles.scrollContent}>
         {/* Hero Section */}
         <View style={styles.heroSection}>
-          <Text style={[styles.heroEmoji]}>✨</Text>
+          <Text style={[styles.heroEmoji]}>{requiresPro ? '🎉' : '✨'}</Text>
           <Text style={[styles.heroTitle, { color: colors.text }]}>
-            Unlock Your Full Potential
+            {requiresPro ? 'Your 3-Month Free Trial Ended' : 'Unlock Your Full Potential'}
           </Text>
           <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-            Get unlimited access to all premium features and take your charisma tracking to the next level
+            {requiresPro 
+              ? 'Thanks for using CzarApp! Your free trial has ended. Subscribe to PRO to continue accessing all premium features.'
+              : 'Get unlimited access to all premium features and take your charisma tracking to the next level'}
           </Text>
         </View>
+
+        {/* Trial Status Banner for signed-up users */}
+        {userEmail && trialDaysRemaining !== null && trialDaysRemaining > 0 && (
+          <View style={[styles.trialBanner, { backgroundColor: colors.card, borderColor: colors.gold }]}>
+            <IconSymbol name="gift.fill" size={20} color={colors.gold} />
+            <Text style={[styles.trialBannerText, { color: colors.text }]}>
+              <Text style={{ color: colors.gold, fontWeight: 'bold' }}>{trialDaysRemaining} days</Text> left in your free trial
+            </Text>
+          </View>
+        )}
 
         {/* Auth Status */}
         {userEmail ? (
@@ -317,10 +341,12 @@ export default function SubscriptionScreen() {
           ) : (
             <>
               <Text style={[styles.subscribeButtonText, { color: '#000000' }]}>
-                Start Free Trial
+                {requiresPro ? 'Subscribe to PRO' : 'Start Free Trial'}
               </Text>
               <Text style={[styles.subscribeButtonSubtext, { color: '#000000' }]}>
-                30 days free, then {PLANS.find(p => p.id === selectedPlan)?.price}/{PLANS.find(p => p.id === selectedPlan)?.interval}
+                {requiresPro 
+                  ? 'Continue with ' + PLANS.find(p => p.id === selectedPlan)?.price + '/' + PLANS.find(p => p.id === selectedPlan)?.interval
+                  : '30 days free, then ' + PLANS.find(p => p.id === selectedPlan)?.price + '/' + PLANS.find(p => p.id === selectedPlan)?.interval}
               </Text>
             </>
           )}
@@ -476,5 +502,18 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 20,
     marginBottom: 40,
+  },
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 24,
+  },
+  trialBannerText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
 });

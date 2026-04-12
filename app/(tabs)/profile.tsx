@@ -140,6 +140,10 @@ export default function ProfileScreen() {
     router.push('/subscription');
   };
 
+  const handleSubscriptionsInfo = () => {
+    router.push('/subscriptions-info');
+  };
+
   const handleScroll = (event: any) => {
     savedScrollPosition.current = event.nativeEvent.contentOffset.y;
   };
@@ -198,6 +202,7 @@ export default function ProfileScreen() {
           onEditProfile={handleEditProfile}
           onExportData={handleExportData}
           onSettings={handleSettings}
+          onSubscriptionsInfo={handleSubscriptionsInfo}
           /* onSubscription={handleSubscription} // Disabled for free mode */
         />
 

@@ -142,9 +142,9 @@ CREATE POLICY "Users can send messages"
     ON public.messages FOR INSERT
     WITH CHECK (auth.uid() = sender_id);
 
-CREATE POLICY "Users can update messages they received (for read status)"
+CREATE POLICY "Users can update messages they sent or received (for read status and reactions)"
     ON public.messages FOR UPDATE
-    USING (auth.uid() = receiver_id);
+    USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 
 CREATE POLICY "Users can delete messages they sent"
     ON public.messages FOR DELETE

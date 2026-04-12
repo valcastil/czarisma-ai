@@ -5,16 +5,23 @@ const PRO_STATUS_KEY = '@pro_status';
 const TRIAL_START_KEY = '@trial_start_date';
 const PRO_EMAIL_KEY = '@pro_email';
 const LOCAL_TRIAL_START_KEY = '@local_trial_start';
-const TRIAL_DURATION_DAYS = 30;
+const SIGNED_UP_TRIAL_START_KEY = '@signed_up_trial_start';
 
-// FREE MODE: Signed-up users get free access. Non-signed-up users get a 30-day local trial.
-// After trial expires, the user must sign up.
+// NEW SUBSCRIPTION FLOW:
+// 1. Non-signed-up users: 7-day local trial
+// 2. After 7 days: persistent popup forces sign up
+// 3. After sign up: 3-month free trial (90 days)
+// 4. After 3 months: must subscribe to PRO monthly or yearly
+const LOCAL_TRIAL_DAYS = 7;
+const SIGNED_UP_TRIAL_DAYS = 90; // 3 months free after sign up
+
+// FREE MODE is now controlled by the trial periods above
 const FREE_MODE = true;
 
 /**
  * Check if user is signed in (has an active Supabase session)
  */
-const isUserSignedIn = async (): Promise<boolean> => {
+export const isUserSignedIn = async (): Promise<boolean> => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     return !!session;
@@ -25,7 +32,8 @@ const isUserSignedIn = async (): Promise<boolean> => {
 
 /**
  * Get local trial status for non-signed-up users.
- * Trial starts on first app open and lasts 30 days.
+ * Trial starts on first app open and lasts 7 days.
+ * After 7 days, user must sign up to continue.
  */
 export const getLocalTrialStatus = async (): Promise<TrialStatus> => {
   try {
@@ -38,7 +46,7 @@ export const getLocalTrialStatus = async (): Promise<TrialStatus> => {
     }
 
     const startTime = parseInt(trialStart, 10);
-    const endTime = startTime + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000;
+    const endTime = startTime + LOCAL_TRIAL_DAYS * 24 * 60 * 60 * 1000;
     const now = Date.now();
     const daysRemaining = Math.max(0, Math.ceil((endTime - now) / (24 * 60 * 60 * 1000)));
     const isExpired = now >= endTime;
@@ -52,19 +60,57 @@ export const getLocalTrialStatus = async (): Promise<TrialStatus> => {
     };
   } catch (error) {
     console.error('Error getting local trial status:', error);
-    return { isTrialActive: true, trialStartDate: Date.now(), trialEndDate: Date.now() + TRIAL_DURATION_DAYS * 86400000, daysRemaining: TRIAL_DURATION_DAYS, isExpired: false };
+    return { isTrialActive: true, trialStartDate: Date.now(), trialEndDate: Date.now() + LOCAL_TRIAL_DAYS * 86400000, daysRemaining: LOCAL_TRIAL_DAYS, isExpired: false };
+  }
+};
+
+/**
+ * Get signed-up user trial status (3-month free trial after sign up)
+ */
+export const getSignedUpTrialStatus = async (): Promise<TrialStatus> => {
+  try {
+    let trialStart = await SecureStorage.getItem(SIGNED_UP_TRIAL_START_KEY);
+    
+    if (!trialStart) {
+      // User just signed up - start the 3-month trial
+      const now = Date.now();
+      await SecureStorage.setItem(SIGNED_UP_TRIAL_START_KEY, now.toString());
+      trialStart = now.toString();
+    }
+
+    const startTime = parseInt(trialStart, 10);
+    const endTime = startTime + SIGNED_UP_TRIAL_DAYS * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const daysRemaining = Math.max(0, Math.ceil((endTime - now) / (24 * 60 * 60 * 1000)));
+    const isExpired = now >= endTime;
+
+    return {
+      isTrialActive: !isExpired,
+      trialStartDate: startTime,
+      trialEndDate: endTime,
+      daysRemaining: isExpired ? 0 : daysRemaining,
+      isExpired,
+    };
+  } catch (error) {
+    console.error('Error getting signed-up trial status:', error);
+    return { isTrialActive: true, trialStartDate: Date.now(), trialEndDate: Date.now() + SIGNED_UP_TRIAL_DAYS * 86400000, daysRemaining: SIGNED_UP_TRIAL_DAYS, isExpired: false };
   }
 };
 
 /**
  * Determine if the user has access:
- * - Signed-in users always have free access
- * - Non-signed-in users have access only during the 30-day local trial
+ * - Non-signed-in users: 7-day local trial only
+ * - Signed-in users: 3-month free trial, then must subscribe to PRO
  */
 export const hasAccess = async (): Promise<boolean> => {
-  if (await isUserSignedIn()) return true;
-  const trial = await getLocalTrialStatus();
-  return trial.isTrialActive;
+  if (await isUserSignedIn()) {
+    // Check if signed-up user's 3-month trial is still active
+    const signedUpTrial = await getSignedUpTrialStatus();
+    return signedUpTrial.isTrialActive;
+  }
+  // Non-signed-in users only get 7-day trial
+  const localTrial = await getLocalTrialStatus();
+  return localTrial.isTrialActive;
 };
 
 export interface ProStatus {
@@ -79,6 +125,16 @@ export interface TrialStatus {
   daysRemaining: number | null;
   isExpired: boolean;
 }
+
+/**
+ * Check if user needs to subscribe to PRO (after 3-month free trial)
+ */
+export const needsProSubscription = async (): Promise<boolean> => {
+  if (!(await isUserSignedIn())) return false; // Non-signed users handled separately
+  
+  const signedUpTrial = await getSignedUpTrialStatus();
+  return signedUpTrial.isExpired; // After 3 months, needs PRO
+};
 
 /**
  * Force-refresh cached Pro status from Supabase.
@@ -461,8 +517,8 @@ export const getTrialStatusForUser = async (userId: string) => {
       const defaultTrial: TrialStatus = {
         isTrialActive: true,
         trialStartDate: Date.now(),
-        trialEndDate: Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000,
-        daysRemaining: TRIAL_DURATION_DAYS,
+        trialEndDate: Date.now() + LOCAL_TRIAL_DAYS * 24 * 60 * 60 * 1000,
+        daysRemaining: LOCAL_TRIAL_DAYS,
         isExpired: false,
       };
       await SecureStorage.setItem(trialKey, JSON.stringify(defaultTrial));
@@ -522,13 +578,47 @@ export const getUsersWithValidSubscriptions = async (users: any[]): Promise<any[
 };
 
 /**
+ * Check if should show persistent trial expiration popup
+ * Returns true if 7-day trial expired and user hasn't signed up
+ */
+export const shouldShowTrialExpiredPopup = async (): Promise<boolean> => {
+  if (await isUserSignedIn()) return false; // Signed up users don't see this
+  const trial = await getLocalTrialStatus();
+  return trial.isExpired; // Show popup if 7-day trial expired
+};
+
+/**
+ * Check if should show PRO subscription popup (after 3-month free trial)
+ * Returns true if signed-up user's 3-month trial expired
+ */
+export const shouldShowProSubscriptionPopup = async (): Promise<boolean> => {
+  if (!(await isUserSignedIn())) return false; // Only for signed-up users
+  const signedUpTrial = await getSignedUpTrialStatus();
+  return signedUpTrial.isExpired; // Show PRO popup after 3 months
+};
+
+/**
  * Check trial expiration and redirect if needed
  * Call this on app startup and major screen navigation
+ * 
+ * NEW FLOW:
+ * - 7-day trial for non-signed users -> redirect to sign-in
+ * - 3-month free for signed users -> redirect to subscription after expiry
  */
 export const checkTrialExpirationAndRedirect = async (router: any): Promise<void> => {
   if (FREE_MODE) {
     const signedIn = await isUserSignedIn();
-    if (signedIn) return; // Signed-in users always have access
+    
+    if (signedIn) {
+      // Check if signed-up user's 3-month trial expired
+      const needsPro = await needsProSubscription();
+      if (needsPro) {
+        router.replace('/subscription');
+      }
+      return;
+    }
+    
+    // Non-signed-in users: check 7-day trial
     const trial = await getLocalTrialStatus();
     if (trial.isExpired) {
       router.replace('/auth-sign-in');
@@ -637,9 +727,9 @@ export const createTrialIfNeeded = async (userId: string): Promise<void> => {
       return;
     }
 
-    // Create a new trial subscription (30 days)
+    // Create a new trial subscription (90 days = 3 months for signed-up users)
     const trialStartDate = new Date();
-    const trialEndDate = new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
+    const trialEndDate = new Date(Date.now() + SIGNED_UP_TRIAL_DAYS * 24 * 60 * 60 * 1000);
 
     const { error: insertError } = await supabase.from('subscriptions').insert({
       user_id: userId,
@@ -653,7 +743,9 @@ export const createTrialIfNeeded = async (userId: string): Promise<void> => {
       return;
     }
 
-    console.log('Trial subscription created for user:', userId);
+    // Also set the local signed-up trial start date for client-side tracking
+    await SecureStorage.setItem(SIGNED_UP_TRIAL_START_KEY, trialStartDate.getTime().toString());
+    console.log('Trial subscription created for user:', userId, 'with 3-month local tracking');
   } catch (error) {
     console.error('Error in createTrialIfNeeded:', error);
   }

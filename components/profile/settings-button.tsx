@@ -10,7 +10,8 @@ const iconNames = {
   export: 'square.and.arrow.up',
   gear: 'gearshape',
   star: 'star.fill',
-  chevron: 'chevron.right'
+  chevron: 'chevron.right',
+  creditcard: 'creditcard.fill'
 } as const;
 
 interface SettingsButtonProps {
@@ -61,9 +62,10 @@ interface QuickActionsProps {
   onExportData: () => void;
   onSettings: () => void;
   onSubscription?: () => void;
+  onSubscriptionsInfo?: () => void;
 }
 
-export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscription }: QuickActionsProps) {
+export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscription, onSubscriptionsInfo }: QuickActionsProps) {
   const { colors } = useTheme();
 
   const handleExportData = async () => {
@@ -88,6 +90,14 @@ export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscr
             title="Upgrade to Pro ✨"
             icon="star"
             onPress={onSubscription}
+          />
+        )}
+
+        {onSubscriptionsInfo && (
+          <SettingsButton
+            title="Subscriptions"
+            icon="creditcard"
+            onPress={onSubscriptionsInfo}
           />
         )}
 

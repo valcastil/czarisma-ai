@@ -2,11 +2,12 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } fro
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { IntelligentCzar } from '@/components/intelligent-czar';
+import { TrialExpiredModal } from '@/components/trial-expired-modal';
 import { Colors } from '@/constants/theme';
 import { CzarProvider, useCzar } from '@/contexts/czar-context';
 import { ThemeProvider, useColorScheme } from '@/hooks/use-theme';
@@ -14,7 +15,7 @@ import { initializeGemini } from '@/lib/gemini';
 import { initializeRevenueCat } from '@/lib/revenuecat';
 import { initializeSupabase, supabase } from '@/lib/supabase';
 import { initializeVexo } from '@/lib/vexo-analytics';
-import { checkTrialExpirationAndRedirect } from '@/utils/subscription-utils';
+import { checkTrialExpirationAndRedirect, getLocalTrialStatus, shouldShowTrialExpiredPopup } from '@/utils/subscription-utils';
 
 // Stripe publishable key - replace with your actual key
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here';
@@ -29,6 +30,8 @@ function RootLayoutContent() {
   const router = useRouter();
   const pathname = usePathname();
   const { setCurrentScreen } = useCzar();
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | undefined>(undefined);
 
   // Track screen changes for Czar context
   useEffect(() => {
@@ -40,12 +43,32 @@ function RootLayoutContent() {
   }, [pathname, setCurrentScreen]);
 
   // Check auth state and trial status after navigation is ready
-  // Signed-in users: free access. Non-signed-in: 30-day trial, then must sign up.
+  // NEW FLOW: 7-day trial → sign up → 3-month free → PRO subscription
   useEffect(() => {
     const checkAuthAndTrial = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      
       if (!session) {
-        // Not signed in — check if local trial is still active
+        // Not signed in — check if 7-day trial expired
+        const trial = await getLocalTrialStatus();
+        const shouldShowPopup = await shouldShowTrialExpiredPopup();
+        
+        if (shouldShowPopup) {
+          // Show persistent trial expired modal
+          setTrialDaysRemaining(trial.daysRemaining ?? undefined);
+          setShowTrialModal(true);
+        } else if (trial.daysRemaining !== null && trial.daysRemaining <= 2) {
+          // Show warning popup when 2 or fewer days remaining
+          setTrialDaysRemaining(trial.daysRemaining);
+          setShowTrialModal(true);
+        }
+        
+        // Also redirect to sign-in if fully expired
+        if (trial.isExpired) {
+          await checkTrialExpirationAndRedirect(router);
+        }
+      } else {
+        // Signed in — check if 3-month trial expired and needs PRO
         await checkTrialExpirationAndRedirect(router);
       }
     };
@@ -73,6 +96,7 @@ function RootLayoutContent() {
         <Stack.Screen name="add-entry" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="subscription" />
+        <Stack.Screen name="subscriptions-info" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
         <Stack.Screen name="auth-sign-in" />
         <Stack.Screen name="ai-chat" />
         <Stack.Screen 
@@ -89,6 +113,13 @@ function RootLayoutContent() {
       <StatusBar style="light" />
       {/* Intelligent Czar - appears after inactivity on any screen */}
       <IntelligentCzar />
+      
+      {/* Trial Expired Modal - shows after 7 days or when expiring soon */}
+      <TrialExpiredModal 
+        visible={showTrialModal} 
+        daysRemaining={trialDaysRemaining}
+        onClose={() => setShowTrialModal(false)}
+      />
     </NavigationThemeProvider>
   );
 }
