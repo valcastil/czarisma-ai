@@ -1,0 +1,59 @@
+# EAS Build ignore file
+# Everything in .gitignore plus AI tooling artifacts
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env.local
+.env.production
+.env.development
+.env*.local
+*.env
+
+# typescript
+*.tsbuildinfo
+
+app-example
+
+# generated native folders
+/ios
+/android
+
+# Sensitive credentials
+credentials.json
+supabase/.env
+supabase/.env.local
+
+# AI tooling artifacts (contain symlinks that break EAS on Windows)
+.agents/
+.claude/
+.windsurf/
+.vscode/
