@@ -73,6 +73,15 @@ const MAPPING = {
   'xmark.circle.fill': 'cancel',
   'arrowshape.turn.up.forward': 'forward',
   
+  // Settings & info icons
+  'gearshape': 'settings',
+  'gearshape.fill': 'settings',
+  'info.circle': 'info',
+  'info.circle.fill': 'info',
+  'creditcard.fill': 'credit-card',
+  'gift.fill': 'card-giftcard',
+  'person.circle': 'account-circle',
+  
   // Shared links platform icons
   'play.rectangle.fill': 'play-arrow',
   'music.note': 'music-note',

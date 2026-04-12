@@ -767,6 +767,7 @@ export default function ChatScreen() {
     return (
       <>
       {showDateSeparator && renderDateSeparator(item.date)}
+      <View style={(showReactionPicker || showActions) ? { zIndex: 999 } : undefined}>
       <TouchableOpacity
         onLongPress={() => setReactionMessageId(item.id)}
         delayLongPress={500}
@@ -777,7 +778,7 @@ export default function ChatScreen() {
         }}>
         <View style={[
           styles.messageContainer,
-          isFromCurrentUser ? styles.messageRight : styles.messageLeft
+          isFromCurrentUser ? styles.messageRight : styles.messageLeft,
         ]}>
           {/* Avatar for received messages (left side) */}
           {!isFromCurrentUser && (
@@ -842,32 +843,6 @@ export default function ChatScreen() {
             )}
           </View>
 
-          {showReactionPicker && (
-            <View style={[
-              styles.reactionPicker,
-              { 
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                [isFromCurrentUser ? 'right' : 'left']: 0,
-              }
-            ]}>
-              {quickReactions.map((emoji, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.reactionButton}
-                  onPress={() => handleAddReaction(item.id, emoji)}
-                  activeOpacity={0.7}>
-                  <Text style={styles.reactionEmoji}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                style={styles.reactionButton}
-                onPress={() => setShowFullEmojiPicker(true)}
-                activeOpacity={0.7}>
-                <Text style={styles.reactionPlus}>+</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {showActions && (
             <View style={[
@@ -933,6 +908,46 @@ export default function ChatScreen() {
           )}
         </View>
       </TouchableOpacity>
+
+      {/* Reaction picker rendered OUTSIDE TouchableOpacity so taps aren't intercepted */}
+      {showReactionPicker && (
+        <View style={[
+          styles.reactionPickerContainer,
+          isFromCurrentUser ? { alignItems: 'flex-end', paddingRight: 12 } : { alignItems: 'flex-start', paddingLeft: 50 },
+        ]}>
+          <View 
+            style={[
+              styles.reactionPicker,
+              { 
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              }
+            ]}
+          >
+            {quickReactions.map((emoji, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.reactionButton}
+                onPress={() => {
+                  console.log('Reaction tapped:', emoji, 'for message:', item.id);
+                  handleAddReaction(item.id, emoji);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                activeOpacity={0.6}>
+                <Text style={styles.reactionEmoji}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.reactionButton}
+              onPress={() => setShowFullEmojiPicker(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              activeOpacity={0.6}>
+              <Text style={styles.reactionPlus}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      </View>
       </>
     );
   };
@@ -1533,6 +1548,9 @@ const styles = StyleSheet.create({
   },
   messageBubbleWrapper: {
     maxWidth: '80%',
+    position: 'relative',
+    zIndex: 1,
+    overflow: 'visible',
   },
   messageBubble: {
     paddingHorizontal: 16,
@@ -1957,20 +1975,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  reactionPickerContainer: {
+    marginTop: -8,
+    marginBottom: 4,
+    zIndex: 9999,
+  },
   reactionPicker: {
-    position: 'absolute',
-    top: -60,
     flexDirection: 'row',
     borderRadius: 30,
     padding: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 100,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
     borderWidth: 1,
     gap: 4,
+    alignSelf: 'flex-start',
   },
   reactionButton: {
     width: 40,

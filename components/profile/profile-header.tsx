@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface ProfileHeaderProps {
   profile: UserProfile;
@@ -244,6 +244,45 @@ export function ProfileHeader({ profile, onEditPress }: ProfileHeaderProps) {
           </Text>
         </View>
       )}
+
+      {profile.socialLinks && Object.values(profile.socialLinks).some(v => v) && (
+        <View style={[styles.socialContainer, { backgroundColor: colors.card }]}>
+          <Text style={[styles.socialTitle, { color: colors.textSecondary }]}>SOCIAL MEDIA</Text>
+          <View style={styles.socialGrid}>
+            {[
+              { key: 'instagram', icon: '📸', label: 'Instagram', urlPrefix: 'https://instagram.com/' },
+              { key: 'facebook', icon: '👤', label: 'Facebook', urlPrefix: 'https://facebook.com/' },
+              { key: 'twitter', icon: '𝕏', label: 'X', urlPrefix: 'https://x.com/' },
+              { key: 'tiktok', icon: '🎵', label: 'TikTok', urlPrefix: 'https://tiktok.com/@' },
+              { key: 'youtube', icon: '▶️', label: 'YouTube', urlPrefix: 'https://youtube.com/' },
+              { key: 'linkedin', icon: '💼', label: 'LinkedIn', urlPrefix: 'https://linkedin.com/in/' },
+              { key: 'snapchat', icon: '👻', label: 'Snapchat', urlPrefix: 'https://snapchat.com/add/' },
+              { key: 'threads', icon: '🧵', label: 'Threads', urlPrefix: 'https://threads.net/@' },
+              { key: 'whatsapp', icon: '💬', label: 'WhatsApp', urlPrefix: 'https://wa.me/' },
+              { key: 'telegram', icon: '✈️', label: 'Telegram', urlPrefix: 'https://t.me/' },
+            ]
+              .filter(item => profile.socialLinks?.[item.key as keyof typeof profile.socialLinks])
+              .map(item => {
+                const value = profile.socialLinks?.[item.key as keyof typeof profile.socialLinks] || '';
+                const isUrl = value.startsWith('http');
+                const url = isUrl ? value : `${item.urlPrefix}${value.replace('@', '')}`;
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[styles.socialChip, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    onPress={() => Linking.openURL(url).catch(() => {})}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.socialChipIcon}>{item.icon}</Text>
+                    <Text style={[styles.socialChipText, { color: colors.text }]} numberOfLines={1}>
+                      {value.startsWith('http') ? item.label : value}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -402,5 +441,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
+  },
+  socialContainer: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  socialTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  socialGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  socialChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 6,
+  },
+  socialChipIcon: {
+    fontSize: 14,
+  },
+  socialChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    maxWidth: 120,
   },
 });

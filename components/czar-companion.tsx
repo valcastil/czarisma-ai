@@ -408,7 +408,7 @@ export function CzarCompanion({
           {/* Speech Bubble */}
           {showMessage && (
             <View style={[styles.speechBubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.speechText, { color: colors.text }]} numberOfLines={2}>
+              <Text style={[styles.speechText, { color: colors.text }]}>
                 {displayMessage}
               </Text>
             </View>
@@ -492,9 +492,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   speechBubble: {
-    maxWidth: 200,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    maxWidth: 280,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 12,

@@ -32,6 +32,18 @@ export default function ProfileSettingsScreen() {
   const [name, setName] = useState('');
   const [about, setAbout] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | undefined>(undefined);
+  const [socialLinks, setSocialLinks] = useState({
+    facebook: '',
+    instagram: '',
+    whatsapp: '',
+    tiktok: '',
+    twitter: '',
+    linkedin: '',
+    youtube: '',
+    snapchat: '',
+    threads: '',
+    telegram: '',
+  });
 
   useEffect(() => {
     (async () => {
@@ -41,6 +53,20 @@ export default function ProfileSettingsScreen() {
         setName(p.name || '');
         setAbout(p.bio || '');
         setAvatarUri(p.avatar);
+        if (p.socialLinks) {
+          setSocialLinks({
+            facebook: p.socialLinks.facebook || '',
+            instagram: p.socialLinks.instagram || '',
+            whatsapp: p.socialLinks.whatsapp || '',
+            tiktok: p.socialLinks.tiktok || '',
+            twitter: p.socialLinks.twitter || '',
+            linkedin: p.socialLinks.linkedin || '',
+            youtube: p.socialLinks.youtube || '',
+            snapchat: p.socialLinks.snapchat || '',
+            threads: p.socialLinks.threads || '',
+            telegram: p.socialLinks.telegram || '',
+          });
+        }
       } catch (e) {
         Alert.alert('Error', 'Unable to load profile settings');
       } finally {
@@ -53,12 +79,17 @@ export default function ProfileSettingsScreen() {
     if (!profile) return false;
     const normalizedAbout = about.trim();
     const normalizedProfileAbout = (profile.bio || '').trim();
+    const socialChanged = Object.keys(socialLinks).some((key) => {
+      const k = key as keyof typeof socialLinks;
+      return (socialLinks[k] || '').trim() !== (profile.socialLinks?.[k] || '').trim();
+    });
     return (
       name.trim() !== (profile.name || '').trim() ||
       normalizedAbout !== normalizedProfileAbout ||
-      avatarUri !== profile.avatar
+      avatarUri !== profile.avatar ||
+      socialChanged
     );
-  }, [about, avatarUri, name, profile]);
+  }, [about, avatarUri, name, profile, socialLinks]);
 
   const handlePickPhoto = async () => {
     try {
@@ -96,10 +127,17 @@ export default function ProfileSettingsScreen() {
       console.log('Saving profile with avatar:', avatarUri ? 'Yes' : 'No');
       
       // Update profile (this now syncs to Supabase automatically, including avatar upload)
+      // Build clean social links (only non-empty values)
+      const cleanSocialLinks: Record<string, string> = {};
+      Object.entries(socialLinks).forEach(([key, value]) => {
+        if (value.trim()) cleanSocialLinks[key] = value.trim();
+      });
+
       const updated = await updateProfile({
         name: trimmedName,
         bio: about.trim(),
         avatar: avatarUri,
+        socialLinks: cleanSocialLinks as any,
       });
       
       console.log('Profile saved successfully');
@@ -271,6 +309,48 @@ export default function ProfileSettingsScreen() {
           </View>
         </View>
 
+        <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>SOCIAL MEDIA LINKS</Text>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {[
+            { key: 'instagram', label: 'Instagram', placeholder: '@username', icon: '📸' },
+            { key: 'facebook', label: 'Facebook', placeholder: 'Profile URL or username', icon: '👤' },
+            { key: 'twitter', label: 'X (Twitter)', placeholder: '@handle', icon: '𝕏' },
+            { key: 'tiktok', label: 'TikTok', placeholder: '@username', icon: '🎵' },
+            { key: 'youtube', label: 'YouTube', placeholder: 'Channel URL or @handle', icon: '▶️' },
+            { key: 'linkedin', label: 'LinkedIn', placeholder: 'Profile URL', icon: '💼' },
+            { key: 'snapchat', label: 'Snapchat', placeholder: '@username', icon: '👻' },
+            { key: 'threads', label: 'Threads', placeholder: '@username', icon: '🧵' },
+            { key: 'whatsapp', label: 'WhatsApp', placeholder: 'Phone number', icon: '💬' },
+            { key: 'telegram', label: 'Telegram', placeholder: '@username', icon: '✈️' },
+          ].map((item, index, arr) => (
+            <View key={item.key}>
+              <View style={styles.fieldRow}>
+                <View style={styles.socialIconWrap}>
+                  <Text style={styles.socialIcon}>{item.icon}</Text>
+                </View>
+                <View style={styles.fieldBody}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{item.label}</Text>
+                  <TextInput
+                    value={socialLinks[item.key as keyof typeof socialLinks]}
+                    onChangeText={(text) => setSocialLinks(prev => ({ ...prev, [item.key]: text }))}
+                    style={[styles.fieldInput, { color: colors.text }]}
+                    placeholder={item.placeholder}
+                    placeholderTextColor={colors.textSecondary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+              {index < arr.length - 1 && (
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              )}
+            </View>
+          ))}
+        </View>
+
         <View style={styles.footerSpacer} />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -433,6 +513,14 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     marginVertical: 14,
+  },
+  socialIconWrap: {
+    width: 34,
+    paddingTop: 2,
+    alignItems: 'center',
+  },
+  socialIcon: {
+    fontSize: 18,
   },
   footerSpacer: {
     height: 20,

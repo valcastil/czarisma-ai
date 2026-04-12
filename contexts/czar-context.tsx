@@ -7,62 +7,153 @@ type ScreenContext = {
   actionPrompt: string;
 };
 
-const screenContexts: Record<string, ScreenContext> = {
-  'index': {
-    screen: 'Home',
-    message: 'Welcome to your Charisma journey!',
-    actionPrompt: 'Would you like to add a new entry or check your progress?',
-  },
-  'ai-chat': {
-    screen: 'AI Chat',
-    message: 'Chatting with your AI companion!',
-    actionPrompt: 'Need help with anything specific?',
-  },
-  'profile': {
-    screen: 'Profile',
-    message: 'Viewing your profile stats!',
-    actionPrompt: 'Want to update your profile or check your achievements?',
-  },
-  'profile-settings': {
-    screen: 'Profile Settings',
-    message: 'Customizing your profile!',
-    actionPrompt: 'Need to change any settings?',
-  },
-  'subscription': {
-    screen: 'Subscription',
-    message: 'Exploring subscription options!',
-    actionPrompt: 'Have questions about our plans?',
-  },
-  'add-entry': {
-    screen: 'Add Entry',
-    message: 'Adding a new Charisma entry!',
-    actionPrompt: 'Need help filling out the entry?',
-  },
-  'entry/[id]': {
-    screen: 'Entry Details',
-    message: 'Viewing your entry details!',
-    actionPrompt: 'Want to edit or share this entry?',
-  },
-  'onboarding-charisma': {
-    screen: 'Onboarding',
-    message: 'Getting started with Charisma!',
-    actionPrompt: 'Need help understanding the app?',
-  },
-  'onboarding-emotions': {
-    screen: 'Onboarding',
-    message: 'Learning about emotions!',
-    actionPrompt: 'Have questions about emotions?',
-  },
-  'onboarding-password': {
-    screen: 'Onboarding',
-    message: 'Setting up your account!',
-    actionPrompt: 'Need help with password setup?',
-  },
-  'modal': {
-    screen: 'Welcome',
-    message: 'Welcome to CzarApp!',
-    actionPrompt: 'Ready to start your journey?',
-  },
+// Randomized messages per screen — mix of tips, encouragement, and jokes
+const screenMessages: Record<string, string[]> = {
+  'index': [
+    "Your charisma is off the charts today! 🔥",
+    "Fun fact: Charismatic people blink less. Try it... or don't. 😂",
+    "Welcome back, legend! Ready to level up?",
+    "Did you know? Confidence is just charisma's warm-up act! 💪",
+    "Knock knock! Who's there? Your untapped potential! 🚀",
+    "A wise Czar once said: 'Track your growth, rule your world.' That Czar was me. 👑",
+    "You've got more charisma than a room full of motivational speakers!",
+    "Quick tip: Smile more — it's free charisma points! 😊",
+    "Your vibe today? Absolutely magnetic. ✨",
+    "Why did the charismatic person cross the road? To inspire the other side! 🤣",
+  ],
+  '(tabs)': [
+    "Swipe, explore, conquer! The world is your stage. 🌍",
+    "Every tab is a new adventure. What'll it be today?",
+    "Pro tip: Great leaders explore all their options. You're doing great! 👏",
+    "Why don't charismatic people get lost? They always find their way! 😄",
+    "Keep exploring — that's what legends do! 🏆",
+  ],
+  'ai-chat': [
+    "AI + You = Unstoppable combo! 🤖✨",
+    "Ask me anything! I promise I won't judge... much. 😜",
+    "Fun fact: Even AI needs a coffee break. Just kidding, I'm always here!",
+    "Your AI buddy is ready! Let's brainstorm something brilliant. 💡",
+    "Why did the AI go to therapy? Too many unresolved queries! 😂",
+    "Think of me as your charisma co-pilot. Let's fly! ✈️",
+    "Pro tip: The best conversations start with curiosity. Go ahead!",
+    "I've been waiting for you! ...okay that sounded creepy. But really, hi! 👋",
+  ],
+  'profile': [
+    "Looking sharp! Your profile is 🔥",
+    "Fun fact: Your profile pic has more charisma than most people's whole personality! 😎",
+    "Stats don't lie — you're crushing it! 📊",
+    "Your profile called. It wants you to know how awesome you are. 💪",
+    "Why update your profile? Because the world deserves to see the real you! 🌟",
+    "Pro tip: A great profile pic = +100 charisma points (scientifically proven*) 📸\n\n*Not actually proven.",
+    "Mirror mirror on the wall, who's the most charismatic of them all? You! 👑",
+    "Your achievements are stacking up like a royal treasury! 💰",
+  ],
+  'profile-settings': [
+    "Customization is the key to world domination! Or at least a cool profile. 🎨",
+    "Settings are like a wardrobe — pick what fits you best! 👔",
+    "Pro tip: The best settings are the ones that make YOU happy.",
+    "Tweaking your profile? That's what champions do! 🏅",
+    "Fun fact: Even royalty updates their look from time to time! 👑",
+  ],
+  'subscription': [
+    "PRO users have 200% more charisma. Okay I made that up, but still! 😂",
+    "Investing in yourself? That's the most charismatic move of all! 💎",
+    "Fun fact: PRO stands for Pretty Remarkable & Outstanding. Obviously.",
+    "Your future PRO self is cheering you on right now! 🎉",
+    "Going PRO is like adding a crown to your charisma toolkit! 👑",
+  ],
+  'subscriptions-info': [
+    "Knowledge is power! Understanding your options = big brain energy. 🧠",
+    "PRO tip: Reading the fine print makes you 10x more sophisticated! 📋",
+    "The more you know, the better you grow! 🌱",
+    "Smart people ask questions. You're clearly one of them! 💡",
+  ],
+  'add-entry': [
+    "New entry time! Your future self will thank you for this. 📝",
+    "Every entry is a step toward legendary charisma! 🚶‍♂️→🏃‍♂️→🦸‍♂️",
+    "Pro tip: Be honest in your entries — growth loves authenticity! 💯",
+    "Fun fact: Writing things down makes them 42% more likely to happen! ✍️",
+    "Your journal is your kingdom. Rule it wisely! 👑",
+    "One small entry for you, one giant leap for your charisma! 🚀",
+    "Quick joke: Why did the entry blush? It was too personal! 😂",
+  ],
+  'entry/[id]': [
+    "Reviewing past entries? That's elite-level self-awareness! 🧠",
+    "Look how far you've come! This entry is proof. 📖",
+    "Pro tip: Share your wins — charisma multiplies when shared! 🤝",
+    "Your past self left you breadcrumbs of wisdom. Follow them! 🍞",
+    "Every entry tells a story. This one's a bestseller! 📚",
+  ],
+  'settings': [
+    "Adjusting the controls? A true master of their domain! ⚙️",
+    "Pro tip: Good settings = smooth sailing! 🚢",
+    "Fun fact: 73% of successful people customize their app settings. The other 27% wish they did! 😄",
+    "Settings are like seasoning — a little tweak makes everything better! 🧂",
+  ],
+  'onboarding-charisma': [
+    "Welcome aboard, future charisma champion! 🎖️",
+    "First steps are always the bravest. I'm proud of you! 🦁",
+    "Fun fact: You're already more charismatic just by being here! ✨",
+    "The journey of a thousand miles begins with... this screen! 🗺️",
+  ],
+  'onboarding-emotions': [
+    "Emotions are your superpower! Let's understand them better. 💫",
+    "Did you know? Emotionally aware people are 40% more charismatic! 🧠",
+    "Fun fact: Even Czars have feelings. Mine is 'excitement' right now! 😄",
+    "Mastering emotions = mastering life. You're on the right track! 🎯",
+  ],
+  'auth-sign-in': [
+    "Welcome! Great things await behind this door! 🚪✨",
+    "Signing in is step one to greatness. Let's go! 🏁",
+    "Your kingdom awaits, Your Majesty! Just sign in. 👑",
+    "Fun fact: The password to success is... well, your actual password! 🔑😂",
+  ],
+  'chat': [
+    "Chatting with friends? Your charisma is contagious! 💬✨",
+    "Pro tip: Good listeners make the best conversationalists! 👂",
+    "Fun fact: The average person sends 72 texts a day. You're clearly above average! 📱",
+    "Your words have power — use them wisely and hilariously! 😄",
+    "Why did the text message break up with the email? It wanted a quicker response! 💌😂",
+  ],
+  'modal': [
+    "Welcome to CzarApp! Your charisma journey starts NOW! 🎬",
+    "The Czar is in! Ready to guide you to greatness! 👑",
+    "Fun fact: You've just opened the most charismatic app ever created. Coincidence? I think not! 😎",
+  ],
+};
+
+// Helper to pick a random message for a screen
+const getRandomMessage = (screen: string): string => {
+  const messages = screenMessages[screen] || screenMessages['index'] || ['Welcome! 👋'];
+  return messages[Math.floor(Math.random() * messages.length)];
+};
+
+// Build screen context from screen name
+const getScreenContext = (screen: string): ScreenContext => {
+  const friendlyNames: Record<string, string> = {
+    'index': 'Home',
+    '(tabs)': 'Home',
+    'ai-chat': 'AI Chat',
+    'profile': 'Profile',
+    'profile-settings': 'Profile Settings',
+    'subscription': 'Subscription',
+    'subscriptions-info': 'Subscriptions',
+    'add-entry': 'Add Entry',
+    'entry/[id]': 'Entry Details',
+    'settings': 'Settings',
+    'onboarding-charisma': 'Onboarding',
+    'onboarding-emotions': 'Onboarding',
+    'auth-sign-in': 'Sign In',
+    'chat': 'Chat',
+    'modal': 'Welcome',
+  };
+
+  const message = getRandomMessage(screen);
+  return {
+    screen: friendlyNames[screen] || screen,
+    message,
+    actionPrompt: message,
+  };
 };
 
 interface CzarContextType {
@@ -82,9 +173,9 @@ interface CzarContextType {
 const CzarContext = createContext<CzarContextType | undefined>(undefined);
 
 // Constants for timing
-const INITIAL_DELAY = 3; // seconds after screen change to show Czar
-const VISIBILITY_DURATION = 5; // seconds Czar stays visible
-const COOLDOWN_DURATION = 20; // seconds before Czar can appear again
+const INITIAL_DELAY = 1; // seconds after screen change to show Czar (fast for navigation)
+const VISIBILITY_DURATION = 6; // seconds Czar stays visible
+const COOLDOWN_DURATION = 10; // seconds before Czar can appear again (shorter for more interaction)
 
 export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreenState] = useState('index');
@@ -136,8 +227,8 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
 
   // Show Czar after initial delay
   const scheduleCzarAppearance = useCallback(() => {
-    const context = screenContexts[currentScreen];
-    if (!context) return;
+    // Get a fresh random message for this screen
+    const context = getScreenContext(currentScreen);
 
     // Clear any existing timers
     clearAllTimers();
@@ -162,9 +253,17 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
     }, INITIAL_DELAY * 1000);
   }, [currentScreen, clearAllTimers, startCooldown]);
 
-  // Handle screen change
+  // Track previous screen to detect actual navigation
+  const prevScreenRef = useRef<string>('index');
+
+  // Handle screen change — trigger Czar on every navigation/swipe
   const setCurrentScreen = useCallback((screen: string) => {
+    const prevScreen = prevScreenRef.current;
+    prevScreenRef.current = screen;
     setCurrentScreenState(screen);
+
+    // Only trigger on actual screen change (not same screen re-render)
+    if (screen === prevScreen) return;
 
     // Check if we're in cooldown period
     const now = Date.now();
@@ -176,7 +275,7 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Not in cooldown, schedule Czar appearance
+    // Screen changed — show Czar with a fresh random message
     scheduleCzarAppearance();
   }, [clearAllTimers, scheduleCzarAppearance]);
 
@@ -214,7 +313,7 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
     return () => clearAllTimers();
   }, []);
 
-  const screenContext = screenContexts[currentScreen] || null;
+  const screenContext = getScreenContext(currentScreen);
 
   return (
     <CzarContext.Provider

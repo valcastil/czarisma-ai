@@ -11,7 +11,7 @@ const iconNames = {
   gear: 'gearshape',
   star: 'star.fill',
   chevron: 'chevron.right',
-  creditcard: 'creditcard.fill'
+  info: 'info.circle.fill'
 } as const;
 
 interface SettingsButtonProps {
@@ -96,7 +96,7 @@ export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscr
         {onSubscriptionsInfo && (
           <SettingsButton
             title="Subscriptions"
-            icon="creditcard"
+            icon="info"
             onPress={onSubscriptionsInfo}
           />
         )}

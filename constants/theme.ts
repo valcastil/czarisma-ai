@@ -91,6 +91,12 @@ export interface UserProfile {
     instagram?: string;
     whatsapp?: string;
     tiktok?: string;
+    twitter?: string;
+    linkedin?: string;
+    youtube?: string;
+    snapchat?: string;
+    threads?: string;
+    telegram?: string;
   };
   joinDate: number;
   totalEntries: number;
