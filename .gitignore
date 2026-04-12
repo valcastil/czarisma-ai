@@ -52,3 +52,8 @@ app-example
 credentials.json
 supabase/.env
 supabase/.env.local
+
+# AI tooling artifacts (contain symlinks that break EAS on Windows)
+.agents/
+.claude/
+.windsurf/
