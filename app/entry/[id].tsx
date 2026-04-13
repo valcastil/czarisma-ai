@@ -314,15 +314,10 @@ export default function EntryDetailScreen() {
       {/* Edit Button - Top Right */}
       <View style={styles.topEditButton}>
         <TouchableOpacity
-          style={[styles.roundEditButton, { backgroundColor: isPro ? 'rgba(244, 197, 66, 0.2)' : 'rgba(128, 128, 128, 0.2)' }]}
+          style={[styles.roundEditButton, { backgroundColor: 'rgba(244, 197, 66, 0.2)' }]}
           onPress={handleStartEdit}
           activeOpacity={0.8}>
-          <IconSymbol size={20} name="pencil" color={isPro ? "#F4C542" : "#808080"} />
-          {isPro && (
-            <View style={[styles.proBadge, { backgroundColor: colors.gold }]}>
-              <Text style={styles.proBadgeText} numberOfLines={1}>PRO</Text>
-            </View>
-          )}
+          <IconSymbol size={20} name="pencil" color="#F4C542" />
         </TouchableOpacity>
       </View>
 

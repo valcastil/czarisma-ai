@@ -1,7 +1,7 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
 import { addMultipleLinks, detectPlatform, getPlatformColor, getPlatformEmoji, parseLinksFromText } from '@/utils/link-storage';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -26,6 +26,14 @@ export function PasteLinkModal({ visible, onClose, onLinkAdded }: PasteLinkModal
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Reset state every time modal opens
+  useEffect(() => {
+    if (visible) {
+      setText('');
+      setSaving(false);
+    }
+  }, [visible]);
+
   const parsedLinks = useMemo(() => parseLinksFromText(text), [text]);
   const detectedPlatforms = useMemo(() => {
     return parsedLinks.map((url) => ({ url, ...detectPlatform(url) }));
@@ -39,15 +47,20 @@ export function PasteLinkModal({ visible, onClose, onLinkAdded }: PasteLinkModal
       return;
     }
 
+    // Capture links before clearing state
+    const linksToSave = [...parsedLinks];
+
     try {
       setSaving(true);
-      await addMultipleLinks(parsedLinks);
+      // Close modal immediately for snappy UX
       setText('');
-      onLinkAdded();
       onClose();
+      // Save in background
+      await addMultipleLinks(linksToSave);
+      onLinkAdded();
     } catch (error) {
       console.error('Error saving links:', error);
-      Alert.alert('Error', 'Failed to save links');
+      Alert.alert('Error', 'Failed to save links. Please try again.');
     } finally {
       setSaving(false);
     }

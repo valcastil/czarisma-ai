@@ -47,24 +47,18 @@ export default function HomeScreen() {
   const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
   const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const pendingScrollToEntries = useRef(false);
-  const entriesSectionY = useRef(0);
+  const entriesSectionRef = useRef<View>(null);
+  const currentScrollY = useRef(0);
 
   const params = useLocalSearchParams<{ openPasteLink?: string; scrollToEntries?: string }>();
 
-  // Open paste link modal when navigated with param
+  // Open paste link modal when navigated with param (uses timestamp for uniqueness)
   useEffect(() => {
-    if (params.openPasteLink === 'true') {
+    if (params.openPasteLink) {
       setShowPasteLinkModal(true);
     }
   }, [params.openPasteLink]);
 
-  // Flag scroll when navigated with scrollToEntries param
-  useEffect(() => {
-    if (params.scrollToEntries === 'true') {
-      pendingScrollToEntries.current = true;
-    }
-  }, [params.scrollToEntries]);
 
   useEffect(() => {
     loadData();
@@ -314,7 +308,10 @@ Forwarded from Czar AI
         ref={scrollViewRef}
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
-        onScroll={onScroll}
+        onScroll={(e) => {
+          currentScrollY.current = e.nativeEvent.contentOffset.y;
+          onScroll(e);
+        }}
         scrollEventThrottle={16}>
         {/* Social Links Section */}
         {sharedLinks.length > 0 && (
@@ -323,11 +320,23 @@ Forwarded from Czar AI
               <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Social Links</Text>
               {entries.length > 0 && (
                 <TouchableOpacity
-                  onPress={() => scrollViewRef.current?.scrollTo({ y: entriesSectionY.current, animated: true })}
+                  onPress={() => {
+                    // Get screen positions of both elements and compute scroll target
+                    entriesSectionRef.current?.measureInWindow((ex: number, ey: number) => {
+                      (scrollViewRef.current as any)?.measureInWindow((sx: number, sy: number) => {
+                        // ey = entries section screen Y
+                        // sy = scrollview screen Y
+                        // difference = how far entries is below scrollview top on screen
+                        // add current scroll offset to get content offset target
+                        const targetY = currentScrollY.current + (ey - sy);
+                        scrollViewRef.current?.scrollTo({ y: Math.max(0, targetY), animated: true });
+                      });
+                    });
+                  }}
                   style={styles.scrollToTopButton}
                   activeOpacity={0.7}>
                   <IconSymbol size={14} name="arrow.down" color={colors.gold} />
-                  <Text style={[styles.scrollToTopText, { color: colors.gold }]}>Entries</Text>
+                  <Text style={[styles.scrollToTopText, { color: colors.gold }]}>Charisma Entries</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -409,16 +418,7 @@ Forwarded from Czar AI
         )}
 
         {/* Charisma Entries Section */}
-        <View onLayout={(e) => {
-          const y = e.nativeEvent.layout.y;
-          entriesSectionY.current = y;
-          if (pendingScrollToEntries.current) {
-            pendingScrollToEntries.current = false;
-            setTimeout(() => {
-              scrollViewRef.current?.scrollTo({ y, animated: true });
-            }, 100);
-          }
-        }}>
+        <View ref={entriesSectionRef} collapsable={false} renderToHardwareTextureAndroid>
           {entries.length === 0 && sharedLinks.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>

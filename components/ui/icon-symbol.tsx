@@ -82,6 +82,11 @@ const MAPPING = {
   'gift.fill': 'card-giftcard',
   'person.circle': 'account-circle',
   
+  // Arrows
+  'arrow.down': 'arrow-downward',
+  'arrow.up': 'arrow-upward',
+  'arrow.up.right': 'arrow-outward',
+
   // Shared links platform icons
   'play.rectangle.fill': 'play-arrow',
   'music.note': 'music-note',

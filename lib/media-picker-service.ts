@@ -1,7 +1,11 @@
 import { MediaPermissions } from '@/utils/media-permissions';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
+
+// On Android, UCrop needs an aspect ratio to keep crop handles within image safe zone.
+// On iOS, aspect is ignored when allowsEditing:true (native free-form crop is used).
+const CROP_ASPECT: [number, number] | undefined = Platform.OS === 'android' ? [3, 4] : undefined;
 
 export interface PickedMedia {
   type: 'image' | 'video' | 'document';
@@ -29,6 +33,7 @@ export class MediaPickerService {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
+        aspect: CROP_ASPECT,
         quality: 0.8,
       });
 
@@ -52,6 +57,7 @@ export class MediaPickerService {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
+        aspect: CROP_ASPECT,
         quality: 0.8,
         allowsMultipleSelection: false,
       });
@@ -134,6 +140,7 @@ export class MediaPickerService {
 
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
+        aspect: CROP_ASPECT,
         quality: 0.8,
       });
 

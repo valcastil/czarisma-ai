@@ -66,7 +66,7 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
                   },
                   {
                     text: 'Paste Social Link',
-                    onPress: () => router.push({ pathname: '/(tabs)', params: { openPasteLink: 'true' } }),
+                    onPress: () => router.push({ pathname: '/(tabs)', params: { openPasteLink: Date.now().toString() } }),
                   },
                   { text: 'Cancel', style: 'cancel' },
                 ]

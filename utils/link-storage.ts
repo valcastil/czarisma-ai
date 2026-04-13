@@ -105,21 +105,45 @@ interface LinkMetadata {
 }
 
 /**
- * Fetch title via noembed.com (supports YouTube, TikTok, Instagram, Facebook, etc.)
+ * Fetch oEmbed data (supports YouTube, TikTok, Instagram, Facebook, etc.)
+ * Returns title and thumbnail_url when available
  */
-const fetchTitleViaNoEmbed = async (url: string): Promise<string | null> => {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(url)}`;
-    const response = await fetch(apiUrl, { signal: controller.signal });
-    clearTimeout(timeout);
-    const json = await response.json();
-    if (json.title) return json.title;
-    return null;
-  } catch {
-    return null;
+interface OEmbedResult {
+  title: string | null;
+  thumbnail: string | null;
+}
+
+const fetchOEmbed = async (url: string, platform: LinkPlatform): Promise<OEmbedResult> => {
+  const endpoints: string[] = [];
+
+  // Platform-specific oEmbed endpoints (most reliable for thumbnails)
+  if (platform === 'tiktok') {
+    endpoints.push(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+  } else if (platform === 'instagram' || platform === 'reels') {
+    // Instagram/Facebook oEmbed requires app token, fall through to noembed
+  } else if (platform === 'youtube') {
+    endpoints.push(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
   }
+
+  // Generic fallback
+  endpoints.push(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+
+  for (const apiUrl of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(apiUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!response.ok) continue;
+      const json = await response.json();
+      const title = json.title || null;
+      const thumbnail = json.thumbnail_url || json.thumbnail || null;
+      if (title || thumbnail) return { title, thumbnail };
+    } catch {
+      continue;
+    }
+  }
+  return { title: null, thumbnail: null };
 };
 
 /**
@@ -184,12 +208,12 @@ const fetchMetadataDirect = async (url: string): Promise<LinkMetadata> => {
 };
 
 /**
- * Fetch title only — tries noembed first (most reliable), then Microlink, then direct HTML
+ * Fetch title only — tries oEmbed first, then Microlink, then direct HTML
  */
-const fetchTitleOnly = async (url: string): Promise<string | null> => {
-  // 1. noembed.com — works great for YouTube, TikTok, Instagram, Facebook
-  const noembedTitle = await fetchTitleViaNoEmbed(url);
-  if (noembedTitle) return noembedTitle;
+const fetchTitleOnly = async (url: string, platform?: LinkPlatform): Promise<string | null> => {
+  // 1. oEmbed — works great for YouTube, TikTok
+  const oembed = await fetchOEmbed(url, platform || 'unknown');
+  if (oembed.title) return oembed.title;
 
   // 2. Microlink
   const microlinkResult = await fetchMetadataViaApi(url);
@@ -202,6 +226,7 @@ const fetchTitleOnly = async (url: string): Promise<string | null> => {
 
 /**
  * Fetch metadata: combines multiple strategies for thumbnail + title
+ * Priority: oEmbed (platform-native) > YouTube direct > Microlink > HTML scraping
  */
 const fetchLinkMetadata = async (url: string, platform: LinkPlatform): Promise<LinkMetadata> => {
   // For YouTube, we can build the thumbnail directly
@@ -211,30 +236,31 @@ const fetchLinkMetadata = async (url: string, platform: LinkPlatform): Promise<L
     if (videoId) youtubeThumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
   }
 
-  // Fetch title via noembed (most reliable for social platforms)
-  const noembedTitle = await fetchTitleViaNoEmbed(url);
+  // 1. Try oEmbed first — most reliable for TikTok & YouTube thumbnails
+  const oembed = await fetchOEmbed(url, platform);
+  const oembedTitle = oembed.title;
+  const oembedThumb = oembed.thumbnail;
 
-  // If we already have the title and a YouTube thumbnail, skip other APIs
-  if (noembedTitle && youtubeThumbnail) {
-    // Still try to get description from Microlink
-    const apiResult = await fetchMetadataViaApi(url);
-    return { thumbnail: youtubeThumbnail, title: noembedTitle, description: apiResult.description };
+  // If we have both from oEmbed + YouTube direct, we're done
+  const bestThumb = youtubeThumbnail || oembedThumb;
+  if (oembedTitle && bestThumb) {
+    return { thumbnail: bestThumb, title: oembedTitle, description: null };
   }
 
-  // Try Microlink for thumbnail (and title if noembed missed it)
+  // 2. Try Microlink for remaining metadata
   const apiResult = await fetchMetadataViaApi(url);
-  const title = noembedTitle || apiResult.title;
+  const title = oembedTitle || apiResult.title;
+  const thumbnail = bestThumb || apiResult.thumbnail;
   const description = apiResult.description;
-  const thumbnail = youtubeThumbnail || apiResult.thumbnail;
 
   if (title || thumbnail) {
     return { thumbnail, title, description };
   }
 
-  // Final fallback: direct HTML scraping
+  // 3. Final fallback: direct HTML scraping (useful for Instagram/Facebook)
   const directResult = await fetchMetadataDirect(url);
   return {
-    thumbnail: youtubeThumbnail || directResult.thumbnail,
+    thumbnail: directResult.thumbnail,
     title: directResult.title,
     description: directResult.description,
   };
@@ -246,11 +272,17 @@ const fetchLinkMetadata = async (url: string, platform: LinkPlatform): Promise<L
 export const parseLinksFromText = (text: string): string[] => {
   const lines = text.split(/[\n\r,]+/);
   const urls: string[] = [];
+  const seen = new Set<string>();
   for (const line of lines) {
     const words = line.trim().split(/\s+/);
     for (const word of words) {
-      const trimmed = word.trim();
-      if (trimmed.length > 5 && isValidSocialLink(trimmed)) {
+      let trimmed = word.trim();
+      // Add https:// if missing
+      if (trimmed && !trimmed.startsWith('http://') && !trimmed.startsWith('https://') && isValidSocialLink(trimmed)) {
+        trimmed = 'https://' + trimmed;
+      }
+      if (trimmed.length > 5 && isValidSocialLink(trimmed) && !seen.has(trimmed)) {
+        seen.add(trimmed);
         urls.push(trimmed);
       }
     }
