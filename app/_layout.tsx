@@ -17,6 +17,10 @@ import { initializeRevenueCat } from '@/lib/revenuecat';
 import { initializeSupabase, supabase } from '@/lib/supabase';
 import { initializeVexo } from '@/lib/vexo-analytics';
 import { checkTrialExpirationAndRedirect, getLocalTrialStatus, shouldShowTrialExpiredPopup } from '@/utils/subscription-utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// ⚠️ TEMPORARY: Set to true to reset onboarding, then set back to false
+const DEV_RESET_ONBOARDING = false;
 
 // Stripe publishable key - replace with your actual key
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here';
@@ -126,6 +130,17 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
+  // DEV ONLY: Reset onboarding state for fresh start
+  useEffect(() => {
+    if (__DEV__ && DEV_RESET_ONBOARDING) {
+      AsyncStorage.multiRemove([
+        '@charisma_onboarding',
+        '@tutorial_completed',
+        '@onboarding_completed',
+      ]).then(() => console.log('DEV: Onboarding state cleared'));
+    }
+  }, []);
+
   // Initialize new services on app start
   useEffect(() => {
     const initializeServices = async () => {

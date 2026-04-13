@@ -29,7 +29,7 @@ export default function WelcomeScreen() {
         </View>
 
         {/* Subtitle */}
-        <Text style={[styles.subtitle, { color: colors.gold }]}>Improve Your{"\n"}Charisma Now</Text>
+        <Text style={[styles.subtitle, { color: colors.gold }]}>Elevate Your Charisma,{"\n"}Organize Your World</Text>
       </View>
 
       {/* Bottom Section - Get Started Button */}
