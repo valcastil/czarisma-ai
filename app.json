@@ -20,6 +20,7 @@
         "applinks:charismachat.app"
       ],
       "infoPlist": {
+        "CFBundleDisplayName": "Czar AI",
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "This app needs access to your microphone to transcribe voice messages.",
         "NSSpeechRecognitionUsageDescription": "This app needs access to speech recognition to convert your voice to text.",
@@ -28,8 +29,7 @@
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos and videos.",
         "NSUserActivityTypes": [
           "NSUserActivityTypeBrowsingWeb"
-        ],
-                "UIRequiredDeviceCapabilities": ["armv7"]
+        ]
       }
     },
     "android": {
