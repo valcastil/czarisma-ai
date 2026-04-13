@@ -17,8 +17,6 @@ import {
     Alert,
     Image,
     Linking,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
     ScrollView,
     Share,
     StyleSheet,
@@ -47,8 +45,8 @@ export default function HomeScreen() {
   const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
   const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const entriesSectionRef = useRef<View>(null);
-  const currentScrollY = useRef(0);
+  const entriesSectionY = useRef(0);
+  const pendingScrollToEntries = useRef(false);
 
   const params = useLocalSearchParams<{ openPasteLink?: string; scrollToEntries?: string }>();
 
@@ -59,6 +57,12 @@ export default function HomeScreen() {
     }
   }, [params.openPasteLink]);
 
+  // Flag scroll when navigated with scrollToEntries param (after adding entry)
+  useEffect(() => {
+    if (params.scrollToEntries === 'true') {
+      pendingScrollToEntries.current = true;
+    }
+  }, [params.scrollToEntries]);
 
   useEffect(() => {
     loadData();
@@ -307,12 +311,7 @@ Forwarded from Czar AI
       <ScrollView
         ref={scrollViewRef}
         style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        onScroll={(e) => {
-          currentScrollY.current = e.nativeEvent.contentOffset.y;
-          onScroll(e);
-        }}
-        scrollEventThrottle={16}>
+        contentContainerStyle={styles.contentContainer}>
         {/* Social Links Section */}
         {sharedLinks.length > 0 && (
           <View style={styles.sectionContainer}>
@@ -321,17 +320,11 @@ Forwarded from Czar AI
               {entries.length > 0 && (
                 <TouchableOpacity
                   onPress={() => {
-                    // Get screen positions of both elements and compute scroll target
-                    entriesSectionRef.current?.measureInWindow((ex: number, ey: number) => {
-                      (scrollViewRef.current as any)?.measureInWindow((sx: number, sy: number) => {
-                        // ey = entries section screen Y
-                        // sy = scrollview screen Y
-                        // difference = how far entries is below scrollview top on screen
-                        // add current scroll offset to get content offset target
-                        const targetY = currentScrollY.current + (ey - sy);
-                        scrollViewRef.current?.scrollTo({ y: Math.max(0, targetY), animated: true });
-                      });
-                    });
+                    if (entriesSectionY.current > 0) {
+                      scrollViewRef.current?.scrollTo({ y: entriesSectionY.current, animated: true });
+                    } else {
+                      scrollViewRef.current?.scrollToEnd({ animated: true });
+                    }
                   }}
                   style={styles.scrollToTopButton}
                   activeOpacity={0.7}>
@@ -418,7 +411,16 @@ Forwarded from Czar AI
         )}
 
         {/* Charisma Entries Section */}
-        <View ref={entriesSectionRef} collapsable={false} renderToHardwareTextureAndroid>
+        <View onLayout={(e) => {
+          const y = e.nativeEvent.layout.y;
+          entriesSectionY.current = y;
+          if (pendingScrollToEntries.current) {
+            pendingScrollToEntries.current = false;
+            setTimeout(() => {
+              scrollViewRef.current?.scrollTo({ y, animated: true });
+            }, 100);
+          }
+        }}>
           {entries.length === 0 && sharedLinks.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
