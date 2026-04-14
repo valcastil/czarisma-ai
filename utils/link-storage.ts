@@ -120,9 +120,16 @@ const fetchOEmbed = async (url: string, platform: LinkPlatform): Promise<OEmbedR
   if (platform === 'tiktok') {
     endpoints.push(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
   } else if (platform === 'instagram' || platform === 'reels') {
-    // Instagram/Facebook oEmbed requires app token, fall through to noembed
+    // Instagram/Facebook oEmbed requires app token, use noembed as fallback
+    endpoints.push(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
   } else if (platform === 'youtube') {
     endpoints.push(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+    endpoints.push(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+  }
+
+  // For Facebook, try NoEmbed which works without authentication
+  if (platform === 'reels' || url.includes('facebook.com') || url.includes('fb.watch')) {
+    endpoints.push(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
   }
 
   // Generic fallback
@@ -136,8 +143,13 @@ const fetchOEmbed = async (url: string, platform: LinkPlatform): Promise<OEmbedR
       clearTimeout(timeout);
       if (!response.ok) continue;
       const json = await response.json();
-      const title = json.title || null;
-      const thumbnail = json.thumbnail_url || json.thumbnail || null;
+      // NoEmbed uses 'title' and 'thumbnail_url' or 'media_url'
+      const title = json.title || json.meta?.title || null;
+      let thumbnail = json.thumbnail_url || json.thumbnail || json.media_url || json.image || null;
+      // Convert HTTP to HTTPS for Android compatibility (cleartext blocked)
+      if (thumbnail && thumbnail.startsWith('http:')) {
+        thumbnail = thumbnail.replace(/^http:/, 'https:');
+      }
       if (title || thumbnail) return { title, thumbnail };
     } catch {
       continue;
@@ -161,7 +173,12 @@ const fetchMetadataViaApi = async (url: string): Promise<LinkMetadata> => {
     if (json.status === 'success') {
       result.title = json.data?.title || null;
       result.description = json.data?.description || null;
-      result.thumbnail = json.data?.image?.url || json.data?.video?.poster || null;
+      let thumbnail = json.data?.image?.url || json.data?.video?.poster || null;
+      // Convert HTTP to HTTPS for Android compatibility
+      if (thumbnail && thumbnail.startsWith('http:')) {
+        thumbnail = thumbnail.replace(/^http:/, 'https:');
+      }
+      result.thumbnail = thumbnail;
     }
     return result;
   } catch {
@@ -197,8 +214,13 @@ const fetchMetadataDirect = async (url: string): Promise<LinkMetadata> => {
       || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i)
       || html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
 
+    let thumbnail = ogImage?.[1] || null;
+    // Convert HTTP to HTTPS for Android compatibility
+    if (thumbnail && thumbnail.startsWith('http:')) {
+      thumbnail = thumbnail.replace(/^http:/, 'https:');
+    }
     return {
-      thumbnail: ogImage?.[1] || null,
+      thumbnail,
       title: ogTitle?.[1]?.trim() || null,
       description: ogDescription?.[1]?.trim() || null,
     };

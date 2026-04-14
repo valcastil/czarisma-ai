@@ -6,10 +6,64 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, BackHandler, DeviceEventEmitter, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENTRIES_KEY = '@charisma_entries';
+
+function AnimatedTabButton({ onPress, children, isFocused, color }: any) {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const wiggleAnim = React.useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    // Scale down effect
+    Animated.spring(scaleAnim, {
+      toValue: 0.85,
+      useNativeDriver: true,
+      stiffness: 1000,
+      damping: 15,
+      mass: 0.5,
+    }).start();
+
+    // Wiggle animation - rotate left-right-left-right
+    wiggleAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(wiggleAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
+      Animated.timing(wiggleAnim, { toValue: -1, duration: 100, useNativeDriver: true }),
+      Animated.timing(wiggleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+      Animated.timing(wiggleAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      stiffness: 1000,
+      damping: 15,
+      mass: 0.5,
+    }).start();
+  };
+
+  const rotation = wiggleAnim.interpolate({
+    inputRange: [-1, 1],
+    outputRange: ['-10deg', '10deg'],
+  });
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={0.7}
+      style={styles.tabItem}
+    >
+      <Animated.View style={{ transform: [{ scale: scaleAnim }, { rotate: rotation }] }}>
+        {children}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
 
 function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNewMessages }: any) {
   const { colors } = useTheme();
@@ -48,6 +102,12 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
             target: route.key,
             canPreventDefault: true,
           });
+
+          // If already focused on Home, emit event to trigger logo flip
+          if (isFocused && route.name === 'index') {
+            DeviceEventEmitter.emit('home-reselected');
+            return;
+          }
 
           if (!isFocused && !event.defaultPrevented) {
             // For the explore tab (Add button), we might want specific behavior?
@@ -92,14 +152,11 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
         // Special render for "explore" (Middle Button)
         if (route.name === 'explore') {
           return (
-            <View key={route.key} style={styles.tabItem}>
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: colors.gold }]}
-                onPress={onPress}
-                activeOpacity={0.8}>
+            <AnimatedTabButton key={route.key} onPress={onPress}>
+              <View style={[styles.addButton, { backgroundColor: colors.gold }]}>
                 <IconSymbol size={32} name="plus" color="#000000" />
-              </TouchableOpacity>
-            </View>
+              </View>
+            </AnimatedTabButton>
           );
         }
 
@@ -110,14 +167,11 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
         if (route.name === 'profile') iconName = "person";
 
         return (
-          <TouchableOpacity
+          <AnimatedTabButton
             key={route.key}
-            accessibilityRole="button"
-            accessibilityState={isFocused ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel}
-            testID={options.tabBarTestID}
             onPress={onPress}
-            style={styles.tabItem}
+            isFocused={isFocused}
+            color={color}
           >
             <View style={styles.tabIconWrap}>
               <IconSymbol size={24} name={iconName as any} color={color} style={styles.tabIcon} />
@@ -128,7 +182,7 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
             <Text style={[styles.tabLabel, { color }]}>
               {label}
             </Text>
-          </TouchableOpacity>
+          </AnimatedTabButton>
         );
       })}
     </View>
@@ -242,6 +296,11 @@ export default function TabLayout() {
         lazy: true,
         animationEnabled: true,
         swipeEnabled: true,
+        // Cubic interpolation animation for smooth transitions
+        sceneStyle: {
+          // Enables hardware acceleration for smooth animations
+          transform: [{ perspective: 1000 }],
+        },
       }}
     >
       <MaterialTopTabs.Screen

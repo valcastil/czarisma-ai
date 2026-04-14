@@ -1,4 +1,4 @@
-import { CharismaLogo } from '@/components/charisma-logo';
+import { CharismaLogo, CharismaLogoRef } from '@/components/charisma-logo';
 import { CzarCompanion } from '@/components/czar-companion';
 import { PasteLinkModal } from '@/components/paste-link-modal';
 import { SubscriptionStatusBanner } from '@/components/subscription-status-banner';
@@ -15,8 +15,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    DeviceEventEmitter,
     Image,
     Linking,
+    Platform,
     ScrollView,
     Share,
     StyleSheet,
@@ -45,8 +47,9 @@ export default function HomeScreen() {
   const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
   const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const entriesSectionY = useRef(0);
+  const entriesSectionRef = useRef<View>(null);
   const pendingScrollToEntries = useRef(false);
+  const logoRef = useRef<CharismaLogoRef>(null);
 
   const params = useLocalSearchParams<{ openPasteLink?: string; scrollToEntries?: string }>();
 
@@ -67,6 +70,10 @@ export default function HomeScreen() {
   useEffect(() => {
     loadData();
     loadSharedLinks();
+    // Flip logo on initial mount
+    setTimeout(() => {
+      logoRef.current?.flip();
+    }, 300);
   }, []);
 
   // Refresh data when screen comes into focus (after sign-in)
@@ -74,6 +81,19 @@ export default function HomeScreen() {
     useCallback(() => {
       loadData();
       loadSharedLinks();
+      // Flip logo when returning to home screen
+      setTimeout(() => {
+        logoRef.current?.flip();
+      }, 100);
+
+      // Listen for home-reselected event (user tapped Home while already on Home)
+      const subscription = DeviceEventEmitter.addListener('home-reselected', () => {
+        logoRef.current?.flip();
+      });
+
+      return () => {
+        subscription.remove();
+      };
     }, [])
   );
 
@@ -277,7 +297,7 @@ Forwarded from Czar AI
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <CharismaLogo size={50} />
+          <CharismaLogo ref={logoRef} size={50} />
           <Text style={[styles.title, { color: colors.text }]}>Czar AI</Text>
         </View>
 
@@ -320,11 +340,16 @@ Forwarded from Czar AI
               {entries.length > 0 && (
                 <TouchableOpacity
                   onPress={() => {
-                    if (entriesSectionY.current > 0) {
-                      scrollViewRef.current?.scrollTo({ y: entriesSectionY.current, animated: true });
-                    } else {
-                      scrollViewRef.current?.scrollToEnd({ animated: true });
-                    }
+                    requestAnimationFrame(() => {
+                      entriesSectionRef.current?.measure((x, y, width, height, pageX, pageY) => {
+                        console.log('[SCROLL] measure result:', { y, pageY, height });
+                        if (y >= 0) {
+                          scrollViewRef.current?.scrollTo({ y, animated: true });
+                        } else {
+                          scrollViewRef.current?.scrollToEnd({ animated: true });
+                        }
+                      });
+                    });
                   }}
                   style={styles.scrollToTopButton}
                   activeOpacity={0.7}>
@@ -341,12 +366,13 @@ Forwarded from Czar AI
                   <TouchableOpacity
                     onPress={() => handleOpenLink(link.url)}
                     activeOpacity={0.7}>
-                    {/* Thumbnail */}
+                    {/* Thumbnail - ensure HTTPS for Android (blocks HTTP cleartext) */}
                     {link.thumbnail ? (
                       <Image
-                        source={{ uri: link.thumbnail }}
+                        source={{ uri: link.thumbnail.replace(/^http:/, 'https:') }}
                         style={styles.linkThumbnail}
                         resizeMode="cover"
+                        onError={(e) => console.log('[Link] Thumbnail load failed:', link.platform, link.thumbnail?.substring(0, 50), e.nativeEvent.error)}
                       />
                     ) : (
                       <View style={[styles.linkThumbnailPlaceholder, { backgroundColor: platformColor + '15' }]}>
@@ -411,16 +437,18 @@ Forwarded from Czar AI
         )}
 
         {/* Charisma Entries Section */}
-        <View onLayout={(e) => {
-          const y = e.nativeEvent.layout.y;
-          entriesSectionY.current = y;
-          if (pendingScrollToEntries.current) {
-            pendingScrollToEntries.current = false;
-            setTimeout(() => {
-              scrollViewRef.current?.scrollTo({ y, animated: true });
-            }, 100);
-          }
-        }}>
+        <View
+          ref={entriesSectionRef}
+          collapsable={false}
+          onLayout={(e) => {
+            if (pendingScrollToEntries.current) {
+              pendingScrollToEntries.current = false;
+              // Scroll after layout settles
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 150);
+            }
+          }}>
           {entries.length === 0 && sharedLinks.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
