@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { IntelligentCzar } from '@/components/intelligent-czar';
 import { TrialExpiredModal } from '@/components/trial-expired-modal';
+import { InactivityProvider } from '@/contexts/inactivity-provider';
 import { Colors } from '@/constants/theme';
 import { CzarProvider, useCzar } from '@/contexts/czar-context';
 import { ThemeProvider, useColorScheme } from '@/hooks/use-theme';
@@ -93,38 +94,39 @@ function RootLayoutContent() {
 
   return (
     <NavigationThemeProvider value={colorScheme === 'dark' ? customDarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="modal" />
-        <Stack.Screen name="onboarding-charisma" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-        <Stack.Screen name="onboarding-emotions" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-        <Stack.Screen name="add-entry" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="subscription" />
-        <Stack.Screen name="subscriptions-info" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-        <Stack.Screen name="auth-sign-in" />
-        <Stack.Screen name="ai-chat" />
-        <Stack.Screen 
-          name="entry/[id]" 
-          options={{ 
-            headerShown: true,
-            title: 'Entry Details',
-            headerBackTitle: 'Back',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.gold,
-          }} 
+      <InactivityProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="modal" />
+          <Stack.Screen name="onboarding-charisma" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="onboarding-emotions" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="add-entry" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="subscription" />
+          <Stack.Screen name="subscriptions-info" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="auth-sign-in" />
+          <Stack.Screen name="ai-chat" />
+          <Stack.Screen
+            name="entry/[id]"
+            options={{
+              headerShown: true,
+              title: 'Entry Details',
+              headerBackTitle: 'Back',
+              headerStyle: { backgroundColor: colors.background },
+              headerTintColor: colors.gold,
+            }}
+          />
+        </Stack>
+        <StatusBar style="light" />
+        {/* Intelligent Czar - appears after 20s of inactivity */}
+        <IntelligentCzar />
+        {/* Trial Expired Modal */}
+        <TrialExpiredModal
+          visible={showTrialModal}
+          daysRemaining={trialDaysRemaining}
+          onClose={() => setShowTrialModal(false)}
         />
-      </Stack>
-      <StatusBar style="light" />
-      {/* Intelligent Czar - appears after inactivity on any screen */}
-      <IntelligentCzar />
-      
-      {/* Trial Expired Modal - shows after 7 days or when expiring soon */}
-      <TrialExpiredModal 
-        visible={showTrialModal} 
-        daysRemaining={trialDaysRemaining}
-        onClose={() => setShowTrialModal(false)}
-      />
+      </InactivityProvider>
     </NavigationThemeProvider>
   );
 }

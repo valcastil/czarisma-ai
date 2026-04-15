@@ -174,9 +174,8 @@ interface CzarContextType {
 const CzarContext = createContext<CzarContextType | undefined>(undefined);
 
 // Constants for timing
-const INITIAL_DELAY = 1; // seconds after screen change to show Czar (fast for navigation)
+const IDLE_TIMEOUT = 20;      // seconds of inactivity before Czar appears
 const VISIBILITY_DURATION = 18; // seconds Czar stays visible (long enough for voice to finish)
-const COOLDOWN_DURATION = 15; // seconds before Czar can appear again
 
 export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreenState] = useState('index');
@@ -186,137 +185,91 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [isVisibleWindow, setIsVisibleWindow] = useState(false);
 
   // Refs for timers
-  const initialDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cooldownEndTimeRef = useRef<number>(0);
-  const hasInteractedRef = useRef<boolean>(false);
+  const currentScreenRef = useRef('index');
 
-  // Clear all timers
-  const clearAllTimers = useCallback(() => {
-    if (initialDelayTimerRef.current) {
-      clearTimeout(initialDelayTimerRef.current);
-      initialDelayTimerRef.current = null;
-    }
+  // Show Czar now — pick a message for the current screen and speak it
+  const showCzar = useCallback(() => {
+    const context = getScreenContext(currentScreenRef.current);
+    setCzarMessage(context.actionPrompt);
+    setShouldShowCzar(true);
+    setIsVisibleWindow(true);
+
+    speakCzarMessage(context.actionPrompt).catch(() => {});
+
+    // Auto-hide after VISIBILITY_DURATION if user doesn't dismiss
+    if (visibilityTimerRef.current) clearTimeout(visibilityTimerRef.current);
+    visibilityTimerRef.current = setTimeout(() => {
+      setShouldShowCzar(false);
+      setIsVisibleWindow(false);
+      stopCzarVoice().catch(() => {});
+      // Restart idle countdown after auto-hide
+      startIdleTimer();
+    }, VISIBILITY_DURATION * 1000);
+  }, []);
+
+  // Start (or restart) the 20-second idle countdown
+  const startIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => {
+      showCzar();
+    }, IDLE_TIMEOUT * 1000);
+  }, [showCzar]);
+
+  // Called by InactivityProvider on every touch/scroll — resets idle clock
+  const resetInactivity = useCallback(() => {
+    // If Czar is visible, hide him immediately when user interacts
     if (visibilityTimerRef.current) {
       clearTimeout(visibilityTimerRef.current);
       visibilityTimerRef.current = null;
     }
-    if (cooldownTimerRef.current) {
-      clearInterval(cooldownTimerRef.current);
-      cooldownTimerRef.current = null;
-    }
-  }, []);
-
-  // Start cooldown period
-  const startCooldown = useCallback(() => {
-    cooldownEndTimeRef.current = Date.now() + COOLDOWN_DURATION * 1000;
-    setTimeUntilNextAppearance(COOLDOWN_DURATION);
-
-    cooldownTimerRef.current = setInterval(() => {
-      const remaining = Math.ceil((cooldownEndTimeRef.current - Date.now()) / 1000);
-      setTimeUntilNextAppearance(Math.max(0, remaining));
-
-      if (remaining <= 0) {
-        if (cooldownTimerRef.current) {
-          clearInterval(cooldownTimerRef.current);
-          cooldownTimerRef.current = null;
-        }
-      }
-    }, 1000);
-  }, []);
-
-  // Show Czar after initial delay
-  const scheduleCzarAppearance = useCallback(() => {
-    // Get a fresh random message for this screen
-    const context = getScreenContext(currentScreen);
-
-    // Clear any existing timers
-    clearAllTimers();
-
-    // Set message for current screen
-    setCzarMessage(context.actionPrompt);
-
-    // Schedule appearance after 3 seconds
-    initialDelayTimerRef.current = setTimeout(() => {
-      setShouldShowCzar(true);
-      setIsVisibleWindow(true);
-      hasInteractedRef.current = false;
-
-      // Speak the message when Czar appears
-      speakCzarMessage(context.actionPrompt).catch(() => {});
-
-      // Set timer to hide Czar after 5 seconds if not interacted
-      visibilityTimerRef.current = setTimeout(() => {
-        if (!hasInteractedRef.current) {
-          setShouldShowCzar(false);
-          setIsVisibleWindow(false);
-          stopCzarVoice().catch(() => {});
-          startCooldown();
-        }
-      }, VISIBILITY_DURATION * 1000);
-    }, INITIAL_DELAY * 1000);
-  }, [currentScreen, clearAllTimers, startCooldown]);
-
-  // Track previous screen to detect actual navigation
-  const prevScreenRef = useRef<string>('index');
-
-  // Handle screen change — trigger Czar on every navigation/swipe
-  const setCurrentScreen = useCallback((screen: string) => {
-    const prevScreen = prevScreenRef.current;
-    prevScreenRef.current = screen;
-    setCurrentScreenState(screen);
-
-    // Only trigger on actual screen change (not same screen re-render)
-    if (screen === prevScreen) return;
-
-    // Check if we're in cooldown period
-    const now = Date.now();
-    if (now < cooldownEndTimeRef.current) {
-      // Still in cooldown, don't show Czar yet
-      clearAllTimers();
-      setShouldShowCzar(false);
-      setIsVisibleWindow(false);
-      return;
-    }
-
-    // Screen changed — show Czar with a fresh random message
-    scheduleCzarAppearance();
-  }, [clearAllTimers, scheduleCzarAppearance]);
-
-  // User dismissed Czar (tapped X or similar)
-  const dismissCzar = useCallback(() => {
     setShouldShowCzar(false);
     setIsVisibleWindow(false);
     stopCzarVoice().catch(() => {});
-    clearAllTimers();
-    startCooldown();
-  }, [clearAllTimers, startCooldown]);
 
-  // User interacted with Czar (tapped or dragged)
+    // Restart the idle countdown
+    startIdleTimer();
+  }, [startIdleTimer]);
+
+  // Track screen changes (just update ref — no longer triggers Czar directly)
+  const prevScreenRef = useRef<string>('index');
+  const setCurrentScreen = useCallback((screen: string) => {
+    if (screen !== prevScreenRef.current) {
+      prevScreenRef.current = screen;
+      currentScreenRef.current = screen;
+      setCurrentScreenState(screen);
+    }
+  }, []);
+
+  // User dismissed Czar manually (tapped X)
+  const dismissCzar = useCallback(() => {
+    if (visibilityTimerRef.current) {
+      clearTimeout(visibilityTimerRef.current);
+      visibilityTimerRef.current = null;
+    }
+    setShouldShowCzar(false);
+    setIsVisibleWindow(false);
+    stopCzarVoice().catch(() => {});
+    // Restart idle countdown after dismiss
+    startIdleTimer();
+  }, [startIdleTimer]);
+
+  // User interacted with Czar (dragged) — keep visible, cancel auto-hide
   const interactWithCzar = useCallback(() => {
-    hasInteractedRef.current = true;
-    // Cancel the auto-hide timer since user interacted
     if (visibilityTimerRef.current) {
       clearTimeout(visibilityTimerRef.current);
       visibilityTimerRef.current = null;
     }
   }, []);
 
-  // Reset everything (for testing/debugging)
-  const resetInactivity = useCallback(() => {
-    clearAllTimers();
-    cooldownEndTimeRef.current = 0;
-    setTimeUntilNextAppearance(0);
-    setShouldShowCzar(false);
-    setIsVisibleWindow(false);
-    hasInteractedRef.current = false;
-  }, [clearAllTimers]);
-
-  // Initial mount - schedule Czar appearance
+  // Start idle timer on mount, clear on unmount
   useEffect(() => {
-    scheduleCzarAppearance();
-    return () => clearAllTimers();
+    startIdleTimer();
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (visibilityTimerRef.current) clearTimeout(visibilityTimerRef.current);
+    };
   }, []);
 
   const screenContext = getScreenContext(currentScreen);
