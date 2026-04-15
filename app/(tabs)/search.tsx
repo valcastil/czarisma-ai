@@ -420,6 +420,8 @@ interface LinkSearchResult {
   matchedLabel?: boolean;
   matchedPlatform?: boolean;
   matchedTitle?: boolean;
+  matchedDescription?: boolean;
+  matchedHashtags?: string[];
 }
 
 const platformIcons: { [key: string]: string } = {
@@ -473,6 +475,12 @@ export default function SearchScreen() {
     setSearching(true);
     const lowercaseQuery = query.toLowerCase().trim();
 
+    // Extract hashtags from text (e.g. "#charisma" => "charisma")
+    const extractHashtags = (text: string): string[] => {
+      const matches = text.match(/#(\w+)/g);
+      return matches ? matches.map(h => h.slice(1).toLowerCase()) : [];
+    };
+
     // Search social links
     const matchedLinks: LinkSearchResult[] = allLinks
       .map(link => {
@@ -490,8 +498,28 @@ export default function SearchScreen() {
         if (link.title && link.title.toLowerCase().includes(lowercaseQuery)) {
           matches.matchedTitle = true;
         }
+        if (link.description && link.description.toLowerCase().includes(lowercaseQuery)) {
+          matches.matchedDescription = true;
+        }
 
-        if (matches.matchedUrl || matches.matchedLabel || matches.matchedPlatform || matches.matchedTitle) {
+        // Search hashtags: strip # so "charisma" matches "#charisma"
+        const combinedText = `${link.title || ''} ${link.description || ''}`;
+        const allHashtags = extractHashtags(combinedText);
+        // Query without leading # if user typed it
+        const cleanQuery = lowercaseQuery.startsWith('#') ? lowercaseQuery.slice(1) : lowercaseQuery;
+        const matchedHashtags = allHashtags.filter(tag => tag.includes(cleanQuery));
+        if (matchedHashtags.length > 0) {
+          matches.matchedHashtags = matchedHashtags;
+        }
+
+        if (
+          matches.matchedUrl ||
+          matches.matchedLabel ||
+          matches.matchedPlatform ||
+          matches.matchedTitle ||
+          matches.matchedDescription ||
+          matches.matchedHashtags
+        ) {
           return matches;
         }
         return null;
@@ -613,7 +641,7 @@ export default function SearchScreen() {
           <IconSymbol size={20} name="magnifyingglass" color={colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search entries, links, emotions, or notes..."
+            placeholder="Search entries, links, hashtags, descriptions..."
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -635,7 +663,7 @@ export default function SearchScreen() {
               Enter a search term to find entries and links
             </Text>
             <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              Try searching for charisma types, emotions, notes, or social links
+              Try searching for charisma types, emotions, notes, hashtags, or link descriptions
             </Text>
           </View>
         ) : totalResults === 0 ? (
@@ -686,6 +714,20 @@ export default function SearchScreen() {
                         <Text style={[styles.subCharisma, { color: colors.textSecondary }]} numberOfLines={1}>
                           {result.matchedUrl ? highlightMatch(result.link.url, searchQuery) : result.link.url}
                         </Text>
+                        {result.matchedDescription && result.link.description && (
+                          <Text style={[styles.subCharisma, { color: colors.textSecondary }]} numberOfLines={3}>
+                            {highlightMatch(result.link.description, searchQuery)}
+                          </Text>
+                        )}
+                        {result.matchedHashtags && result.matchedHashtags.length > 0 && (
+                          <View style={[styles.emotionsContainer, { marginTop: 6 }]}>
+                            {result.matchedHashtags.map((tag, i) => (
+                              <Text key={i} style={[styles.emotionTag, { backgroundColor: colors.gold, color: '#000000' }]}>
+                                #{highlightMatch(tag, searchQuery.startsWith('#') ? searchQuery.slice(1) : searchQuery)}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
                       </View>
                     </View>
                     {result.matchedPlatform && (
