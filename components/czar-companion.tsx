@@ -197,6 +197,13 @@ export function CzarCompanion({
     }
   }, [message, intelligent]);
 
+  // Trigger talking animation when Czar becomes visible
+  useEffect(() => {
+    if (isVisible && displayMessage) {
+      setIsTalking(true);
+    }
+  }, [isVisible]);
+
   // Position styles for different placements
   const positionStyles = {
     'top-right': { position: 'absolute' as const, top: 80, right: 20 },
@@ -370,10 +377,14 @@ export function CzarCompanion({
     );
     talkAnimation.start();
 
-    // Stop talking after 2 seconds
+    // Stop talking after estimated audio duration (~80ms per char, min 2s, max 15s)
+    const estimatedDuration = Math.min(
+      Math.max(2000, displayMessage.length * 80),
+      15000
+    );
     const timer = setTimeout(() => {
       setIsTalking(false);
-    }, 2000);
+    }, estimatedDuration);
 
     return () => {
       talkAnimation.stop();

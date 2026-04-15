@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { speakCzarMessage, stopCzarVoice } from '@/utils/czar-voice';
 
 // Screen-specific context messages for Czar
 type ScreenContext = {
@@ -242,11 +243,15 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
       setIsVisibleWindow(true);
       hasInteractedRef.current = false;
 
+      // Speak the message when Czar appears
+      speakCzarMessage(context.actionPrompt).catch(() => {});
+
       // Set timer to hide Czar after 5 seconds if not interacted
       visibilityTimerRef.current = setTimeout(() => {
         if (!hasInteractedRef.current) {
           setShouldShowCzar(false);
           setIsVisibleWindow(false);
+          stopCzarVoice().catch(() => {});
           startCooldown();
         }
       }, VISIBILITY_DURATION * 1000);
@@ -283,6 +288,7 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
   const dismissCzar = useCallback(() => {
     setShouldShowCzar(false);
     setIsVisibleWindow(false);
+    stopCzarVoice().catch(() => {});
     clearAllTimers();
     startCooldown();
   }, [clearAllTimers, startCooldown]);
