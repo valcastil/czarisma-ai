@@ -50,6 +50,7 @@ export default function HomeScreen() {
   const entriesSectionRef = useRef<View>(null);
   const pendingScrollToEntries = useRef(false);
   const logoRef = useRef<CharismaLogoRef>(null);
+  const didBackfillRef = useRef(false);
 
   const params = useLocalSearchParams<{ openPasteLink?: string; scrollToEntries?: string }>();
 
@@ -69,7 +70,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadData();
-    loadSharedLinks();
+    loadSharedLinks(true); // run backfill once on first mount
+    loadSubscriptionInfo();
     // Flip logo on initial mount
     setTimeout(() => {
       logoRef.current?.flip();
@@ -81,6 +83,7 @@ export default function HomeScreen() {
     useCallback(() => {
       loadData();
       loadSharedLinks();
+      loadSubscriptionInfo();
       // Flip logo when returning to home screen
       setTimeout(() => {
         logoRef.current?.flip();
@@ -97,25 +100,12 @@ export default function HomeScreen() {
     }, [])
   );
 
-  // Load subscription info
-  useEffect(() => {
-    loadSubscriptionInfo();
-  }, []);
-
   // Handle onboarding navigation in useEffect instead of during render
   useEffect(() => {
     if (!loading && !onboardingComplete) {
       router.replace('/modal');
     }
   }, [loading, onboardingComplete]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-      loadSubscriptionInfo();
-      loadSharedLinks();
-    }, [])
-  );
 
   const loadSubscriptionInfo = async () => {
     try {
@@ -126,16 +116,19 @@ export default function HomeScreen() {
     }
   };
 
-  const loadSharedLinks = async () => {
+  const loadSharedLinks = async (runBackfill = false) => {
     try {
       const links = await getSharedLinks();
       setSharedLinks(links);
 
-      // Backfill titles for old links that don't have them
-      const didUpdate = await refreshMissingTitles();
-      if (didUpdate) {
-        const refreshed = await getSharedLinks();
-        setSharedLinks(refreshed);
+      // Backfill titles/thumbnails only once per session
+      if (runBackfill && !didBackfillRef.current) {
+        didBackfillRef.current = true;
+        const didUpdate = await refreshMissingTitles();
+        if (didUpdate) {
+          const refreshed = await getSharedLinks();
+          setSharedLinks(refreshed);
+        }
       }
     } catch (error) {
       console.error('Error loading shared links:', error);

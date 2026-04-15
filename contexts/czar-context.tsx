@@ -175,8 +175,8 @@ const CzarContext = createContext<CzarContextType | undefined>(undefined);
 
 // Constants for timing
 const INITIAL_DELAY = 1; // seconds after screen change to show Czar (fast for navigation)
-const VISIBILITY_DURATION = 6; // seconds Czar stays visible
-const COOLDOWN_DURATION = 10; // seconds before Czar can appear again (shorter for more interaction)
+const VISIBILITY_DURATION = 18; // seconds Czar stays visible (long enough for voice to finish)
+const COOLDOWN_DURATION = 15; // seconds before Czar can appear again
 
 export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreenState] = useState('index');
