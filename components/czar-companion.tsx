@@ -70,7 +70,7 @@ export function CzarCompanion({
   const [messageIndex, setMessageIndex] = useState(0);
   const [isTalking, setIsTalking] = useState(false);
   const [isWiggling, setIsWiggling] = useState(false);
-  const [isVisible, setIsVisible] = useState(controlledVisible ?? false);
+  const [isVisible, setIsVisible] = useState(false);
   const [hasAppeared, setHasAppeared] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -181,28 +181,30 @@ export function CzarCompanion({
     });
   }, [pan, handlePress, onInteract, currentSize.width, currentSize.height]);
 
-  // Handle controlled visibility prop
+  // Handle controlled visibility prop — sync immediately, reset opacity before fade-in
   useEffect(() => {
-    if (controlledVisible !== undefined) {
-      setIsVisible(controlledVisible);
+    if (controlledVisible === undefined) return;
+    if (controlledVisible) {
+      // Reset to invisible first so the fade-in animation always fires
+      opacityAnim.setValue(0);
+      scaleAnim.setValue(0.8);
     }
+    setIsVisible(controlledVisible);
   }, [controlledVisible]);
 
   // Update message when prop changes (for intelligent mode)
   useEffect(() => {
     if (message && intelligent) {
       setDisplayMessage(message);
-      // Start talking animation when message changes
-      setIsTalking(true);
     }
   }, [message, intelligent]);
 
-  // Trigger talking animation when Czar becomes visible
+  // Trigger talking animation when Czar becomes visible or message changes
   useEffect(() => {
     if (isVisible && displayMessage) {
       setIsTalking(true);
     }
-  }, [isVisible]);
+  }, [isVisible, displayMessage]);
 
   // Position styles for different placements
   const positionStyles = {
