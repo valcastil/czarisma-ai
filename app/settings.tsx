@@ -15,7 +15,13 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, Touchab
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors, setTheme, theme } = useTheme();
-  const { czarEnabled, setCzarEnabled } = useCzar();
+  const { czarEnabled, setCzarEnabled, idleTimeout, setIdleTimeout } = useCzar();
+  const [localTimer, setLocalTimer] = useState(idleTimeout);
+
+  // Sync local state when context value loads from AsyncStorage
+  useEffect(() => {
+    setLocalTimer(idleTimeout);
+  }, [idleTimeout]);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -209,7 +215,7 @@ export default function SettingsScreen() {
                 Czar AI Companion
               </Text>
               <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
-                {czarEnabled ? 'Appears after 20s of inactivity' : 'Disabled'}
+                {czarEnabled ? `Appears after ${idleTimeout}s of inactivity` : 'Disabled'}
               </Text>
             </View>
             <Switch
@@ -219,6 +225,66 @@ export default function SettingsScreen() {
               thumbColor={colors.background}
             />
           </View>
+
+          {czarEnabled && (
+            <View style={[styles.timerCard, { backgroundColor: colors.card }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>
+                  Czar AI Timer
+                </Text>
+                <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
+                  {localTimer >= 60 ? `${localTimer / 60} min` : `${localTimer}s`}
+                </Text>
+              </View>
+              <View style={styles.sliderRow}>
+                <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>5s</Text>
+                <View style={styles.sliderTrackWrap}>
+                  <View
+                    style={[
+                      styles.sliderTrack,
+                      { backgroundColor: colors.border },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.sliderFill,
+                      {
+                        backgroundColor: colors.gold,
+                        width: `${((localTimer - 5) / (300 - 5)) * 100}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>5m</Text>
+              </View>
+              <View style={styles.timerButtons}>
+                {[10, 20, 30, 60, 120, 300].map((val) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[
+                      styles.timerPreset,
+                      {
+                        backgroundColor: localTimer === val ? colors.gold : colors.background,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      setLocalTimer(val);
+                      setIdleTimeout(val);
+                    }}
+                    activeOpacity={0.7}>
+                    <Text
+                      style={[
+                        styles.timerPresetText,
+                        { color: localTimer === val ? '#000000' : colors.text },
+                      ]}>
+                      {val >= 60 ? `${val / 60}m` : `${val}s`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -651,5 +717,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  timerCard: {
+    padding: 15,
+    marginHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 12,
+    gap: 8,
+  },
+  sliderLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  sliderTrackWrap: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  sliderTrack: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 3,
+  },
+  sliderFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 3,
+  },
+  timerButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+    width: '100%',
+  },
+  timerPreset: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  timerPresetText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

@@ -73,8 +73,11 @@ export default function MessagesScreen() {
       }
       
       setCurrentUser(user);
-      await registerCurrentUser();
-      await loadConversations();
+      // Run registration and conversation loading in parallel — no dependency between them
+      await Promise.all([
+        registerCurrentUser().catch(e => console.error('Error registering user:', e)),
+        loadConversations(),
+      ]);
 
       // Clean up any existing subscription before creating new one
       if (unsubscribeRef.current) {
@@ -117,19 +120,10 @@ export default function MessagesScreen() {
 
   const loadProfilePhotos = async (convos: Conversation[]) => {
     try {
-      console.log('=== loadProfilePhotos called ===');
-      console.log('Conversations:', convos.map(c => ({
-        id: c.id,
-        participantId: c.participantId,
-        participantName: c.participantName,
-        participantAvatarUrl: c.participantAvatarUrl
-      })));
-      
       const photos: Record<string, string | null> = {};
       // Load the current user's own profile avatar
       try {
         const profile = await getProfile();
-        console.log('Current user profile:', profile ? { id: profile.id, avatar: profile.avatar } : null);
         if (profile.avatar && profile.id) {
           photos[profile.id] = profile.avatar;
         }
@@ -138,12 +132,10 @@ export default function MessagesScreen() {
       }
       // Load profile photos for all conversation participants from Supabase data
       convos.forEach((convo) => {
-        console.log(`Processing conversation ${convo.id}: participant ${convo.participantId} has avatarUrl:`, convo.participantAvatarUrl);
         if (convo.participantAvatarUrl) {
           photos[convo.participantId] = convo.participantAvatarUrl;
         }
       });
-      console.log('Final photos object:', photos);
       setProfilePhotos(photos);
     } catch (error) {
       console.error('Error loading profile photos:', error);
@@ -157,11 +149,6 @@ export default function MessagesScreen() {
   }, []);
 
   const handleConversationPress = (conversation: Conversation) => {
-    console.log('=== Conversation Press Debug ===');
-    console.log('Participant ID:', conversation.participantId);
-    console.log('Participant Name:', conversation.participantName);
-    console.log('Participant Avatar URL:', conversation.participantAvatarUrl);
-    
     router.push({
       pathname: '/chat/[id]',
       params: {

@@ -4,6 +4,8 @@ import { AppState, AppStateStatus } from 'react-native';
 import { speakCzarMessage, stopCzarVoice } from '@/utils/czar-voice';
 
 const CZAR_ENABLED_KEY = '@czar_ai_enabled';
+const CZAR_TIMER_KEY = '@czar_ai_timer';
+const DEFAULT_IDLE_TIMEOUT = 20; // seconds
 
 // Screen-specific context messages for Czar
 type ScreenContext = {
@@ -172,6 +174,8 @@ interface CzarContextType {
   czarMessage: string;
   czarEnabled: boolean;
   setCzarEnabled: (enabled: boolean) => Promise<void>;
+  idleTimeout: number;
+  setIdleTimeout: (seconds: number) => Promise<void>;
   // For debugging/UI
   timeUntilNextAppearance: number;
   isVisibleWindow: boolean;
@@ -180,7 +184,6 @@ interface CzarContextType {
 const CzarContext = createContext<CzarContextType | undefined>(undefined);
 
 // Constants for timing
-const IDLE_TIMEOUT = 20;      // seconds of inactivity before Czar appears
 const VISIBILITY_DURATION = 18; // seconds Czar stays visible (long enough for voice to finish)
 
 export function CzarProvider({ children }: { children: React.ReactNode }) {
@@ -190,19 +193,30 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [timeUntilNextAppearance, setTimeUntilNextAppearance] = useState(0);
   const [isVisibleWindow, setIsVisibleWindow] = useState(false);
   const [czarEnabled, setCzarEnabledState] = useState(true);
+  const [idleTimeout, setIdleTimeoutState] = useState(DEFAULT_IDLE_TIMEOUT);
 
   // Refs for timers
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentScreenRef = useRef('index');
   const czarEnabledRef = useRef(true);
+  const idleTimeoutRef = useRef(DEFAULT_IDLE_TIMEOUT);
 
-  // Load czar enabled preference on mount
+  // Load czar preferences on mount
   useEffect(() => {
-    AsyncStorage.getItem(CZAR_ENABLED_KEY).then((val) => {
-      const enabled = val === null ? true : val === 'true';
+    Promise.all([
+      AsyncStorage.getItem(CZAR_ENABLED_KEY),
+      AsyncStorage.getItem(CZAR_TIMER_KEY),
+    ]).then(([enabledVal, timerVal]) => {
+      const enabled = enabledVal === null ? true : enabledVal === 'true';
       czarEnabledRef.current = enabled;
       setCzarEnabledState(enabled);
+
+      const timer = timerVal ? parseInt(timerVal, 10) : DEFAULT_IDLE_TIMEOUT;
+      if (!isNaN(timer) && timer >= 5) {
+        idleTimeoutRef.current = timer;
+        setIdleTimeoutState(timer);
+      }
     });
   }, []);
 
@@ -228,12 +242,12 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
     }, VISIBILITY_DURATION * 1000);
   }, []);
 
-  // Start (or restart) the 20-second idle countdown
+  // Start (or restart) the idle countdown using user-configured timeout
   const startIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     idleTimerRef.current = setTimeout(() => {
       showCzar();
-    }, IDLE_TIMEOUT * 1000);
+    }, idleTimeoutRef.current * 1000);
   }, [showCzar]);
 
   // Track whether Czar is currently visible (ref for sync access in callbacks)
@@ -266,6 +280,18 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
       setCurrentScreenState(screen);
     }
   }, []);
+
+  // Persist and apply czar timer setting
+  const setIdleTimeout = useCallback(async (seconds: number) => {
+    const clamped = Math.max(5, Math.min(300, Math.round(seconds)));
+    idleTimeoutRef.current = clamped;
+    setIdleTimeoutState(clamped);
+    await AsyncStorage.setItem(CZAR_TIMER_KEY, String(clamped));
+    // Restart idle timer with new duration
+    if (czarEnabledRef.current) {
+      startIdleTimer();
+    }
+  }, [startIdleTimer]);
 
   // Persist and apply czar enabled toggle
   const setCzarEnabled = useCallback(async (enabled: boolean) => {
@@ -350,6 +376,8 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
         czarMessage,
         czarEnabled,
         setCzarEnabled,
+        idleTimeout,
+        setIdleTimeout,
         timeUntilNextAppearance,
         isVisibleWindow,
       }}
