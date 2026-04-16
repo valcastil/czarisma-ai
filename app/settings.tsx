@@ -2,6 +2,7 @@ import { NotificationPreferences } from '@/components/profile/notification-prefe
 import { PrivacySettings } from '@/components/profile/privacy-settings';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { UserProfile } from '@/constants/theme';
+import { useCzar } from '@/contexts/czar-context';
 import { useTheme } from '@/hooks/use-theme';
 import { handleSignOut } from '@/utils/auth-utils';
 import { exportUserData, getProfile, updateProfile } from '@/utils/profile-utils';
@@ -9,12 +10,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors, setTheme, theme } = useTheme();
-  
+  const { czarEnabled, setCzarEnabled } = useCzar();
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -195,6 +197,27 @@ export default function SettingsScreen() {
                 Auto
               </Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Czar AI</Text>
+
+          <View style={[styles.settingItem, { backgroundColor: colors.card }]}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                Czar AI Companion
+              </Text>
+              <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
+                {czarEnabled ? 'Appears after 20s of inactivity' : 'Disabled'}
+              </Text>
+            </View>
+            <Switch
+              value={czarEnabled}
+              onValueChange={(val) => setCzarEnabled(val)}
+              trackColor={{ false: colors.border, true: colors.gold }}
+              thumbColor={colors.background}
+            />
           </View>
         </View>
 

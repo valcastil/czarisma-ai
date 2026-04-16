@@ -1,5 +1,9 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { speakCzarMessage, stopCzarVoice } from '@/utils/czar-voice';
+
+const CZAR_ENABLED_KEY = '@czar_ai_enabled';
 
 // Screen-specific context messages for Czar
 type ScreenContext = {
@@ -166,6 +170,8 @@ interface CzarContextType {
   resetInactivity: () => void;
   screenContext: ScreenContext | null;
   czarMessage: string;
+  czarEnabled: boolean;
+  setCzarEnabled: (enabled: boolean) => Promise<void>;
   // For debugging/UI
   timeUntilNextAppearance: number;
   isVisibleWindow: boolean;
@@ -183,16 +189,29 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [czarMessage, setCzarMessage] = useState('');
   const [timeUntilNextAppearance, setTimeUntilNextAppearance] = useState(0);
   const [isVisibleWindow, setIsVisibleWindow] = useState(false);
+  const [czarEnabled, setCzarEnabledState] = useState(true);
 
   // Refs for timers
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentScreenRef = useRef('index');
+  const czarEnabledRef = useRef(true);
+
+  // Load czar enabled preference on mount
+  useEffect(() => {
+    AsyncStorage.getItem(CZAR_ENABLED_KEY).then((val) => {
+      const enabled = val === null ? true : val === 'true';
+      czarEnabledRef.current = enabled;
+      setCzarEnabledState(enabled);
+    });
+  }, []);
 
   // Show Czar now — pick a message for the current screen and speak it
   const showCzar = useCallback(() => {
+    if (!czarEnabledRef.current) return;
     const context = getScreenContext(currentScreenRef.current);
     setCzarMessage(context.actionPrompt);
+    czarVisibleRef.current = true;
     setShouldShowCzar(true);
     setIsVisibleWindow(true);
 
@@ -201,10 +220,10 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
     // Auto-hide after VISIBILITY_DURATION if user doesn't dismiss
     if (visibilityTimerRef.current) clearTimeout(visibilityTimerRef.current);
     visibilityTimerRef.current = setTimeout(() => {
+      czarVisibleRef.current = false;
       setShouldShowCzar(false);
       setIsVisibleWindow(false);
       stopCzarVoice().catch(() => {});
-      // Restart idle countdown after auto-hide
       startIdleTimer();
     }, VISIBILITY_DURATION * 1000);
   }, []);
@@ -217,18 +236,24 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
     }, IDLE_TIMEOUT * 1000);
   }, [showCzar]);
 
-  // Called by InactivityProvider on every touch/scroll — resets idle clock
-  const resetInactivity = useCallback(() => {
-    // If Czar is visible, hide him immediately when user interacts
-    if (visibilityTimerRef.current) {
-      clearTimeout(visibilityTimerRef.current);
-      visibilityTimerRef.current = null;
-    }
-    setShouldShowCzar(false);
-    setIsVisibleWindow(false);
-    stopCzarVoice().catch(() => {});
+  // Track whether Czar is currently visible (ref for sync access in callbacks)
+  const czarVisibleRef = useRef(false);
 
-    // Restart the idle countdown
+  // Called by InactivityProvider on touch — resets idle clock
+  const resetInactivity = useCallback(() => {
+    // Only do heavy work if Czar is actually visible
+    if (czarVisibleRef.current) {
+      if (visibilityTimerRef.current) {
+        clearTimeout(visibilityTimerRef.current);
+        visibilityTimerRef.current = null;
+      }
+      czarVisibleRef.current = false;
+      setShouldShowCzar(false);
+      setIsVisibleWindow(false);
+      stopCzarVoice().catch(() => {});
+    }
+
+    // Always restart the idle countdown
     startIdleTimer();
   }, [startIdleTimer]);
 
@@ -242,16 +267,32 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Persist and apply czar enabled toggle
+  const setCzarEnabled = useCallback(async (enabled: boolean) => {
+    czarEnabledRef.current = enabled;
+    setCzarEnabledState(enabled);
+    await AsyncStorage.setItem(CZAR_ENABLED_KEY, String(enabled));
+    if (!enabled) {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (visibilityTimerRef.current) clearTimeout(visibilityTimerRef.current);
+      setShouldShowCzar(false);
+      setIsVisibleWindow(false);
+      stopCzarVoice().catch(() => {});
+    } else {
+      startIdleTimer();
+    }
+  }, [startIdleTimer]);
+
   // User dismissed Czar manually (tapped X)
   const dismissCzar = useCallback(() => {
     if (visibilityTimerRef.current) {
       clearTimeout(visibilityTimerRef.current);
       visibilityTimerRef.current = null;
     }
+    czarVisibleRef.current = false;
     setShouldShowCzar(false);
     setIsVisibleWindow(false);
     stopCzarVoice().catch(() => {});
-    // Restart idle countdown after dismiss
     startIdleTimer();
   }, [startIdleTimer]);
 
@@ -262,6 +303,28 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
       visibilityTimerRef.current = null;
     }
   }, []);
+
+  // Pause/resume idle timer based on app foreground/background state
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        // App went to background — stop everything immediately
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        if (visibilityTimerRef.current) clearTimeout(visibilityTimerRef.current);
+        setShouldShowCzar(false);
+        setIsVisibleWindow(false);
+        stopCzarVoice().catch(() => {});
+      } else if (nextState === 'active') {
+        // App returned to foreground — restart idle countdown fresh
+        if (czarEnabledRef.current) {
+          startIdleTimer();
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [startIdleTimer]);
 
   // Start idle timer on mount, clear on unmount
   useEffect(() => {
@@ -285,6 +348,8 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
         resetInactivity,
         screenContext,
         czarMessage,
+        czarEnabled,
+        setCzarEnabled,
         timeUntilNextAppearance,
         isVisibleWindow,
       }}

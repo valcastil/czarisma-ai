@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
+import { AppState } from 'react-native';
 
 const ELEVENLABS_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY || '';
 
@@ -11,6 +12,13 @@ const CACHE_PREFIX = '@czar_audio_v1_';
 
 // Active sound instance — keep ref so we can stop it
 let activeSound: Audio.Sound | null = null;
+
+// Stop audio whenever app goes to background (prevents Android freeze)
+AppState.addEventListener('change', (state) => {
+  if (state === 'background' || state === 'inactive') {
+    stopCzarVoice().catch(() => {});
+  }
+});
 
 /**
  * Simple hash to create a stable cache key from message text
