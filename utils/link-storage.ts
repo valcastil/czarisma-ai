@@ -391,44 +391,45 @@ export const refreshMissingTitles = async (): Promise<boolean> => {
     if (linksNeedingUpdate.length === 0) return false;
 
     let updated = false;
-    const updatedLinks = await Promise.all(
-      links.map(async (link) => {
-        // Skip if already has both title and thumbnail
-        if (link.title && link.thumbnail) return link;
-
-        try {
-          const metadata = await fetchLinkMetadata(link.url, link.platform);
-          let hasUpdate = false;
-          const updatedLink = { ...link };
-
-          // Update title if missing and we found one
-          if (!link.title && metadata.title) {
-            updatedLink.title = metadata.title;
-            hasUpdate = true;
+    // Process links in batches of 3 to avoid overwhelming network
+    const BATCH_SIZE = 3;
+    const updatedLinks = [...links];
+    for (let i = 0; i < updatedLinks.length; i += BATCH_SIZE) {
+      const batch = updatedLinks.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map(async (link) => {
+          if (link.title && link.thumbnail) return link;
+          try {
+            const metadata = await fetchLinkMetadata(link.url, link.platform);
+            let hasUpdate = false;
+            const updatedLink = { ...link };
+            if (!link.title && metadata.title) {
+              updatedLink.title = metadata.title;
+              hasUpdate = true;
+            }
+            if (!link.thumbnail && metadata.thumbnail) {
+              updatedLink.thumbnail = metadata.thumbnail;
+              hasUpdate = true;
+            }
+            if (!link.description && metadata.description) {
+              updatedLink.description = metadata.description;
+              hasUpdate = true;
+            }
+            if (hasUpdate) {
+              updated = true;
+              return updatedLink;
+            }
+          } catch {
+            // Skip failed fetches
           }
-
-          // Update thumbnail if missing and we found one
-          if (!link.thumbnail && metadata.thumbnail) {
-            updatedLink.thumbnail = metadata.thumbnail;
-            hasUpdate = true;
-          }
-
-          // Update description if missing and we found one
-          if (!link.description && metadata.description) {
-            updatedLink.description = metadata.description;
-            hasUpdate = true;
-          }
-
-          if (hasUpdate) {
-            updated = true;
-            return updatedLink;
-          }
-        } catch {
-          // Skip failed fetches
-        }
-        return link;
-      })
-    );
+          return link;
+        })
+      );
+      // Write results back into the updatedLinks array at correct positions
+      for (let j = 0; j < results.length; j++) {
+        updatedLinks[i + j] = results[j];
+      }
+    }
 
     if (updated) {
       await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updatedLinks));

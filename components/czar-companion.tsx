@@ -1,6 +1,6 @@
 import { useTheme } from '@/hooks/use-theme';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Animated, Easing, Image, PanResponder, StyleSheet, Text, TouchableOpacity, View, Dimensions } from 'react-native';
+import { Animated, Easing, Image, PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 interface CzarCompanionProps {
   message?: string;
@@ -32,7 +32,7 @@ const messages = {
 // Czar image - Tsar portrait
 const CZAR_IMAGE = require('@/assets/images/czar.png');
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// SCREEN_WIDTH / SCREEN_HEIGHT now obtained via useWindowDimensions() inside component
 
 const sizeStyles = {
   small: { width: 70, height: 70 },
@@ -56,6 +56,7 @@ export function CzarCompanion({
   onInteract,
 }: CzarCompanionProps) {
   const { colors } = useTheme();
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const mouthScaleAnim = useRef(new Animated.Value(0)).current;

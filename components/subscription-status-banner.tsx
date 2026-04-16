@@ -11,10 +11,20 @@ import {
     View,
 } from 'react-native';
 
-export function SubscriptionStatusBanner() {
+interface SubscriptionStatusBannerProps {
+  info?: {
+    isPro: boolean;
+    isTrialActive: boolean;
+    daysRemaining: number | null;
+    statusMessage: string;
+    userEmail: string | null;
+  } | null;
+}
+
+export function SubscriptionStatusBanner({ info: externalInfo }: SubscriptionStatusBannerProps = {}) {
   const router = useRouter();
   const { colors } = useTheme();
-  const [subscriptionInfo, setSubscriptionInfo] = useState<{
+  const [localInfo, setLocalInfo] = useState<{
     isPro: boolean;
     isTrialActive: boolean;
     daysRemaining: number | null;
@@ -22,18 +32,23 @@ export function SubscriptionStatusBanner() {
     userEmail: string | null;
   } | null>(null);
 
+  // Only fetch if parent didn't provide info
   useEffect(() => {
-    loadSubscriptionInfo();
-  }, []);
+    if (!externalInfo) {
+      loadSubscriptionInfo();
+    }
+  }, [externalInfo]);
 
   const loadSubscriptionInfo = async () => {
     try {
       const info = await getSubscriptionInfo();
-      setSubscriptionInfo(info);
+      setLocalInfo(info);
     } catch (error) {
       console.error('Error loading subscription info:', error);
     }
   };
+
+  const subscriptionInfo = externalInfo ?? localInfo;
 
   if (!subscriptionInfo) {
     return null;

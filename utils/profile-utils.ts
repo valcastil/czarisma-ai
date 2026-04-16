@@ -352,14 +352,11 @@ export const calculateUserStats = async (entries: CharismaEntry[]): Promise<User
       // Convert display name to key if needed, otherwise use as-is
       const charismaKey = displayNameToKey[entry.majorCharisma] || entry.majorCharisma;
       charismaCounts[charismaKey] = (charismaCounts[charismaKey] || 0) + 1;
-      console.log(`Counting charisma: ${entry.majorCharisma} -> ${charismaKey}, count: ${charismaCounts[charismaKey]}`);
     }
   });
 
-  console.log('Final charisma counts:', charismaCounts);
   const topCharisma = Object.entries(charismaCounts).reduce((a, b) =>
     charismaCounts[a[0]] > charismaCounts[b[0]] ? a : b, ['', 0]);
-  console.log('Top charisma result:', topCharisma);
 
   // Count emotions
   const emotionCounts: { [key: string]: number } = {};

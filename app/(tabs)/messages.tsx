@@ -12,7 +12,7 @@ import { getProfile } from '@/utils/profile-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -38,19 +38,28 @@ export default function MessagesScreen() {
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
   const [profilePhotos, setProfilePhotos] = useState<Record<string, string | null>>({});
 
-  useEffect(() => {
-    initializeMessages();
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const isInitializedRef = useRef(false);
 
-    // Cleanup function
-    return () => {
-      // Cleanup will be handled by the subscription unsubscribe
-    };
-  }, []);
-
-  // Refresh messages when screen comes into focus (after sign-in)
+  // Single initialization + refresh on focus
   useFocusEffect(
     useCallback(() => {
-      initializeMessages();
+      if (!isInitializedRef.current) {
+        isInitializedRef.current = true;
+        initializeMessages();
+      } else {
+        // Only refresh conversation list on subsequent focus, don't re-subscribe
+        loadConversations();
+      }
+
+      return () => {
+        // Clean up subscription when screen loses focus
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current();
+          unsubscribeRef.current = null;
+          isInitializedRef.current = false;
+        }
+      };
     }, [])
   );
 
@@ -67,26 +76,26 @@ export default function MessagesScreen() {
       await registerCurrentUser();
       await loadConversations();
 
+      // Clean up any existing subscription before creating new one
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+
       // Subscribe to real-time conversation updates
       const unsubscribe = subscribeToConversations((updatedConversation) => {
         setConversations(prev => {
           const existingIndex = prev.findIndex(c => c.id === updatedConversation.id);
           if (existingIndex >= 0) {
-            // Update existing conversation
             const updated = [...prev];
             updated[existingIndex] = updatedConversation;
             return updated.sort((a, b) => b.updatedAt - a.updatedAt);
           } else {
-            // Add new conversation
             return [updatedConversation, ...prev];
           }
         });
       });
-
-      // Store unsubscribe function for cleanup
-      return () => {
-        unsubscribe();
-      };
+      unsubscribeRef.current = unsubscribe;
     } catch (error) {
       console.error('Error initializing messages:', error);
       Alert.alert('Error', 'Failed to initialize messages');

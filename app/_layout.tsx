@@ -106,6 +106,7 @@ function RootLayoutContent() {
           <Stack.Screen name="subscriptions-info" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="auth-sign-in" />
           <Stack.Screen name="ai-chat" />
+          <Stack.Screen name="search" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen
             name="entry/[id]"
             options={{

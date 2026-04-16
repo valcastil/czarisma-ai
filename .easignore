@@ -57,3 +57,9 @@ supabase/.env.local
 .claude/
 .windsurf/
 .vscode/
+
+# Documentation — not needed in builds
+*.md
+docs/
+skills/
+scripts/

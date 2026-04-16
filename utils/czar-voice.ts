@@ -9,6 +9,8 @@ const VOICE_ID = 'pNInz6obpgDQGcFmaJgB';
 const MODEL_ID = 'eleven_multilingual_v2';
 
 const CACHE_PREFIX = '@czar_audio_v1_';
+const CACHE_INDEX_KEY = '@czar_audio_cache_index';
+const MAX_CACHED_AUDIO = 15; // Keep at most 15 cached audio clips (~3MB)
 
 // Active sound instance — keep ref so we can stop it
 let activeSound: Audio.Sound | null = null;
@@ -46,6 +48,34 @@ export const stopCzarVoice = async (): Promise<void> => {
     }
     activeSound = null;
   }
+};
+
+/**
+ * LRU cache management — evict oldest audio when over limit
+ */
+const cacheAudioWithEviction = async (key: string, base64Audio: string): Promise<void> => {
+  // Read current cache index (ordered list of keys, newest last)
+  let index: string[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_INDEX_KEY);
+    if (raw) index = JSON.parse(raw);
+  } catch { /* ignore */ }
+
+  // Remove this key if it already exists (will be re-added at end)
+  index = index.filter(k => k !== key);
+
+  // Evict oldest entries if over limit
+  while (index.length >= MAX_CACHED_AUDIO) {
+    const oldest = index.shift();
+    if (oldest) {
+      try { await AsyncStorage.removeItem(oldest); } catch { /* ignore */ }
+    }
+  }
+
+  // Store the new audio + update index
+  await AsyncStorage.setItem(key, base64Audio);
+  index.push(key);
+  await AsyncStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(index));
 };
 
 /**
@@ -124,9 +154,9 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
       }
       base64Audio = btoa(binary);
 
-      // 3. Cache it
+      // 3. Cache it with LRU eviction
       try {
-        await AsyncStorage.setItem(cacheKey, base64Audio);
+        await cacheAudioWithEviction(cacheKey, base64Audio);
       } catch {
         // Cache write failure is non-critical
       }

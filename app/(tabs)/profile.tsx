@@ -144,6 +144,10 @@ export default function ProfileScreen() {
     router.push('/subscriptions-info');
   };
 
+  const handleSearch = () => {
+    router.push('/search');
+  };
+
   const handleScroll = (event: any) => {
     savedScrollPosition.current = event.nativeEvent.contentOffset.y;
   };
@@ -203,6 +207,7 @@ export default function ProfileScreen() {
           onExportData={handleExportData}
           onSettings={handleSettings}
           onSubscriptionsInfo={handleSubscriptionsInfo}
+          onSearch={handleSearch}
           /* onSubscription={handleSubscription} // Disabled for free mode */
         />
 

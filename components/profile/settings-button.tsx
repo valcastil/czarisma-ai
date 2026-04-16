@@ -11,7 +11,8 @@ const iconNames = {
   gear: 'gearshape',
   star: 'star.fill',
   chevron: 'chevron.right',
-  info: 'info.circle.fill'
+  info: 'info.circle.fill',
+  search: 'magnifyingglass',
 } as const;
 
 interface SettingsButtonProps {
@@ -63,9 +64,10 @@ interface QuickActionsProps {
   onSettings: () => void;
   onSubscription?: () => void;
   onSubscriptionsInfo?: () => void;
+  onSearch?: () => void;
 }
 
-export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscription, onSubscriptionsInfo }: QuickActionsProps) {
+export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscription, onSubscriptionsInfo, onSearch }: QuickActionsProps) {
   const { colors } = useTheme();
 
   const handleExportData = async () => {
@@ -98,6 +100,14 @@ export function QuickActions({ onEditProfile, onExportData, onSettings, onSubscr
             title="Subscriptions"
             icon="info"
             onPress={onSubscriptionsInfo}
+          />
+        )}
+
+        {onSearch && (
+          <SettingsButton
+            title="Search"
+            icon="search"
+            onPress={onSearch}
           />
         )}
 

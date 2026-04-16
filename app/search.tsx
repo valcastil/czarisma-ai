@@ -632,6 +632,9 @@ export default function SearchScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
+          <IconSymbol size={24} name="chevron.left" color={colors.gold} />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]}>Search</Text>
       </View>
 
@@ -846,6 +849,12 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    padding: 4,
   },
   title: {
     fontSize: 32,

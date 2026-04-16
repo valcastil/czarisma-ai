@@ -7,6 +7,23 @@ const PRO_EMAIL_KEY = '@pro_email';
 const LOCAL_TRIAL_START_KEY = '@local_trial_start';
 const SIGNED_UP_TRIAL_START_KEY = '@signed_up_trial_start';
 
+// In-memory session cache to avoid repeated supabase.auth.getSession() calls
+let _sessionCache: { session: any; timestamp: number } | null = null;
+const SESSION_CACHE_TTL = 10000; // 10 seconds
+
+const getCachedSession = async () => {
+  const now = Date.now();
+  if (_sessionCache && now - _sessionCache.timestamp < SESSION_CACHE_TTL) {
+    return _sessionCache.session;
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  _sessionCache = { session, timestamp: now };
+  return session;
+};
+
+// Clear session cache on auth state changes
+supabase.auth.onAuthStateChange(() => { _sessionCache = null; });
+
 // NEW SUBSCRIPTION FLOW:
 // 1. Non-signed-up users: 7-day local trial
 // 2. After 7 days: persistent popup forces sign up
@@ -23,7 +40,7 @@ const FREE_MODE = true;
  */
 export const isUserSignedIn = async (): Promise<boolean> => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await getCachedSession();
     return !!session;
   } catch {
     return false;

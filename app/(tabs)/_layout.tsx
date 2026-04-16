@@ -6,7 +6,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Animated, BackHandler, DeviceEventEmitter, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, BackHandler, DeviceEventEmitter, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const CZAR_IMAGE = require('@/assets/images/czar.png');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -131,6 +133,9 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
                   { text: 'Cancel', style: 'cancel' },
                 ]
               );
+            } else if (route.name === 'czar-chat') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/ai-chat');
             } else if (route.name === 'messages') {
               // Check if user is authenticated before accessing messages
               const user = await getCurrentUser();
@@ -163,8 +168,33 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
         let iconName = "house";
         if (route.name === 'index') iconName = "house";
         if (route.name === 'messages') iconName = "message";
-        if (route.name === 'search') iconName = "magnifyingglass";
         if (route.name === 'profile') iconName = "person";
+
+        // Special render for Czar AI chat tab — use Czar profile image
+        if (route.name === 'czar-chat') {
+          return (
+            <AnimatedTabButton
+              key={route.key}
+              onPress={onPress}
+              isFocused={isFocused}
+              color={color}
+            >
+              <View style={styles.tabIconWrap}>
+                <Image
+                  source={CZAR_IMAGE}
+                  style={[
+                    styles.czarTabImage,
+                    { borderColor: isFocused ? colors.gold : 'transparent' },
+                  ]}
+                  resizeMode="cover"
+                />
+              </View>
+              <Text style={[styles.tabLabel, { color }]}>
+                {label}
+              </Text>
+            </AnimatedTabButton>
+          );
+        }
 
         return (
           <AnimatedTabButton
@@ -337,9 +367,9 @@ export default function TabLayout() {
         }}
       />
       <MaterialTopTabs.Screen
-        name="search"
+        name="czar-chat"
         options={{
-          title: 'Search',
+          title: 'Czar AI',
         }}
       />
       <MaterialTopTabs.Screen
@@ -382,6 +412,13 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 10,
+    marginTop: 4,
+  },
+  czarTabImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
     marginTop: 4,
   },
   addButton: {
