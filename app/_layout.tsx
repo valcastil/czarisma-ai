@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { Stack, useRouter, usePathname } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
@@ -38,6 +39,60 @@ function RootLayoutContent() {
   const { setCurrentScreen } = useCzar();
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | undefined>(undefined);
+
+  // Handle deep links for auth callbacks (email confirmation, password reset)
+  useEffect(() => {
+    const handleAuthDeepLink = async (url: string) => {
+      if (!url || !url.includes('auth/callback')) return;
+
+      try {
+        // Handle hash fragments: charismachat://auth/callback#access_token=xxx&refresh_token=xxx&...
+        // Browsers that DO follow the custom scheme redirect put tokens in the hash
+        if (url.includes('#')) {
+          const hashPart = url.split('#')[1];
+          if (hashPart) {
+            const params = new URLSearchParams(hashPart);
+            const access_token = params.get('access_token');
+            const refresh_token = params.get('refresh_token');
+
+            if (access_token && refresh_token) {
+              const { error } = await supabase.auth.setSession({
+                access_token,
+                refresh_token,
+              });
+              if (!error) {
+                console.log('Session established from deep link hash');
+                try {
+                  const { refreshProStatus, createTrialIfNeeded } = await import('@/utils/subscription-utils');
+                  await refreshProStatus();
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (user) await createTrialIfNeeded(user.id);
+                } catch (e) {
+                  console.error('Error setting up subscription after deep link auth:', e);
+                }
+                router.replace('/(tabs)');
+                return;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error handling auth deep link:', e);
+      }
+    };
+
+    // Listen for deep links while app is running
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleAuthDeepLink(event.url);
+    });
+
+    // Check if app was opened via deep link (from terminated state)
+    Linking.getInitialURL().then((url) => {
+      if (url) handleAuthDeepLink(url);
+    });
+
+    return () => subscription.remove();
+  }, [router]);
 
   // Track screen changes for Czar context
   useEffect(() => {
@@ -104,8 +159,13 @@ function RootLayoutContent() {
           <Stack.Screen name="settings" />
           <Stack.Screen name="subscription" />
           <Stack.Screen name="subscriptions-info" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-          <Stack.Screen name="auth-sign-in" />
+          <Stack.Screen name="auth-sign-in" options={{ gestureEnabled: false }} />
           <Stack.Screen name="ai-chat" />
+          <Stack.Screen name="profile-settings" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="edit-profile" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="change-password" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="new-message" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="chat/[id]" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="search" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen
             name="entry/[id]"

@@ -6,7 +6,6 @@ import { trackAuth, trackError } from '@/lib/vexo-analytics';
 import { saveProfile } from '@/utils/profile-utils';
 import { SecureStorage } from '@/utils/secure-storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
 
 /**
  * Sync local data to Supabase before sign out (for authenticated users)
@@ -61,18 +60,16 @@ export const handleSignOut = async (): Promise<{ success: boolean; error?: any }
   try {
     console.log('Starting sign out process...');
 
-    // 1. Track the sign out event
     trackAuth('sign_out', 'manual');
 
-    // 2. Navigate to sign-in screen immediately for responsive UX
-    router.replace('/auth-sign-in');
-
-    // 3. Run all cleanup tasks in parallel (non-blocking)
-    const cacheKeys = [
+    const secureKeys = [
       '@charisma_profile',
       '@charisma_entries',
       '@pro_status',
       '@trial_start_date',
+      '@charisma_shared_links',
+    ];
+    const asyncKeys = [
       '@pro_email',
       '@user_preferences',
       '@cached_messages',
@@ -83,11 +80,12 @@ export const handleSignOut = async (): Promise<{ success: boolean; error?: any }
       '@last_sync_time',
     ];
 
+    // Run critical cleanup in parallel with timeouts on network calls
     await Promise.allSettled([
-      syncDataToSupabase(),
-      supabase.auth.signOut(),
-      logoutRevenueCatUser(),
-      AsyncStorage.multiRemove(cacheKeys),
+      Promise.race([supabase.auth.signOut(), new Promise(r => setTimeout(r, 3000))]),
+      Promise.race([logoutRevenueCatUser(), new Promise(r => setTimeout(r, 2000))]),
+      ...secureKeys.map(key => SecureStorage.removeItem(key)),
+      AsyncStorage.multiRemove(asyncKeys),
     ]);
 
     console.log('User signed out successfully');
@@ -96,14 +94,6 @@ export const handleSignOut = async (): Promise<{ success: boolean; error?: any }
   } catch (error: any) {
     console.error('Error during sign out:', error);
     trackError('sign_out_error', error?.message || 'Unknown error', 'auth');
-
-    // For security, still navigate to sign-in even if cleanup fails
-    try {
-      router.replace('/auth-sign-in');
-    } catch (navError) {
-      console.error('Navigation error:', navError);
-    }
-
     return { success: false, error };
   }
 };

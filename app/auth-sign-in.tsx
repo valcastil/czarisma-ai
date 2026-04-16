@@ -8,7 +8,7 @@ import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -36,6 +36,14 @@ export default function AuthSignInScreen() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // OTP verification state
+  const [showOtpVerification, setShowOtpVerification] = useState(false);
+  const [otpCode, setOtpCode] = useState(['', '', '', '', '', '', '', '']);
+  const [signUpEmail, setSignUpEmail] = useState('');
+  const [pendingPassword, setPendingPassword] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const otpInputRefs = useRef<(TextInput | null)[]>([]);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -101,50 +109,32 @@ export default function AuthSignInScreen() {
       await recordAttempt(action, email);
 
       if (isSignUp) {
-        // Sign up with email confirmation enabled
-        const redirectUrl = Linking.createURL('auth/callback');
-        const { data, error } = await supabase.auth.signUp({
+        // Send Magic Link OTP first — do NOT call signUp() which triggers a confirmation link email
+        // shouldCreateUser: true will create the account if it doesn't exist yet
+        const { error: otpError } = await supabase.auth.signInWithOtp({
           email: cleanEmail,
-          password: cleanPassword,
-          options: {
-            emailRedirectTo: redirectUrl,
-          },
+          options: { shouldCreateUser: true },
         });
 
-        if (error) throw error;
-
-        if (data.user) {
-          // Check if email confirmation is required
-          if (data.session) {
-            // User is immediately signed in (email confirmation disabled)
-            // Create trial subscription for new user
-            const { createTrialIfNeeded } = await import('@/utils/subscription-utils');
-            await createTrialIfNeeded(data.user.id);
-            
+        if (otpError) {
+          // If user already exists, let them sign in
+          if (otpError.message?.includes('already registered') || otpError.message?.includes('already exists')) {
             Alert.alert(
-              'Success! 🎉',
-              'Account created successfully. Welcome to Charisma!',
-              [
-                {
-                  text: 'Continue',
-                  onPress: () => router.replace('/(tabs)'),
-                },
-              ]
+              'Account Exists',
+              'An account with this email already exists. Please sign in instead.',
+              [{ text: 'Sign In', onPress: () => setIsSignUp(false) }]
             );
-          } else {
-            // Email confirmation required
-            Alert.alert(
-              'Check Your Email 📧',
-              'We sent you a confirmation email. Please check your inbox and click the link to verify your account before signing in.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => setIsSignUp(false),
-                },
-              ]
-            );
+            return;
           }
+          throw otpError;
         }
+
+        // Store password so we can set it after OTP verification
+        setSignUpEmail(cleanEmail);
+        setPendingPassword(cleanPassword);
+        setOtpCode(['', '', '', '', '', '', '', '']);
+        setShowOtpVerification(true);
+        startResendCooldown();
       } else {
         // Sign in
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -184,8 +174,25 @@ export default function AuthSignInScreen() {
           errorMessage = errorMsg;
           
           if (errorMsg.includes('Email not confirmed')) {
-            errorTitle = 'Email Not Confirmed';
-            errorMessage = 'Please check your email and click the confirmation link before signing in.';
+            errorTitle = 'Email Not Verified';
+            errorMessage = 'Your email is not yet verified. Would you like to resend the verification code?';
+            Alert.alert(errorTitle, errorMessage, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Resend Code',
+                onPress: async () => {
+                  const cleanEmail = sanitizeInput(email).toLowerCase().trim();
+                  setSignUpEmail(cleanEmail);
+                  setOtpCode(['', '', '', '', '', '', '', '']);
+                  try {
+                    await supabase.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser: false } });
+                  } catch {}
+                  setShowOtpVerification(true);
+                  startResendCooldown();
+                },
+              },
+            ]);
+            return; // Already showed alert above
           } else if (errorMsg.includes('Invalid login credentials')) {
             errorTitle = 'Invalid Credentials';
             errorMessage = 'The email or password you entered is incorrect. Please try again.';
@@ -209,6 +216,149 @@ export default function AuthSignInScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ── OTP Verification Helpers ──
+
+  const startResendCooldown = () => {
+    setResendCooldown(60);
+    const interval = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleOtpChange = (value: string, index: number) => {
+    // Only accept single digits
+    const digit = value.replace(/[^0-9]/g, '').slice(-1);
+    const newOtp = [...otpCode];
+    newOtp[index] = digit;
+    setOtpCode(newOtp);
+
+    // Auto-advance to next input
+    if (digit && index < 7) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === 'Backspace' && !otpCode[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+
+  };
+
+  const handleVerifyOtp = async () => {
+    const token = otpCode.join('');
+    if (token.length !== 8) {
+      Alert.alert('Error', 'Please enter the full 8-digit code');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      logger.info('Verifying OTP for:', signUpEmail);
+
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: signUpEmail,
+        token,
+        type: 'email',
+      });
+
+      if (error) {
+        logger.error('OTP verification error:', error);
+        if (error.message?.includes('expired')) {
+          Alert.alert('Code Expired', 'Your verification code has expired. Please request a new one.');
+        } else {
+          Alert.alert('Invalid Code', 'The code you entered is incorrect. Please try again.');
+        }
+        return;
+      }
+
+      if (data.session) {
+        logger.info('OTP verified — session established');
+
+        // If this was a sign-up, set the password the user chose
+        if (pendingPassword) {
+          const { error: pwError } = await supabase.auth.updateUser({ password: pendingPassword });
+          if (pwError) {
+            logger.error('Failed to set password after OTP:', pwError);
+            // Non-fatal — user can set password later via change-password screen
+          }
+          setPendingPassword('');
+        }
+
+        // Restore data & create trial
+        const { restoreUserDataFromSupabase } = await import('@/utils/auth-utils');
+        await restoreUserDataFromSupabase();
+
+        const { createTrialIfNeeded, refreshProStatus } = await import('@/utils/subscription-utils');
+        await refreshProStatus();
+        if (data.user) {
+          await createTrialIfNeeded(data.user.id);
+        }
+
+        setShowOtpVerification(false);
+        Alert.alert(
+          'Verified! 🎉',
+          'Your account has been verified. Welcome to Charisma!',
+          [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+        );
+      }
+    } catch (err: any) {
+      logger.error('OTP verification exception:', err);
+      Alert.alert('Error', 'Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOtp({
+        email: signUpEmail,
+        options: { shouldCreateUser: false },
+      });
+
+      if (error) {
+        logger.error('Resend OTP error:', error);
+        Alert.alert('Error', 'Failed to resend code. Please try again.');
+        return;
+      }
+
+      startResendCooldown();
+      Alert.alert('Code Sent', 'A new verification code has been sent to your email.');
+    } catch (err: any) {
+      logger.error('Resend OTP exception:', err);
+      Alert.alert('Error', 'Failed to resend code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const finishGoogleSignIn = async (userId?: string) => {
+    console.log('Google sign-in successful, restoring user data...');
+
+    const { restoreUserDataFromSupabase } = await import('@/utils/auth-utils');
+    await restoreUserDataFromSupabase();
+
+    const { refreshProStatus, createTrialIfNeeded } = await import('@/utils/subscription-utils');
+    try { await refreshProStatus(); } catch (e) { logger.error('Error refreshing pro status:', e); }
+    if (userId) await createTrialIfNeeded(userId);
+
+    Alert.alert(
+      'Success! 🎉',
+      'Signed in with Google successfully.',
+      [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+    );
   };
 
   const handleGoogleSignIn = async () => {
@@ -254,22 +404,29 @@ export default function AuthSignInScreen() {
         logger.info('WebBrowser result:', result);
 
         if (result.type === 'success' && result.url) {
-          // Extract tokens from the callback URL
           const url = result.url;
-          const hashParams = url.split('#')[1];
-          const queryParams = url.split('?')[1];
-          const params = new URLSearchParams(hashParams || queryParams);
-          
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
+          logger.info('OAuth callback URL received:', url);
 
-          logger.info('Tokens extracted:', { 
-            hasAccessToken: !!accessToken, 
-            hasRefreshToken: !!refreshToken 
+          // Parse both hash fragment (#) and query string (?) — iOS vs Android may differ
+          const hashFragment = url.includes('#') ? url.split('#')[1] : '';
+          const queryString = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
+
+          const hashParams = new URLSearchParams(hashFragment);
+          const queryParams = new URLSearchParams(queryString);
+
+          // Tokens can be in hash (implicit) or query (PKCE code exchange)
+          const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+          const code = queryParams.get('code');
+
+          logger.info('Tokens extracted:', {
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!refreshToken,
+            hasCode: !!code,
           });
 
           if (accessToken && refreshToken) {
-            // Set the session in Supabase
+            // Implicit flow — set session directly
             const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
@@ -280,39 +437,28 @@ export default function AuthSignInScreen() {
               throw sessionError;
             }
 
-            logger.info('Session established:', sessionData);
-            console.log('Google sign-in successful, restoring user data...');
+            await finishGoogleSignIn(sessionData.user?.id);
 
-            // Restore user data from Supabase
-            const { restoreUserDataFromSupabase } = await import('@/utils/auth-utils');
-            const restoreResult = await restoreUserDataFromSupabase();
-            console.log('Google restore result:', restoreResult);
+          } else if (code) {
+            // PKCE flow — exchange code for session (common on iOS)
+            logger.info('Exchanging PKCE code for session');
+            const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
 
-            try {
-              const { refreshProStatus } = await import('@/utils/subscription-utils');
-              await refreshProStatus();
-            } catch (error) {
-              logger.error('Error refreshing pro status after sign-in:', error);
+            if (sessionError) {
+              logger.error('PKCE exchange error:', sessionError);
+              throw sessionError;
             }
 
-            // Create trial subscription if user doesn't have one
-            const { createTrialIfNeeded } = await import('@/utils/subscription-utils');
-            if (sessionData.user) {
-              await createTrialIfNeeded(sessionData.user.id);
-            }
+            await finishGoogleSignIn(sessionData.user?.id);
 
-            Alert.alert(
-              'Success! 🎉',
-              'Signed in with Google successfully.',
-              [
-                {
-                  text: 'Continue',
-                  onPress: () => router.replace('/(tabs)'),
-                },
-              ]
-            );
           } else {
-            throw new Error('No tokens received from OAuth callback');
+            // Last resort: check if Supabase already picked up the session from the URL
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+              await finishGoogleSignIn(session.user?.id);
+            } else {
+              throw new Error('No tokens or code received from OAuth callback');
+            }
           }
         } else if (result.type === 'cancel') {
           logger.info('User cancelled OAuth flow');
@@ -344,6 +490,106 @@ export default function AuthSignInScreen() {
     );
   };
 
+  // ── OTP Verification Screen ──
+  if (showOtpVerification) {
+    return (
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={() => {
+              setShowOtpVerification(false);
+              setOtpCode(['', '', '', '', '', '', '', '']);
+              setPendingPassword('');
+            }}
+            style={styles.backButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <IconSymbol name="chevron.left" size={24} color={colors.gold} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Verify Email</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled">
+          <View style={styles.heroSection}>
+            <Text style={styles.heroEmoji}>📧</Text>
+            <Text style={[styles.heroTitle, { color: colors.text }]}>Enter Verification Code</Text>
+            <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+              We sent an 8-digit code to{'\n'}
+              <Text style={{ color: colors.gold, fontWeight: '600' }}>{signUpEmail}</Text>
+            </Text>
+          </View>
+
+          {/* OTP Input */}
+          <View style={styles.otpContainer}>
+            {otpCode.map((digit, index) => (
+              <TextInput
+                key={index}
+                ref={(ref) => { otpInputRefs.current[index] = ref; }}
+                style={[
+                  styles.otpInput,
+                  {
+                    backgroundColor: colors.card,
+                    color: colors.text,
+                    borderColor: digit ? colors.gold : colors.border,
+                  },
+                ]}
+                value={digit}
+                onChangeText={(value) => handleOtpChange(value, index)}
+                onKeyPress={(e) => handleOtpKeyPress(e, index)}
+                keyboardType="number-pad"
+                maxLength={1}
+                selectTextOnFocus
+                editable={!loading}
+              />
+            ))}
+          </View>
+
+          {/* Verify Button */}
+          <TouchableOpacity
+            style={[
+              styles.authButton,
+              { backgroundColor: colors.gold },
+              loading && styles.authButtonDisabled,
+            ]}
+            onPress={handleVerifyOtp}
+            disabled={loading}
+            activeOpacity={0.8}>
+            {loading ? (
+              <ActivityIndicator color="#000000" />
+            ) : (
+              <Text style={[styles.authButtonText, { color: '#000000' }]}>Verify</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Resend */}
+          <View style={styles.resendContainer}>
+            <Text style={[styles.resendLabel, { color: colors.textSecondary }]}>
+              Didn't receive the code?
+            </Text>
+            <TouchableOpacity
+              onPress={handleResendOtp}
+              disabled={resendCooldown > 0 || loading}>
+              <Text
+                style={[
+                  styles.resendButton,
+                  { color: resendCooldown > 0 ? colors.textSecondary : colors.gold },
+                ]}>
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ── Main Auth Screen ──
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -453,7 +699,7 @@ export default function AuthSignInScreen() {
             disabled={loading}
             activeOpacity={0.8}>
             {loading ? (
-              <ActivityIndicator color={colors.gold} />
+              <ActivityIndicator color="#000000" />
             ) : (
               <Text style={[styles.authButtonText, { color: '#000000' }]}>
                 {isSignUp ? 'Create Account' : 'Sign In'}
@@ -715,5 +961,34 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 20,
     marginBottom: 40,
+  },
+  // OTP styles
+  otpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 32,
+    paddingHorizontal: 16,
+  },
+  otpInput: {
+    width: 38,
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  resendContainer: {
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 8,
+  },
+  resendLabel: {
+    fontSize: 14,
+  },
+  resendButton: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

@@ -137,13 +137,6 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push('/ai-chat');
             } else if (route.name === 'messages') {
-              // Check if user is authenticated before accessing messages
-              const user = await getCurrentUser();
-              if (!user) {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.replace('/auth-sign-in');
-                return;
-              }
               clearNewMessages?.();
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               navigation.navigate(route.name, route.params);

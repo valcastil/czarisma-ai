@@ -23,19 +23,12 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [recentEntries, setRecentEntries] = useState<CharismaEntry[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadProfileData();
-  }, []);
-
-  // Refresh profile data when screen comes into focus (after sign-in)
-  useFocusEffect(
-    useCallback(() => {
-      loadProfileData();
-    }, [])
-  );
+  const isLoadingRef = useRef(false);
 
   const loadProfileData = async () => {
+    // Prevent concurrent loads which cause race conditions
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
     try {
       setLoading(true);
       console.log('Starting to load profile data...');
@@ -109,9 +102,11 @@ export default function ProfileScreen() {
       Alert.alert('Error', `Unable to load profile data: ${errorMessage}`);
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
   };
 
+  // Single useFocusEffect handles both initial mount and subsequent focus
   useFocusEffect(
     useCallback(() => {
       loadProfileData();

@@ -65,7 +65,13 @@ export default function MessagesScreen() {
 
   const initializeMessages = async () => {
     try {
-      const user = await getCurrentUser();
+      // Try to get user, with a brief retry for session propagation after sign-in
+      let user = await getCurrentUser();
+      if (!user) {
+        // Session may not be propagated yet after sign-in; retry once after a short delay
+        await new Promise(r => setTimeout(r, 500));
+        user = await getCurrentUser();
+      }
       if (!user) {
         // Not authenticated, redirect to sign-in
         router.replace('/auth-sign-in');

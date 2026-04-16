@@ -29,6 +29,12 @@
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos and videos.",
         "NSUserActivityTypes": [
           "NSUserActivityTypeBrowsingWeb"
+        ],
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["charismachat"],
+            "CFBundleURLName": "com.aiagentmaker.charismachat"
+          }
         ]
       }
     },

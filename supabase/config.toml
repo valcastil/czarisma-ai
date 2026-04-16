@@ -120,9 +120,9 @@ file_size_limit = "50MiB"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "charismatracker://"
+site_url = "charismachat://"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["charismatracker://auth/callback", "http://127.0.0.1:3000", "https://127.0.0.1:3000"]
+additional_redirect_urls = ["charismachat://auth/callback", "http://127.0.0.1:3000", "https://127.0.0.1:3000"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to the local API URL (http://127.0.0.1:<port>/auth/v1).
@@ -194,6 +194,11 @@ user = "env(SMTP_USER)"
 pass = "env(SMTP_PASS)"
 admin_email = "env(SMTP_ADMIN_EMAIL)"
 sender_name = "Charisma Tracker"
+
+# Magic Link / OTP email template (sends 6-digit code via {{ .Token }})
+[auth.email.template.magic_link]
+subject = "Your Charisma verification code"
+content_path = "./templates/magic_link.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

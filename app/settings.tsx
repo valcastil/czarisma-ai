@@ -464,14 +464,19 @@ export default function SettingsScreen() {
             
             const result = await handleSignOut();
             
-            if (!result.success) {
+            if (result.success) {
+              // Navigate to sign-in, dismissing all screens so user can't go back
+              while (router.canGoBack()) {
+                router.back();
+              }
+              router.replace('/auth-sign-in');
+            } else {
               Alert.alert(
                 'Error',
                 'Failed to sign out completely. Please try again.'
               );
               setIsSigningOut(false);
             }
-            // If successful, user will be redirected to sign-in screen
           },
         },
       ],
