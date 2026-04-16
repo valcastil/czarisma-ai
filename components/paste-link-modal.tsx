@@ -55,8 +55,8 @@ export function PasteLinkModal({ visible, onClose, onLinkAdded }: PasteLinkModal
       // Close modal immediately for snappy UX
       setText('');
       onClose();
-      // Save in background
-      await addMultipleLinks(linksToSave);
+      // Save instantly (thumbnails appear immediately), titles load in background
+      await addMultipleLinks(linksToSave, onLinkAdded);
       onLinkAdded();
     } catch (error) {
       console.error('Error saving links:', error);

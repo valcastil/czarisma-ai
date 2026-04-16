@@ -543,8 +543,8 @@ export const subscribeToMessages = (
     let reconnectAttempts = 0;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-    const MAX_RECONNECT_ATTEMPTS = 5;
-    const RECONNECT_DELAY_MS = 3000;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const BASE_RECONNECT_DELAY_MS = 2000;
     const HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
 
     const handleMessageChange = async (payload: any) => {
@@ -666,23 +666,21 @@ export const subscribeToMessages = (
         }, HEARTBEAT_INTERVAL_MS);
     };
 
-    // Reconnect function
+    // Reconnect function with exponential backoff
     const reconnect = () => {
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            logger.error('Max reconnection attempts reached - giving up');
+            logger.warn('Messages: Max reconnection attempts reached — will retry on next interaction');
             return;
         }
 
         reconnectAttempts++;
-        logger.info(`Attempting to reconnect... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        const backoffDelay = Math.min(BASE_RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts - 1), 30000);
+        logger.info(`Messages: Attempting reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) in ${backoffDelay}ms`);
 
-        // Clean up old channel
-        if (channel) {
-            supabase.removeChannel(channel);
-        }
-
-        // Create new channel
-        createChannel();
+        reconnectTimer = setTimeout(() => {
+            if (channel) supabase.removeChannel(channel);
+            createChannel();
+        }, backoffDelay);
     };
 
     // Create channel function
@@ -732,13 +730,13 @@ export const subscribeToMessages = (
                     reconnectAttempts = 0; // Reset counter on successful connection
                     setupHeartbeat();
                 } else if (status === 'CHANNEL_ERROR') {
-                    logger.error('Realtime channel error - scheduling reconnect');
+                    logger.warn('Messages: Realtime channel error - scheduling reconnect');
                     clearTimers();
-                    reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
+                    reconnect();
                 } else if (status === 'TIMED_OUT') {
-                    logger.error('Realtime subscription timed out - scheduling reconnect');
+                    logger.warn('Messages: Realtime subscription timed out - scheduling reconnect');
                     clearTimers();
-                    reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
+                    reconnect();
                 } else if (status === 'CLOSED') {
                     logger.warn('Realtime channel closed');
                     clearTimers();
@@ -867,8 +865,8 @@ export const subscribeToConversations = (
     let reconnectAttempts = 0;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-    const MAX_RECONNECT_ATTEMPTS = 5;
-    const RECONNECT_DELAY_MS = 3000;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const BASE_RECONNECT_DELAY_MS = 2000;
     const HEARTBEAT_INTERVAL_MS = 30000;
 
     const clearTimers = () => {
@@ -892,15 +890,16 @@ export const subscribeToConversations = (
 
     const reconnect = () => {
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            logger.error('Conversations: Max reconnection attempts reached');
+            logger.warn('Conversations: Max reconnection attempts reached — will retry on next interaction');
             return;
         }
         reconnectAttempts++;
-        logger.info(`Conversations: Attempting reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-        if (channel) {
-            supabase.removeChannel(channel);
-        }
-        createChannel();
+        const backoffDelay = Math.min(BASE_RECONNECT_DELAY_MS * Math.pow(2, reconnectAttempts - 1), 30000);
+        logger.info(`Conversations: Attempting reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) in ${backoffDelay}ms`);
+        reconnectTimer = setTimeout(() => {
+            if (channel) supabase.removeChannel(channel);
+            createChannel();
+        }, backoffDelay);
     };
 
     const createChannel = () => {
@@ -965,7 +964,7 @@ export const subscribeToConversations = (
                     setupHeartbeat();
                 } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                     clearTimers();
-                    reconnectTimer = setTimeout(reconnect, RECONNECT_DELAY_MS);
+                    reconnect();
                 } else if (status === 'CLOSED') {
                     clearTimers();
                 }

@@ -8,7 +8,7 @@ import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -44,6 +44,13 @@ export default function AuthSignInScreen() {
   const [pendingPassword, setPendingPassword] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpInputRefs = useRef<(TextInput | null)[]>([]);
+  const resendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resendTimerRef.current) clearInterval(resendTimerRef.current);
+    };
+  }, []);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -221,11 +228,13 @@ export default function AuthSignInScreen() {
   // ── OTP Verification Helpers ──
 
   const startResendCooldown = () => {
+    if (resendTimerRef.current) clearInterval(resendTimerRef.current);
     setResendCooldown(60);
-    const interval = setInterval(() => {
+    resendTimerRef.current = setInterval(() => {
       setResendCooldown(prev => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(resendTimerRef.current!);
+          resendTimerRef.current = null;
           return 0;
         }
         return prev - 1;
@@ -255,7 +264,7 @@ export default function AuthSignInScreen() {
 
   const handleVerifyOtp = async () => {
     const token = otpCode.join('');
-    if (token.length !== 8) {
+    if (token.length !== 8 || otpCode.some(d => d === '')) {
       Alert.alert('Error', 'Please enter the full 8-digit code');
       return;
     }

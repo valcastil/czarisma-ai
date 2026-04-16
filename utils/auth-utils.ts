@@ -1,56 +1,11 @@
 import { UserProfile } from '@/constants/theme';
 import { logoutRevenueCatUser } from '@/lib/revenuecat';
 import { supabase } from '@/lib/supabase';
-import { getEntries as getSupabaseEntries, getProfile as getSupabaseProfile, updateProfile as updateSupabaseProfile } from '@/lib/supabase-service';
+import { getEntries as getSupabaseEntries, getProfile as getSupabaseProfile } from '@/lib/supabase-service';
 import { trackAuth, trackError } from '@/lib/vexo-analytics';
 import { saveProfile } from '@/utils/profile-utils';
 import { SecureStorage } from '@/utils/secure-storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-/**
- * Sync local data to Supabase before sign out (for authenticated users)
- */
-const syncDataToSupabase = async (): Promise<void> => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.log('No authenticated user, skipping sync');
-      return;
-    }
-
-    console.log('Syncing local data to Supabase before sign out...');
-
-    // Get local profile and entries
-    const [profileData, entriesData] = await Promise.all([
-      SecureStorage.getItem('@charisma_profile'),
-      SecureStorage.getItem('@charisma_entries'),
-    ]);
-
-    if (profileData) {
-      const profile = JSON.parse(profileData);
-      // Update profile in Supabase with current stats
-      // Note: 'streak' column doesn't exist in profiles table - it's stored locally
-      await updateSupabaseProfile(user.id, {
-        totalEntries: profile.totalEntries || 0,
-        topCharisma: profile.topCharisma || 'confidence',
-        name: profile.name,
-        bio: profile.bio,
-        occupation: profile.occupation,
-        website: profile.website,
-        socialLinks: profile.socialLinks,
-      });
-      console.log('Profile synced to Supabase');
-    }
-
-    // Note: Entries are typically synced in real-time when created,
-    // but we could add batch sync here if needed
-
-    console.log('Data sync to Supabase completed');
-  } catch (error) {
-    console.error('Error syncing data to Supabase:', error);
-    // Don't throw - allow sign out to continue even if sync fails
-  }
-};
 
 /**
  * Handle user sign out with complete cleanup

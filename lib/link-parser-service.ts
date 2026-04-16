@@ -108,33 +108,38 @@ export class LinkParserService {
    * Extract YouTube metadata using oEmbed API
    */
   private static async extractYouTubeMetadata(url: string): Promise<Partial<LinkMetadata>> {
-    try {
-      const videoId = this.extractYouTubeVideoId(url);
-      if (!videoId) {
-        console.warn('Could not extract YouTube video ID');
-        return {};
-      }
+    const videoId = this.extractYouTubeVideoId(url);
+    if (!videoId) {
+      console.warn('Could not extract YouTube video ID');
+      return {};
+    }
 
-      // Use YouTube oEmbed API (no API key required)
-      const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-      
-      const response = await fetch(oEmbedUrl);
-      if (!response.ok) {
-        throw new Error(`YouTube oEmbed failed: ${response.status}`);
-      }
+    // Build thumbnail instantly — no network call needed
+    const directThumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+    try {
+      // Use YouTube oEmbed API with a timeout to avoid hanging on slow networks
+      const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(oEmbedUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!response.ok) throw new Error(`YouTube oEmbed failed: ${response.status}`);
 
       const data = await response.json();
 
       return {
         title: data.title,
         author: data.author_name,
-        thumbnailUrl: data.thumbnail_url,
+        thumbnailUrl: data.thumbnail_url || directThumbnail,
         width: data.thumbnail_width,
         height: data.thumbnail_height,
       };
     } catch (error) {
-      console.error('Error fetching YouTube metadata:', error);
-      return {};
+      console.warn('YouTube oEmbed failed, using direct thumbnail:', error);
+      return { thumbnailUrl: directThumbnail };
     }
   }
 
@@ -166,8 +171,12 @@ export class LinkParserService {
     try {
       // TikTok oEmbed API
       const oEmbedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
-      
-      const response = await fetch(oEmbedUrl);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(oEmbedUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+
       if (!response.ok) {
         throw new Error(`TikTok oEmbed failed: ${response.status}`);
       }

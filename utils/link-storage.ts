@@ -123,8 +123,19 @@ const fetchOEmbed = async (url: string, platform: LinkPlatform): Promise<OEmbedR
     // Instagram/Facebook oEmbed requires app token, use noembed as fallback
     endpoints.push(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
   } else if (platform === 'youtube') {
-    endpoints.push(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-    endpoints.push(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+    // YouTube oEmbed doesn't support /shorts/ URLs — convert to standard watch URL
+    const ytId = (() => {
+      const patterns = [
+        /youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/,
+        /youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
+        /youtu\.be\/([a-zA-Z0-9_-]+)/,
+      ];
+      for (const p of patterns) { const m = url.match(p); if (m) return m[1]; }
+      return null;
+    })();
+    const watchUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : url;
+    endpoints.push(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`);
+    endpoints.push(`https://noembed.com/embed?url=${encodeURIComponent(watchUrl)}`);
   }
 
   // For Facebook, try NoEmbed which works without authentication
@@ -251,28 +262,34 @@ const fetchTitleOnly = async (url: string, platform?: LinkPlatform): Promise<str
  * Priority: oEmbed (platform-native) > YouTube direct > Microlink > HTML scraping
  */
 const fetchLinkMetadata = async (url: string, platform: LinkPlatform): Promise<LinkMetadata> => {
-  // For YouTube, we can build the thumbnail directly
-  let youtubeThumbnail: string | null = null;
+  // For YouTube, build thumbnail instantly from video ID — no network call needed
   if (platform === 'youtube') {
     const videoId = extractYouTubeId(url);
-    if (videoId) youtubeThumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    if (videoId) {
+      const thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      // Fetch title in parallel with a 5s timeout — don't let it block thumbnail
+      const titlePromise = fetchOEmbed(url, platform)
+        .then(r => r.title)
+        .catch(() => null);
+      const timeoutPromise = new Promise<null>(r => setTimeout(() => r(null), 5000));
+      const title = await Promise.race([titlePromise, timeoutPromise]);
+      return { thumbnail, title, description: null };
+    }
   }
 
-  // 1. Try oEmbed first — most reliable for TikTok & YouTube thumbnails
+  // 1. Try oEmbed first — most reliable for TikTok thumbnails
   const oembed = await fetchOEmbed(url, platform);
   const oembedTitle = oembed.title;
   const oembedThumb = oembed.thumbnail;
 
-  // If we have both from oEmbed + YouTube direct, we're done
-  const bestThumb = youtubeThumbnail || oembedThumb;
-  if (oembedTitle && bestThumb) {
-    return { thumbnail: bestThumb, title: oembedTitle, description: null };
+  if (oembedTitle && oembedThumb) {
+    return { thumbnail: oembedThumb, title: oembedTitle, description: null };
   }
 
   // 2. Try Microlink for remaining metadata
   const apiResult = await fetchMetadataViaApi(url);
   const title = oembedTitle || apiResult.title;
-  const thumbnail = bestThumb || apiResult.thumbnail;
+  const thumbnail = oembedThumb || apiResult.thumbnail;
   const description = apiResult.description;
 
   if (title || thumbnail) {
@@ -310,6 +327,36 @@ export const parseLinksFromText = (text: string): string[] => {
     }
   }
   return urls;
+};
+
+/**
+ * Build an instant SharedLink with thumbnail only (no network wait for title)
+ */
+const createLinkObjectInstant = (url: string, index = 0): SharedLink => {
+  const { platform, label } = detectPlatform(url.trim());
+  const now = new Date();
+  const videoId = platform === 'youtube' ? extractYouTubeId(url.trim()) : null;
+  const thumbnail = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+  return {
+    id: `link_${Date.now() + index}_${Math.random().toString(36).slice(2, 8)}`,
+    url: url.trim(),
+    platform,
+    label,
+    title: null,
+    description: null,
+    thumbnail,
+    timestamp: now.getTime(),
+    date: now.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    time: now.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }),
+  };
 };
 
 /**
@@ -353,20 +400,40 @@ export const addSharedLink = async (url: string): Promise<SharedLink> => {
 };
 
 /**
- * Add multiple shared links at once
+ * Add multiple shared links at once.
+ * Saves instantly with thumbnail, then fetches titles in background.
  */
-export const addMultipleLinks = async (urls: string[]): Promise<SharedLink[]> => {
-  const newLinks = await Promise.all(
-    urls.map(async (url, i) => {
-      const link = await createLinkObject(url);
-      // Slightly offset timestamps so ordering is preserved
-      link.id = `link_${Date.now() + i}_${Math.random().toString(36).slice(2, 8)}`;
-      return link;
-    })
-  );
+export const addMultipleLinks = async (urls: string[], onUpdated?: () => void): Promise<SharedLink[]> => {
+  // 1. Build instant stubs (thumbnail ready, title null)
+  const newLinks = urls.map((url, i) => createLinkObjectInstant(url, i));
+
+  // 2. Persist immediately so UI can show thumbnails right away
   const existing = await getSharedLinks();
   const updated = [...newLinks, ...existing];
   await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updated));
+
+  // 3. Fetch titles in background — don't block the caller
+  Promise.all(
+    newLinks.map(async (link) => {
+      try {
+        const meta = await fetchLinkMetadata(link.url, link.platform);
+        if (meta.title || meta.description || (!link.thumbnail && meta.thumbnail)) {
+          const current = await getSharedLinks();
+          const idx = current.findIndex(l => l.id === link.id);
+          if (idx !== -1) {
+            if (meta.title) current[idx].title = meta.title;
+            if (meta.description) current[idx].description = meta.description;
+            if (!link.thumbnail && meta.thumbnail) current[idx].thumbnail = meta.thumbnail;
+            await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(current));
+            onUpdated?.();
+          }
+        }
+      } catch {
+        // Silent — title is optional
+      }
+    })
+  );
+
   return newLinks;
 };
 
