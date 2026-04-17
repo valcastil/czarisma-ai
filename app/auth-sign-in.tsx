@@ -609,11 +609,15 @@ export default function AuthSignInScreen() {
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
+            } else {
+              // Navigate to welcome screen if can't go back (iOS production)
+              router.replace('/modal');
             }
           }}
           style={styles.backButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <IconSymbol name="chevron.left" size={24} color={router.canGoBack() ? colors.gold : 'transparent'} />
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.7}>
+          <IconSymbol name="chevron.left" size={24} color={colors.gold} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {isSignUp ? 'Create Account' : 'Sign In'}

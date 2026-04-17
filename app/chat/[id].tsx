@@ -1218,7 +1218,10 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
-                  setShowMenu(false);
+                  // On iOS, close menu first to avoid nested modal issues
+                  if (Platform.OS === 'ios') {
+                    setShowMenu(false);
+                  }
                   setColorPickerMode('sent');
                   setShowColorPicker(true);
                 }}>
@@ -1232,7 +1235,10 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
-                  setShowMenu(false);
+                  // On iOS, close menu first to avoid nested modal issues
+                  if (Platform.OS === 'ios') {
+                    setShowMenu(false);
+                  }
                   setColorPickerMode('received');
                   setShowColorPicker(true);
                 }}>

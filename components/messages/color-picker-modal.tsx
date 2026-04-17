@@ -57,8 +57,9 @@ export function ColorPickerModal({ visible, onClose, onSelectColor, currentColor
     <Modal
       visible={visible}
       animationType="slide"
+      presentationStyle="pageSheet"
       onRequestClose={onClose}>
-      
+
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <TouchableOpacity
