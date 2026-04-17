@@ -2,9 +2,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WhatsAppBackground } from '@/components/ui/whatsapp-background';
 import { useTheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
+import { speakAIMessage, stopAIVoice } from '@/utils/ai-voice';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -112,13 +112,14 @@ export default function AIChatScreen() {
 
     useEffect(() => {
         isMounted.current = true;
+        
         loadChatHistory();
         // Check trial status on mount and show QR modal if expired
         checkTrialStatusOnMount();
         return () => {
             isMounted.current = false;
             try {
-                Speech.stop();
+                stopAIVoice();
             } catch (e) {
                 // Ignore errors on cleanup
             }
@@ -187,31 +188,12 @@ export default function AIChatScreen() {
         return true;
     };
 
-    const speakText = (text: string) => {
+    const speakText = async (text: string) => {
         if (!isMounted.current) return;
-        try {
-            // Remove emojis to prevent reading them out
-            const cleanText = text
-                .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-            if (cleanText.length === 0) return;
-
-            // Stop any ongoing speech first, then delay slightly on Android
-            // to release the mic audio session before speaking
-            Speech.stop();
-            const delay = Platform.OS === 'android' ? 600 : 100;
-            setTimeout(() => {
-                if (!isMounted.current) return;
-                Speech.speak(cleanText.slice(0, 500), {
-                    onDone: () => { },
-                    onStopped: () => { },
-                    onError: (e) => { console.log('Speech error:', e); }
-                });
-            }, delay);
-        } catch (error) {
-            console.log('Speech error:', error);
-        }
+        if (!isSpeakerEnabled) return; // Don't speak if speaker is disabled
+        
+        // Use ElevenLabs voice (same as Czar companion) with male/female preference
+        await speakAIMessage(text);
     };
 
     const loadChatHistory = async () => {
@@ -291,12 +273,24 @@ export default function AIChatScreen() {
 
 
 
-    const toggleSpeaker = () => {
+    const toggleSpeaker = async () => {
         if (isSpeakerEnabled) {
-            Speech.stop();
+            // Turning speaker off
+            try {
+                await stopAIVoice();
+            } catch (e) {
+                console.log('Error stopping speech:', e);
+            }
             setIsSpeakerEnabled(false);
         } else {
+            // Turning speaker on - test if speech is available
             setIsSpeakerEnabled(true);
+            // Speak a test message to confirm it's working
+            setTimeout(() => {
+                if (isMounted.current && isSpeakerEnabled) {
+                    speakAIMessage('Speaker enabled');
+                }
+            }, 100);
         }
     };
 
@@ -500,9 +494,9 @@ export default function AIChatScreen() {
             </Modal>
             <View style={styles.header}>
                 <TouchableOpacity
-                    onPress={() => {
+                    onPress={async () => {
                         try {
-                            Speech.stop();
+                            await stopAIVoice();
                         } catch (e) { }
                         navigation.dispatch(
                             CommonActions.reset({
@@ -517,7 +511,17 @@ export default function AIChatScreen() {
                 </TouchableOpacity>
                 <Text style={[styles.title, { color: colors.text }]}>Czar AI</Text>
 
-                <View style={styles.speakerButton} />
+                <TouchableOpacity
+                    style={styles.speakerButton}
+                    onPress={toggleSpeaker}
+                    activeOpacity={0.7}
+                >
+                    <IconSymbol
+                        name={isSpeakerEnabled ? "speaker.wave.2" : "speaker.slash"}
+                        size={24}
+                        color={isSpeakerEnabled ? colors.gold : colors.textSecondary}
+                    />
+                </TouchableOpacity>
             </View>
 
             <WhatsAppBackground>

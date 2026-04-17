@@ -35,6 +35,9 @@
             "CFBundleURLSchemes": ["charismachat"],
             "CFBundleURLName": "com.aiagentmaker.charismachat"
           }
+        ],
+        "UIBackgroundModes": [
+          "audio"
         ]
       }
     },
@@ -99,6 +102,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to use your microphone for voice messages and speech-to-text."
+        }
+      ],
       "expo-image-picker",
       [
         "expo-media-library",
@@ -140,7 +149,8 @@
       "eas": {
         "projectId": "41fc9874-9a30-4bf1-9523-383d1480ed52"
       },
-      "geminiApiKey": ""
+      "geminiApiKey": "",
+      "elevenLabsApiKey": ""
     }
   }
 }

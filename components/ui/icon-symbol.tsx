@@ -87,6 +87,10 @@ const MAPPING = {
   'arrow.up': 'arrow-upward',
   'arrow.up.right': 'arrow-outward',
 
+  // Speaker / Audio icons
+  'speaker.wave.2': 'volume-up',
+  'speaker.slash': 'volume-off',
+
   // Shared links platform icons
   'play.rectangle.fill': 'play-arrow',
   'music.note': 'music-note',

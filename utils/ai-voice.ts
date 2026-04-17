@@ -1,8 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 import { AppState } from 'react-native';
-import { getCurrentVoiceId } from './ai-voice';
+
+// Storage key for voice preference
+export const AI_VOICE_PREFERENCE_KEY = '@ai_voice_preference';
+
+// Voice gender type
+export type VoiceGender = 'male' | 'female';
 
 // Get API key from environment variable or app.json extra config
 const ENV_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY || '';
@@ -10,27 +16,58 @@ const EXTRA_API_KEY = Constants.expoConfig?.extra?.elevenLabsApiKey || '';
 const ELEVENLABS_API_KEY = ENV_API_KEY || EXTRA_API_KEY || '';
 
 // Debug: Log API key status (without exposing the key)
-console.log('CzarVoice: API Key Source:', ENV_API_KEY ? 'Environment' : EXTRA_API_KEY ? 'App Config' : 'None');
-console.log('CzarVoice: API Key Status:', ELEVENLABS_API_KEY ? 'Present' : 'Missing');
+console.log('AIVoice: API Key Source:', ENV_API_KEY ? 'Environment' : EXTRA_API_KEY ? 'App Config' : 'None');
+console.log('AIVoice: API Key Status:', ELEVENLABS_API_KEY ? 'Present' : 'Missing');
+console.log('AIVoice: API Key Length:', ELEVENLABS_API_KEY?.length || 0);
 
+// ElevenLabs voice IDs
+const MALE_VOICE_ID = 'pNInz6obpgDQGcFmaJgB';   // Adam - deep, authoritative male (same as Czar companion)
+const FEMALE_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel - warm, natural female voice
 const MODEL_ID = 'eleven_multilingual_v2';
 
-const CACHE_PREFIX = '@czar_audio_v1_';
-const CACHE_INDEX_KEY = '@czar_audio_cache_index';
-const MAX_CACHED_AUDIO = 15; // Keep at most 15 cached audio clips (~3MB)
+const CACHE_PREFIX = '@ai_chat_audio_v1_';
+const CACHE_INDEX_KEY = '@ai_chat_audio_cache_index';
+const MAX_CACHED_AUDIO = 20;
 
-// Active sound instance — keep ref so we can stop it
+// Active sound instance
 let activeSound: Audio.Sound | null = null;
 
-// Stop audio whenever app goes to background (prevents Android freeze)
+// Stop audio when app goes to background
 AppState.addEventListener('change', (state) => {
   if (state === 'background' || state === 'inactive') {
-    stopCzarVoice().catch(() => {});
+    stopAIVoice().catch(() => {});
   }
 });
 
 /**
- * Simple hash to create a stable cache key from message text
+ * Get stored voice preference (defaults to male)
+ */
+export const getVoicePreference = async (): Promise<VoiceGender> => {
+  try {
+    const stored = await AsyncStorage.getItem(AI_VOICE_PREFERENCE_KEY);
+    return (stored as VoiceGender) || 'male';
+  } catch {
+    return 'male';
+  }
+};
+
+/**
+ * Set voice preference
+ */
+export const setVoicePreference = async (gender: VoiceGender): Promise<void> => {
+  await AsyncStorage.setItem(AI_VOICE_PREFERENCE_KEY, gender);
+};
+
+/**
+ * Get current voice ID based on preference
+ */
+export const getCurrentVoiceId = async (): Promise<string> => {
+  const preference = await getVoicePreference();
+  return preference === 'female' ? FEMALE_VOICE_ID : MALE_VOICE_ID;
+};
+
+/**
+ * Hash message for cache key
  */
 const hashMessage = (text: string): string => {
   let hash = 0;
@@ -43,35 +80,59 @@ const hashMessage = (text: string): string => {
 };
 
 /**
- * Stop any currently playing Czar voice audio
+ * Stop AI voice audio (ElevenLabs and fallback)
  */
-export const stopCzarVoice = async (): Promise<void> => {
+export const stopAIVoice = async (): Promise<void> => {
+  // Stop ElevenLabs audio
   if (activeSound) {
     try {
       await activeSound.stopAsync();
       await activeSound.unloadAsync();
     } catch {
-      // Ignore errors on stop
+      // Ignore errors
     }
     activeSound = null;
+  }
+  // Stop fallback expo-speech
+  try {
+    await Speech.stop();
+  } catch {
+    // Ignore errors
   }
 };
 
 /**
- * LRU cache management — evict oldest audio when over limit
+ * Fallback TTS using expo-speech (when ElevenLabs fails)
+ */
+const fallbackTTS = (text: string): void => {
+  const cleanText = text
+    .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
+    .replace(/[*_~`]/g, '')
+    .trim()
+    .slice(0, 500);
+  
+  if (!cleanText) return;
+
+  Speech.speak(cleanText, {
+    language: 'en-US',
+    pitch: 1.0,
+    rate: 0.9,
+    onError: (err) => console.log('Fallback TTS error:', err),
+  });
+};
+
+/**
+ * Cache management with LRU eviction
  */
 const cacheAudioWithEviction = async (key: string, base64Audio: string): Promise<void> => {
-  // Read current cache index (ordered list of keys, newest last)
   let index: string[] = [];
   try {
     const raw = await AsyncStorage.getItem(CACHE_INDEX_KEY);
     if (raw) index = JSON.parse(raw);
   } catch { /* ignore */ }
 
-  // Remove this key if it already exists (will be re-added at end)
   index = index.filter(k => k !== key);
 
-  // Evict oldest entries if over limit
   while (index.length >= MAX_CACHED_AUDIO) {
     const oldest = index.shift();
     if (oldest) {
@@ -79,65 +140,57 @@ const cacheAudioWithEviction = async (key: string, base64Audio: string): Promise
     }
   }
 
-  // Store the new audio + update index
   await AsyncStorage.setItem(key, base64Audio);
   index.push(key);
   await AsyncStorage.setItem(CACHE_INDEX_KEY, JSON.stringify(index));
 };
 
 /**
- * Speak a message using ElevenLabs TTS.
- * - Checks AsyncStorage cache first (keyed by message hash)
- * - On cache miss: fetches from ElevenLabs, caches the base64 result
- * - Plays audio via expo-av
- * Returns estimated duration in ms (for syncing mouth animation)
+ * Speak AI message using ElevenLabs TTS with selected voice
  */
-export const speakCzarMessage = async (message: string): Promise<number> => {
-  // Re-check API key at runtime in case it wasn't available at module load
+export const speakAIMessage = async (message: string): Promise<void> => {
+  // Re-check API key at runtime
   const runtimeApiKey = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY || 
                       Constants.expoConfig?.extra?.elevenLabsApiKey || 
                       ELEVENLABS_API_KEY;
   
   if (!runtimeApiKey || runtimeApiKey === 'your-elevenlabs-api-key') {
-    console.warn('CzarVoice: No ElevenLabs API key configured. Set EXPO_PUBLIC_ELEVENLABS_API_KEY or elevenLabsApiKey in app.json');
-    return 0;
+    console.warn('AIVoice: No ElevenLabs API key configured');
+    return;
   }
 
-  // Strip emojis and special chars for cleaner TTS
+  // Clean message
   const cleanMessage = message.replace(/[\u{1F300}-\u{1FFFF}]/gu, '').replace(/[*_~`]/g, '').trim();
-  if (!cleanMessage) return 0;
+  if (!cleanMessage) return;
 
-  // Stop any playing audio first
-  await stopCzarVoice();
+  // Stop any playing audio
+  await stopAIVoice();
 
-  // Set audio mode for playback through speaker (critical for production builds)
+  // Get voice preference and corresponding voice ID
+  const voiceId = await getCurrentVoiceId();
+
+  // Configure audio session
   try {
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
-      interruptionModeIOS: 1, // DoNotMix - allows TTS to work properly
-      playsInSilentModeIOS: true, // Critical: allows speech when device is on silent
+      interruptionModeIOS: 1,
+      playsInSilentModeIOS: true,
       shouldDuckAndroid: true,
-      interruptionModeAndroid: 2, // DoNotMix
+      interruptionModeAndroid: 2,
       playThroughEarpieceAndroid: false,
     });
-    console.log('CzarVoice: Audio session configured for playback');
   } catch (e) {
-    console.error('CzarVoice: Audio mode config failed', e);
-    // Continue even if audio mode fails
+    console.error('AIVoice: Audio mode config failed', e);
   }
-
-  // Get voice ID based on user preference (male/female)
-  const voiceId = await getCurrentVoiceId();
-  console.log('CzarVoice: Using voice ID:', voiceId);
 
   const cacheKey = CACHE_PREFIX + voiceId + '_' + hashMessage(cleanMessage);
 
   try {
-    // 1. Check cache
+    // Check cache
     let base64Audio = await AsyncStorage.getItem(cacheKey);
 
     if (!base64Audio) {
-      // 2. Fetch from ElevenLabs
+      // Fetch from ElevenLabs
       const response = await fetch(
         `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
         {
@@ -161,11 +214,15 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
       );
 
       if (!response.ok) {
-        console.error(`CzarVoice: ElevenLabs API error ${response.status}`);
-        return 0;
+        console.error(`AIVoice: ElevenLabs API error ${response.status} - falling back to device TTS`);
+        // Fallback to expo-speech when ElevenLabs fails (e.g., 402 payment required)
+        fallbackTTS(cleanMessage);
+        return;
       }
 
-      // Convert response to base64
+      console.log('AIVoice: ElevenLabs API success - using premium voice');
+
+      // Convert to base64
       const arrayBuffer = await response.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       let binary = '';
@@ -174,15 +231,15 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
       }
       base64Audio = btoa(binary);
 
-      // 3. Cache it with LRU eviction
+      // Cache it
       try {
         await cacheAudioWithEviction(cacheKey, base64Audio);
       } catch {
-        // Cache write failure is non-critical
+        // Non-critical
       }
     }
 
-    // 4. Play audio from base64
+    // Play audio
     const { sound } = await Audio.Sound.createAsync(
       { uri: `data:audio/mpeg;base64,${base64Audio}` },
       { shouldPlay: true, volume: 1.0 }
@@ -190,7 +247,7 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
 
     activeSound = sound;
 
-    // Cleanup sound after playback finishes
+    // Cleanup after playback
     sound.setOnPlaybackStatusUpdate((status) => {
       if (status.isLoaded && status.didJustFinish) {
         sound.unloadAsync();
@@ -200,12 +257,9 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
       }
     });
 
-    // Estimate duration for mouth animation sync (~80ms per character)
-    const estimatedDuration = Math.max(2000, cleanMessage.length * 80);
-    return estimatedDuration;
-
   } catch (error) {
-    console.error('CzarVoice: Playback error', error);
-    return 0;
+    console.error('AIVoice: Playback error, falling back to device TTS:', error);
+    // Fallback to expo-speech on any error
+    fallbackTTS(cleanMessage);
   }
 };

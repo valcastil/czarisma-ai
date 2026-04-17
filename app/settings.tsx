@@ -6,6 +6,7 @@ import { useCzar } from '@/contexts/czar-context';
 import { useTheme } from '@/hooks/use-theme';
 import { handleSignOut } from '@/utils/auth-utils';
 import { exportUserData, getProfile, updateProfile } from '@/utils/profile-utils';
+import { getVoicePreference, setVoicePreference, VoiceGender } from '@/utils/ai-voice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -17,11 +18,27 @@ export default function SettingsScreen() {
   const { colors, setTheme, theme } = useTheme();
   const { czarEnabled, setCzarEnabled, idleTimeout, setIdleTimeout } = useCzar();
   const [localTimer, setLocalTimer] = useState(idleTimeout);
+  const [aiVoicePreference, setAiVoicePreferenceState] = useState<VoiceGender>('male');
 
   // Sync local state when context value loads from AsyncStorage
   useEffect(() => {
     setLocalTimer(idleTimeout);
   }, [idleTimeout]);
+
+  // Load voice preference on mount
+  useEffect(() => {
+    loadVoicePreference();
+  }, []);
+
+  const loadVoicePreference = async () => {
+    const preference = await getVoicePreference();
+    setAiVoicePreferenceState(preference);
+  };
+
+  const handleVoicePreferenceChange = async (gender: VoiceGender) => {
+    setAiVoicePreferenceState(gender);
+    await setVoicePreference(gender);
+  };
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -285,6 +302,55 @@ export default function SettingsScreen() {
               </View>
             </View>
           )}
+
+          {/* AI Voice Preference */}
+          <View style={[styles.settingItem, { backgroundColor: colors.card }]}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                AI Voice
+              </Text>
+              <Text style={[styles.settingValue, { color: colors.textSecondary }]}
+              >
+                {aiVoicePreference === 'male' ? 'Male (Czar)' : 'Female'}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[
+                  styles.voiceButton,
+                  {
+                    backgroundColor: aiVoicePreference === 'male' ? colors.gold : colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => handleVoicePreferenceChange('male')}>
+                <Text
+                  style={[
+                    styles.voiceButtonText,
+                    { color: aiVoicePreference === 'male' ? '#000000' : colors.text },
+                  ]}>
+                  Male
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.voiceButton,
+                  {
+                    backgroundColor: aiVoicePreference === 'female' ? colors.gold : colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => handleVoicePreferenceChange('female')}>
+                <Text
+                  style={[
+                    styles.voiceButtonText,
+                    { color: aiVoicePreference === 'female' ? '#000000' : colors.text },
+                  ]}>
+                  Female
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -773,6 +839,16 @@ const styles = StyleSheet.create({
   },
   timerPresetText: {
     fontSize: 13,
+    fontWeight: '600',
+  },
+  voiceButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  voiceButtonText: {
+    fontSize: 14,
     fontWeight: '600',
   },
 });

@@ -229,17 +229,32 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
     setShouldShowCzar(true);
     setIsVisibleWindow(true);
 
-    speakCzarMessage(context.actionPrompt).catch(() => {});
-
-    // Auto-hide after VISIBILITY_DURATION if user doesn't dismiss
+    // Clear any existing visibility timer
     if (visibilityTimerRef.current) clearTimeout(visibilityTimerRef.current);
-    visibilityTimerRef.current = setTimeout(() => {
-      czarVisibleRef.current = false;
-      setShouldShowCzar(false);
-      setIsVisibleWindow(false);
-      stopCzarVoice().catch(() => {});
-      startIdleTimer();
-    }, VISIBILITY_DURATION * 1000);
+
+    // Speak and get estimated duration, then set visibility timer based on speech length
+    speakCzarMessage(context.actionPrompt)
+      .then((durationMs) => {
+        // Set visibility timer based on actual speech duration + 2 second buffer
+        const visibilityTime = Math.max(VISIBILITY_DURATION * 1000, durationMs + 2000);
+        visibilityTimerRef.current = setTimeout(() => {
+          czarVisibleRef.current = false;
+          setShouldShowCzar(false);
+          setIsVisibleWindow(false);
+          stopCzarVoice().catch(() => {});
+          startIdleTimer();
+        }, visibilityTime);
+      })
+      .catch(() => {
+        // Fallback: use default visibility duration if speech fails
+        visibilityTimerRef.current = setTimeout(() => {
+          czarVisibleRef.current = false;
+          setShouldShowCzar(false);
+          setIsVisibleWindow(false);
+          stopCzarVoice().catch(() => {});
+          startIdleTimer();
+        }, VISIBILITY_DURATION * 1000);
+      });
   }, []);
 
   // Start (or restart) the idle countdown using user-configured timeout
