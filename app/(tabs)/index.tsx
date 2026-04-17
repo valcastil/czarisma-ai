@@ -8,7 +8,7 @@ import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, r
 import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -30,6 +30,7 @@ const ONBOARDING_KEY = '@charisma_onboarding';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const [entries, setEntries] = useState<CharismaEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -285,7 +286,20 @@ Forwarded from Czar AI
               borderColor: colors.gold,
             },
           ]}
-          onPress={() => router.push('/ai-chat')}
+          onPress={() => {
+            try {
+              // Use navigation.navigate for better production build compatibility
+              if (navigation && navigation.navigate) {
+                navigation.navigate('ai-chat' as never);
+              } else {
+                router.navigate('/ai-chat');
+              }
+            } catch (error) {
+              console.error('Talk to AI navigation error:', error);
+              // Fallback to router.push
+              router.push('/ai-chat');
+            }
+          }}
           activeOpacity={0.8}>
           <Text
             style={[

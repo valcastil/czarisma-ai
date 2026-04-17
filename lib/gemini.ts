@@ -1,11 +1,15 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Constants from 'expo-constants';
 
-// Initialize the Gemini AI client
-const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+// Get API key from environment variable or app.json extra config
+const ENV_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+const EXTRA_API_KEY = Constants.expoConfig?.extra?.geminiApiKey || '';
+const API_KEY = ENV_API_KEY || EXTRA_API_KEY || '';
 
 // Debug: Log the API key status (without exposing the key)
+console.log('Gemini API Key Source:', ENV_API_KEY ? 'Environment' : EXTRA_API_KEY ? 'App Config' : 'None');
 console.log('Gemini API Key Status:', API_KEY ? 'Present' : 'Missing');
-console.log('API Key Length:', API_KEY.length);
+console.log('Gemini API Key Length:', API_KEY.length);
 
 let genAI: GoogleGenerativeAI | null = null;
 
@@ -13,13 +17,20 @@ let genAI: GoogleGenerativeAI | null = null;
  * Initialize Gemini AI
  */
 export const initializeGemini = () => {
-  if (!API_KEY) {
+  // Re-check API key at runtime in case it wasn't available at module load
+  const runtimeApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 
+                      Constants.expoConfig?.extra?.geminiApiKey || 
+                      API_KEY;
+  
+  if (!runtimeApiKey) {
     console.warn('Gemini API key not found. AI features will be disabled.');
+    console.warn('Please set EXPO_PUBLIC_GEMINI_API_KEY in your environment or geminiApiKey in app.json extra config.');
     return null;
   }
   
   if (!genAI) {
-    genAI = new GoogleGenerativeAI(API_KEY);
+    genAI = new GoogleGenerativeAI(runtimeApiKey);
+    console.log('Gemini AI client created successfully');
   }
   
   return genAI;

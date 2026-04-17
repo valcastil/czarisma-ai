@@ -135,7 +135,13 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
               );
             } else if (route.name === 'czar-chat') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/ai-chat');
+              try {
+                // Use navigation.navigate for better production build compatibility
+                navigation.navigate('ai-chat', route.params);
+              } catch (error) {
+                console.error('Tab navigation error:', error);
+                router.push('/ai-chat');
+              }
             } else if (route.name === 'messages') {
               clearNewMessages?.();
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

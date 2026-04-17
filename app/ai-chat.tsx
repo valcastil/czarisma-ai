@@ -113,6 +113,8 @@ export default function AIChatScreen() {
     useEffect(() => {
         isMounted.current = true;
         loadChatHistory();
+        // Check trial status on mount and show QR modal if expired
+        checkTrialStatusOnMount();
         return () => {
             isMounted.current = false;
             try {
@@ -122,6 +124,25 @@ export default function AIChatScreen() {
             }
         };
     }, []);
+
+    /**
+     * Check trial status on mount - shows QR modal immediately if trial expired
+     */
+    const checkTrialStatusOnMount = async () => {
+        try {
+            const period = await getFreePeriodStatus();
+            if (period.isExpired && isMounted.current) {
+                // Small delay to let the screen render first
+                setTimeout(() => {
+                    if (isMounted.current) {
+                        setShowQRModal(true);
+                    }
+                }, 500);
+            }
+        } catch (error) {
+            console.error('Error checking trial status:', error);
+        }
+    };
 
     /**
      * Check usage limits for ALL users:
@@ -281,8 +302,30 @@ export default function AIChatScreen() {
 
     const [chatHistory, setChatHistory] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [genAI, setGenAI] = useState<ReturnType<typeof initializeGemini>>(null);
+    const [aiError, setAiError] = useState<string | null>(null);
 
-    const genAI = initializeGemini();
+    // Initialize Gemini AI on component mount (not at module level)
+    useEffect(() => {
+        const initAI = async () => {
+            try {
+                console.log('Initializing Gemini AI...');
+                const ai = initializeGemini();
+                if (ai) {
+                    console.log('Gemini AI initialized successfully');
+                    setGenAI(ai);
+                    setAiError(null);
+                } else {
+                    console.error('Gemini AI initialization returned null');
+                    setAiError('AI not available - API key missing');
+                }
+            } catch (error) {
+                console.error('Failed to initialize Gemini AI:', error);
+                setAiError(error instanceof Error ? error.message : 'Unknown error');
+            }
+        };
+        initAI();
+    }, []);
 
     const handleSendWithText = async (text: string) => {
         if (!text.trim() || isLoading) return;
@@ -319,10 +362,13 @@ export default function AIChatScreen() {
 
         try {
             if (!genAI) {
+                console.error('Cannot send message - genAI is null. Error:', aiError);
                 if (isMounted.current) {
                     setMessages(prev => [...prev, {
                         id: Date.now().toString(),
-                        text: "AI is currently unavailable. Please check your internet connection and try again.",
+                        text: aiError 
+                            ? `AI is currently unavailable (${aiError}). Please restart the app.`
+                            : "AI is currently unavailable. Please check your internet connection and try again.",
                         isUser: false
                     }]);
                 }
@@ -358,14 +404,23 @@ export default function AIChatScreen() {
             // Generate the NEXT welcome message in background
             generateNextWelcome(newHistory);
         } catch (error) {
-            console.error(error);
+            console.error('AI send message error:', error);
+            const errorDetails = error instanceof Error ? error.message : 'Unknown error';
             const errorMessage = {
                 id: Date.now().toString(),
-                text: "I'm having trouble connecting to my brain right now. Please check your internet connection or API key.",
+                text: `I'm having trouble connecting right now. ${errorDetails.includes('API key') ? 'API key issue detected.' : 'Please check your internet connection.'}`,
                 isUser: false
             };
             if (isMounted.current) setMessages(prev => [...prev, errorMessage]);
             speakText(errorMessage.text);
+            
+            // Try to re-initialize AI on error (maybe the session expired)
+            try {
+                const reinitAI = initializeGemini();
+                if (reinitAI) setGenAI(reinitAI);
+            } catch (e) {
+                console.error('Failed to re-initialize AI:', e);
+            }
         } finally {
             if (isMounted.current) setIsLoading(false);
         }

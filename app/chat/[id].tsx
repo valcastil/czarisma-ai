@@ -82,12 +82,14 @@ export default function ChatScreen() {
 
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
-  useEffect(() => {
-    initializeChat();
+    useEffect(() => {
+    initializeChat().then(() => {
+      // Load current user photo after currentUser is populated by initializeChat
+      loadCurrentUserPhoto();
+    });
     loadSubscriptionStatus();
     loadMuteStatus();
     // loadProfilePhoto() is not needed here - initializeChat sets profilePhoto from Supabase data
-    loadCurrentUserPhoto();
     loadTextColor();
 
     // Subscribe to real-time messages
@@ -115,6 +117,13 @@ export default function ChatScreen() {
       unsubscribe();
     };
   }, [id]);
+
+  // Reload current user photo whenever currentUser changes (e.g., when avatarUrl is updated)
+  useEffect(() => {
+    if (currentUser) {
+      loadCurrentUserPhoto();
+    }
+  }, [currentUser?.id, currentUser?.avatarUrl]);
 
   const loadMuteStatus = async () => {
     try {
@@ -571,17 +580,23 @@ export default function ChatScreen() {
 
   const loadCurrentUserPhoto = async () => {
     try {
-      const me = await getCurrentUser();
-      if (me) {
+      // Use currentUser state that was populated by initializeChat()
+      if (currentUser) {
         // Use Supabase avatarUrl if available
-        if (me.avatarUrl) {
-          setCurrentUserPhoto(me.avatarUrl);
+        if (currentUser.avatarUrl) {
+          console.log('Setting current user photo from avatarUrl:', currentUser.avatarUrl);
+          setCurrentUserPhoto(currentUser.avatarUrl);
           return;
         }
         // Fallback to AsyncStorage for local-only users
-        const photoKey = `@profile_photo_${me.id}`;
+        const photoKey = `@profile_photo_${currentUser.id}`;
         const savedPhoto = await AsyncStorage.getItem(photoKey);
+        if (savedPhoto) {
+          console.log('Setting current user photo from AsyncStorage:', savedPhoto);
+        }
         setCurrentUserPhoto(savedPhoto);
+      } else {
+        console.log('No current user available for photo load');
       }
     } catch (error) {
       console.error('Error loading current user photo:', error);

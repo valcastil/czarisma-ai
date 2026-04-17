@@ -1,29 +1,60 @@
 import { useTheme } from '@/hooks/use-theme';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useRef } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 
 const CZAR_IMAGE = require('@/assets/images/czar.png');
 
 export default function CzarChatTab() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
   const hasNavigated = useRef(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   // Auto-navigate to ai-chat when this tab is focused
   useFocusEffect(
     useCallback(() => {
-      if (!hasNavigated.current) {
-        hasNavigated.current = true;
-        router.push('/ai-chat');
-      }
+      // Use setTimeout to ensure navigation happens after layout is complete
+      const navigationTimeout = setTimeout(() => {
+        if (!hasNavigated.current && isMounted.current) {
+          hasNavigated.current = true;
+          try {
+            // Use navigate for better compatibility in production builds
+            // navigate replaces the current screen instead of pushing to stack
+            if (navigation && navigation.navigate) {
+              navigation.navigate('ai-chat' as never);
+            } else {
+              router.navigate('/ai-chat');
+            }
+          } catch (error) {
+            console.error('Navigation error:', error);
+            // Fallback to router push if navigate fails
+            try {
+              router.push('/ai-chat');
+            } catch (e) {
+              console.error('Router push also failed:', e);
+            }
+          }
+        }
+      }, Platform.OS === 'android' ? 100 : 50);
 
       return () => {
-        // Reset so next focus triggers navigation again
-        hasNavigated.current = false;
+        clearTimeout(navigationTimeout);
+        // Reset navigation flag after a delay to allow re-navigation
+        setTimeout(() => {
+          hasNavigated.current = false;
+        }, 500);
       };
-    }, [])
+    }, [navigation, router])
   );
 
   return (
@@ -35,7 +66,18 @@ export default function CzarChatTab() {
       </Text>
       <TouchableOpacity
         style={[styles.chatButton, { backgroundColor: colors.gold }]}
-        onPress={() => router.push('/ai-chat')}
+        onPress={() => {
+          try {
+            if (navigation && navigation.navigate) {
+              navigation.navigate('ai-chat' as never);
+            } else {
+              router.navigate('/ai-chat');
+            }
+          } catch (error) {
+            console.error('Button navigation error:', error);
+            router.push('/ai-chat');
+          }
+        }}
         activeOpacity={0.8}>
         <Text style={styles.chatButtonText}>Start Chat</Text>
       </TouchableOpacity>
