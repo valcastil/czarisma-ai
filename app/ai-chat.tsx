@@ -167,25 +167,29 @@ export default function AIChatScreen() {
     };
 
     const speakText = (text: string) => {
-        if (isSpeakerEnabled && isMounted.current) {
-            try {
-                // Remove emojis and emoticons to prevent reading them out
-                const cleanText = text
-                    .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
-                    .replace(/\s+/g, ' ')
-                    .trim();
+        if (!isMounted.current) return;
+        try {
+            // Remove emojis to prevent reading them out
+            const cleanText = text
+                .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (cleanText.length === 0) return;
 
-                // Limit speech to 500 chars as requested to avoid errors and long monologues
-                if (cleanText.length > 0) {
-                    Speech.speak(cleanText.slice(0, 500), {
-                        onDone: () => { },
-                        onStopped: () => { },
-                        onError: () => { }
-                    });
-                }
-            } catch (error) {
-                console.log('Speech error:', error);
-            }
+            // Stop any ongoing speech first, then delay slightly on Android
+            // to release the mic audio session before speaking
+            Speech.stop();
+            const delay = Platform.OS === 'android' ? 600 : 100;
+            setTimeout(() => {
+                if (!isMounted.current) return;
+                Speech.speak(cleanText.slice(0, 500), {
+                    onDone: () => { },
+                    onStopped: () => { },
+                    onError: (e) => { console.log('Speech error:', e); }
+                });
+            }, delay);
+        } catch (error) {
+            console.log('Speech error:', error);
         }
     };
 
@@ -280,8 +284,21 @@ export default function AIChatScreen() {
 
     const genAI = initializeGemini();
 
+    const handleSendWithText = async (text: string) => {
+        if (!text.trim() || isLoading) return;
+        setMessage('');
+        await handleSendCore(text.trim());
+    };
+
     const handleSend = async () => {
         if (!message.trim() || isLoading) return;
+        const text = message.trim();
+        setMessage('');
+        await handleSendCore(text);
+    };
+
+    const handleSendCore = async (userMessageText: string) => {
+        if (isLoading) return;
 
         // Check usage limit before sending
         const canSend = await checkUsageLimit();
@@ -290,8 +307,6 @@ export default function AIChatScreen() {
         // Increment usage counter
         await incrementUsage();
 
-        const userMessageText = message.trim();
-        setMessage('');
         setIsLoading(true);
 
         // Add user message to UI immediately
@@ -447,13 +462,7 @@ export default function AIChatScreen() {
                 </TouchableOpacity>
                 <Text style={[styles.title, { color: colors.text }]}>Czar AI</Text>
 
-                <TouchableOpacity onPress={toggleSpeaker} style={styles.speakerButton}>
-                    <IconSymbol
-                        name={isSpeakerEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"}
-                        size={24}
-                        color={colors.text}
-                    />
-                </TouchableOpacity>
+                <View style={styles.speakerButton} />
             </View>
 
             <WhatsAppBackground>
@@ -485,7 +494,15 @@ export default function AIChatScreen() {
                         placeholder="Type a message..."
                         placeholderTextColor={colors.textSecondary}
                         value={message}
-                        onChangeText={setMessage}
+                        onChangeText={(text) => {
+                            if (/\bsend\b\.?$/i.test(text)) {
+                                const cleaned = text.replace(/\bsend\b\.?$/i, '').trim();
+                                setMessage(cleaned);
+                                if (cleaned) handleSendWithText(cleaned);
+                            } else {
+                                setMessage(text);
+                            }
+                        }}
                         multiline
                     />
 

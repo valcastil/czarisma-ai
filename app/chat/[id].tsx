@@ -262,16 +262,18 @@ export default function ChatScreen() {
     }
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = async (overrideText?: string) => {
     console.log('=== handleSendMessage called ===');
-    console.log('messageText:', messageText);
     console.log('currentUser:', currentUser);
     console.log('otherUser:', otherUser);
     console.log('canChat:', canChat);
     console.log('pendingAttachment:', pendingAttachment);
 
-    if ((!messageText.trim() && !pendingAttachment) || !currentUser) {
-      console.log('Early return: no messageText/attachment or currentUser');
+    const textToSend = overrideText ?? messageText;
+    console.log('textToSend:', textToSend);
+
+    if ((!textToSend.trim() && !pendingAttachment) || !currentUser) {
+      console.log('Early return: no textToSend/attachment or currentUser');
       return;
     }
 
@@ -302,7 +304,7 @@ export default function ChatScreen() {
         otherUser.id,
         otherUser.username,
         otherUser.name,
-        messageText.trim(),
+        textToSend.trim(),
         pendingAttachment || undefined
       );
 
@@ -1082,7 +1084,15 @@ export default function ChatScreen() {
               placeholder="Type a message..."
               placeholderTextColor={colors.textSecondary}
               value={messageText}
-              onChangeText={setMessageText}
+              onChangeText={(text) => {
+                if (/\bsend\b\.?$/i.test(text)) {
+                  const cleaned = text.replace(/\bsend\b\.?$/i, '').trim();
+                  setMessageText(cleaned);
+                  if (cleaned) handleSendMessage(cleaned);
+                } else {
+                  setMessageText(text);
+                }
+              }}
               multiline
               maxLength={1000}
               editable={!sending}
@@ -1092,7 +1102,7 @@ export default function ChatScreen() {
                 styles.sendButton,
                 { backgroundColor: (messageText.trim() || pendingAttachment) ? colors.gold : colors.border }
               ]}
-              onPress={handleSendMessage}
+              onPress={() => handleSendMessage()}
               disabled={(!messageText.trim() && !pendingAttachment) || sending}
               activeOpacity={0.8}>
               {sending ? (
