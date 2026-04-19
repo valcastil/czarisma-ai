@@ -108,7 +108,10 @@ export class MediaPickerService {
         return null;
       }
 
-      if (asset.duration && asset.duration > this.MAX_VIDEO_DURATION) {
+      // expo-image-picker returns duration in milliseconds — convert to seconds
+      const durationInSeconds = asset.duration ? asset.duration / 1000 : undefined;
+
+      if (durationInSeconds && durationInSeconds > this.MAX_VIDEO_DURATION) {
         Alert.alert(
           'Video Too Long',
           `Please select a video shorter than ${this.MAX_VIDEO_DURATION / 60} minutes`
@@ -124,7 +127,7 @@ export class MediaPickerService {
         mimeType: asset.mimeType || 'video/mp4',
         width: asset.width ?? undefined,
         height: asset.height ?? undefined,
-        duration: asset.duration ?? undefined,
+        duration: durationInSeconds,
       };
     } catch (error) {
       console.error('Error picking video:', error);
@@ -180,6 +183,9 @@ export class MediaPickerService {
 
       const asset = result.assets[0];
 
+      // expo-image-picker returns duration in milliseconds — convert to seconds
+      const durationInSeconds = asset.duration ? asset.duration / 1000 : undefined;
+
       return {
         type: 'video',
         uri: asset.uri,
@@ -188,7 +194,7 @@ export class MediaPickerService {
         mimeType: 'video/mp4',
         width: asset.width ?? undefined,
         height: asset.height ?? undefined,
-        duration: asset.duration ?? undefined,
+        duration: durationInSeconds,
       };
     } catch (error) {
       console.error('Error recording video:', error);
