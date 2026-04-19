@@ -3,6 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
+import { deleteAIQuote, getSavedAIQuotes } from '@/utils/ai-quote-storage';
 import { canAccessFeatures, checkPaidProStatus, checkProStatus, checkTrialExpirationAndRedirect, getTrialStatus, setProStatusForTesting, TrialStatus } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -49,6 +50,35 @@ const PRO_CHARISMA_QUOTES = [
   "Listen deeply, respond thoughtfully.",
   "Brevity is the soul of eloquence.",
   "Charisma lives in the harmony of voice and gesture.",
+];
+
+// Inspirational Charisma Quotes with Attribution
+const INSPIRATIONAL_CHARISMA_QUOTES = [
+  // Short, punchy charisma lines
+  '"Charisma is a sparkle in people that money can\'t buy. It\'s an invisible energy with visible effects." — Marianne Williamson',
+  '"Charisma is the transference of enthusiasm." — Ralph Archbold',
+  '"Charisma is the knack of giving people your full attention." — Robert Brault',
+  '"Charisma without character is postponed calamity." — Peter Ajisafe',
+  '"Charisma gets the attention of man and character gets the attention of God." — Rich Wilkerson Jr.',
+  // On real charisma vs. personality
+  '"You can be revered for all sorts of qualities, but to be truly charismatic is rare." — Francesca Annis',
+  '"Charisma is not just saying hello. It is dropping what you\'re doing to say hello." — Robert Brault',
+  '"I think that natural beauty is very charismatic." — Elle Macpherson',
+  '"Charisma knows only inner determination and inner restraint." — Max Weber',
+  // Charisma in leadership
+  '"Charisma is the result of effective leadership, not the other way around." — Warren G. Bennis',
+  '"Effective leadership is about earning respect, and it\'s about personality and charisma." — Alan Sugar',
+  '"Charismatic leaders don\'t say what people want to hear, but they say what people want to say." — C. L. Gammon',
+  '"Charisma can inspire." — Simon Sinek',
+  // On presence and energy
+  '"People who love life have charisma because they fill the room with positive energy." — John C. Maxwell',
+  '"Lack of charisma can be fatal." — Jenny Holzer',
+  '"You either have the charisma, the knowledge, the passion, the intelligence or you don\'t." — Jon Gruden',
+  '"Stand tall and be proud. Realize confidence is charismatic and something money can\'t buy; it radiates from within you." — Cindy Ann Peterson',
+  // Critical / warning quotes about charisma
+  '"The most dangerous people are always clever, compelling, and charismatic." — Malcolm McDowell',
+  '"Just because someone is very charismatic, it doesn\'t mean that they\'re genuinely qualified." — Tenzin Palmo',
+  '"Beware of the charismatic wolf in sheep\'s clothing. There is evil in the world. You can be tricked." — Terry Tempest Williams',
 ];
 
 // Map charisma IDs to readable names
@@ -513,11 +543,13 @@ export default function AddEntryScreen() {
   const [canAccess, setCanAccess] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [availableQuotes, setAvailableQuotes] = useState<string[]>(CHARISMA_QUOTES);
+  const [savedAIQuotes, setSavedAIQuotes] = useState<string[]>([]);
   const [tapCount, setTapCount] = useState(0);
   const [lastTapTime, setLastTapTime] = useState(0);
 
   useEffect(() => {
     loadProStatusAndQuotes();
+    loadSavedAIQuotes();
   }, []);
 
   useFocusEffect(
@@ -565,6 +597,24 @@ export default function AddEntryScreen() {
       setUserEmail(null);
       setIsPro(false);
       setIsPaidPro(false);
+    }
+  };
+
+  const loadSavedAIQuotes = async () => {
+    try {
+      const quotes = await getSavedAIQuotes();
+      setSavedAIQuotes(quotes);
+    } catch (error) {
+      console.error('Error loading saved AI quotes:', error);
+    }
+  };
+
+  const handleDeleteAIQuote = async (quote: string) => {
+    try {
+      await deleteAIQuote(quote);
+      setSavedAIQuotes(prev => prev.filter(q => q !== quote));
+    } catch (error) {
+      console.error('Error deleting AI quote:', error);
     }
   };
 
@@ -639,8 +689,8 @@ export default function AddEntryScreen() {
   };
 
   const handleSelectQuote = (quote: string) => {
-    // Check if this is a Pro quote
-    const isProQuote = PRO_CHARISMA_QUOTES.includes(quote);
+    // Check if this is a Pro or Inspirational quote (both require Pro access)
+    const isProQuote = PRO_CHARISMA_QUOTES.includes(quote) || INSPIRATIONAL_CHARISMA_QUOTES.includes(quote);
 
     if (isProQuote && (!canAccess || !userEmail)) {
       // Check if user is not signed in
@@ -875,7 +925,8 @@ export default function AddEntryScreen() {
         visible={showQuotesModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowQuotesModal(false)}>
+        onRequestClose={() => setShowQuotesModal(false)}
+        onShow={loadSavedAIQuotes}>
         <Pressable
           style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}
           onPress={() => setShowQuotesModal(false)}>
@@ -912,6 +963,35 @@ export default function AddEntryScreen() {
                 ))}
               </View>
 
+              {/* Czar AI Saved Quotes Section */}
+              {savedAIQuotes.length > 0 && (
+                <View style={styles.proSection}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: colors.gold }]}>🤖 Czar AI Quotes</Text>
+                    <View style={[styles.aiQuoteCountBadge, { backgroundColor: colors.gold }]}>
+                      <Text style={styles.aiQuoteCountText}>{savedAIQuotes.length}</Text>
+                    </View>
+                  </View>
+                  {savedAIQuotes.map((quote, index) => (
+                    <View key={`ai-${index}`} style={styles.aiQuoteRow}>
+                      <TouchableOpacity
+                        style={[styles.quoteItem, styles.aiQuoteItem, { backgroundColor: colors.card, borderLeftColor: colors.gold, flex: 1 }]}
+                        onPress={() => handleSelectQuote(quote)}
+                        activeOpacity={0.7}>
+                        <Text style={[styles.quoteText, { color: colors.text }]}>{quote}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.aiQuoteDeleteButton}
+                        onPress={() => handleDeleteAIQuote(quote)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}>
+                        <Text style={[styles.aiQuoteDeleteText, { color: colors.textSecondary }]}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {/* Pro Quotes Section */}
               <View style={styles.proSection}>
                 <View style={styles.proSectionHeader}>
@@ -925,6 +1005,37 @@ export default function AddEntryScreen() {
                 {PRO_CHARISMA_QUOTES.map((quote, index) => (
                   <TouchableOpacity
                     key={`pro-${index}`}
+                    style={[
+                      styles.quoteItem,
+                      styles.proQuoteItem,
+                      (!canAccess || !userEmail) && styles.lockedQuoteItem,
+                      { backgroundColor: colors.card, borderLeftColor: colors.gold }
+                    ]}
+                    onPress={() => handleSelectQuote(quote)}
+                    activeOpacity={0.7}>
+                    <Text style={[styles.quoteText, { color: colors.text }]}>{quote}</Text>
+                    {(!canAccess || !userEmail) && (
+                      <View style={styles.lockIcon}>
+                        <Text style={styles.lockEmoji}>🔒</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Inspirational Quotes Section */}
+              <View style={styles.proSection}>
+                <View style={styles.proSectionHeader}>
+                  <Text style={[styles.proSectionTitle, { color: colors.gold }]}>💬 Inspirational Quotes</Text>
+                  {!isPro && (
+                    <View style={[styles.proBadge, { backgroundColor: colors.gold }]}>
+                      <Text style={styles.proBadgeText} numberOfLines={1}>PRO</Text>
+                    </View>
+                  )}
+                </View>
+                {INSPIRATIONAL_CHARISMA_QUOTES.map((quote, index) => (
+                  <TouchableOpacity
+                    key={`insp-${index}`}
                     style={[
                       styles.quoteItem,
                       styles.proQuoteItem,
@@ -1187,5 +1298,33 @@ const styles = StyleSheet.create({
   },
   lockEmoji: {
     fontSize: 16,
+  },
+  aiQuoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  aiQuoteItem: {
+    marginBottom: 0,
+  },
+  aiQuoteDeleteButton: {
+    padding: 8,
+  },
+  aiQuoteDeleteText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  aiQuoteCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  aiQuoteCountText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#000000',
   },
 });

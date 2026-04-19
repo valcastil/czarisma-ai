@@ -6,7 +6,8 @@ import { speakAIMessage, stopAIVoice } from '@/utils/ai-voice';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { saveAIQuote } from '@/utils/ai-quote-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -101,9 +102,11 @@ export default function AIChatScreen() {
     const insets = useSafeAreaInsets();
     const [message, setMessage] = useState('');
     const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
-    const [messages, setMessages] = useState<{ id: string; text: string; isUser: boolean }[]>([]);
+    const [messages, setMessages] = useState<{ id: string; text: string; isUser: boolean; reactions?: string[] }[]>([]);
     const [showQRModal, setShowQRModal] = useState(false);
     const [activePaymentTab, setActivePaymentTab] = useState<'e&' | 'gcash'>('e&');
+    const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+    const [reactionMessageId, setReactionMessageId] = useState<string | null>(null);
 
     const isMounted = React.useRef(true);
     const scrollViewRef = useRef<ScrollView>(null);
@@ -420,6 +423,41 @@ export default function AIChatScreen() {
         }
     };
 
+    const handleAddReaction = async (messageId: string, emoji: string) => {
+        const msg = messages.find(m => m.id === messageId);
+        if (!msg) return;
+        const current = msg.reactions || [];
+        const updated = current.includes(emoji)
+            ? current.filter(r => r !== emoji)
+            : [...current, emoji];
+        const newMessages = messages.map(m =>
+            m.id === messageId ? { ...m, reactions: updated } : m
+        );
+        setMessages(newMessages);
+        setReactionMessageId(null);
+        await AsyncStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(newMessages));
+    };
+
+    const handleShareMessage = async (text: string) => {
+        try {
+            await Share.share({ message: `${text}\n\n— Czar AI` });
+        } catch (error) {
+            console.error('Error sharing message:', error);
+        }
+        setSelectedMessageId(null);
+    };
+
+    const handleSaveAsQuote = async (text: string) => {
+        try {
+            await saveAIQuote(text);
+            Alert.alert('Saved!', 'Quote saved to your personalized quotes.');
+        } catch (error) {
+            console.error('Error saving quote:', error);
+            Alert.alert('Error', 'Failed to save quote.');
+        }
+        setSelectedMessageId(null);
+    };
+
     return (
         <KeyboardAvoidingView
             style={[styles.container, { backgroundColor: colors.background }]}
@@ -532,17 +570,111 @@ export default function AIChatScreen() {
                     keyboardShouldPersistTaps="handled"
                     onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
                 >
-                    {messages.map((msg) => (
-                        <View key={msg.id} style={[
-                            styles.messageBubble,
-                            msg.isUser ? styles.userBubble : styles.aiBubble,
-                            { backgroundColor: msg.isUser ? colors.gold : colors.card }
-                        ]}>
-                            <Text style={[styles.messageText, { color: msg.isUser ? '#000000' : colors.text }]}>
-                                {msg.text}
-                            </Text>
+                    {messages.map((msg) => {
+                        const showActions = selectedMessageId === msg.id;
+                        const showReactionPicker = reactionMessageId === msg.id;
+                        const quickReactions = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
+
+                        return (
+                        <View key={msg.id} style={(showActions || showReactionPicker) ? { zIndex: 999 } : undefined}>
+                            <TouchableOpacity
+                                activeOpacity={0.8}
+                                onLongPress={() => {
+                                    if (!msg.isUser) {
+                                        setReactionMessageId(msg.id);
+                                        setSelectedMessageId(null);
+                                    }
+                                }}
+                                onPress={() => {
+                                    if (reactionMessageId) setReactionMessageId(null);
+                                    if (selectedMessageId) setSelectedMessageId(null);
+                                }}
+                                delayLongPress={400}
+                                style={[
+                                    styles.messageBubble,
+                                    msg.isUser ? styles.userBubble : styles.aiBubble,
+                                    { backgroundColor: msg.isUser ? colors.gold : colors.card },
+                                    (showActions || showReactionPicker) && { borderWidth: 1, borderColor: colors.gold },
+                                ]}
+                            >
+                                <Text style={[styles.messageText, { color: msg.isUser ? '#000000' : colors.text }]}>
+                                    {msg.text}
+                                </Text>
+
+                                {!msg.isUser && (
+                                    <TouchableOpacity
+                                        style={styles.messageBubbleMenuButton}
+                                        onPress={() => {
+                                            setSelectedMessageId(showActions ? null : msg.id);
+                                            setReactionMessageId(null);
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <IconSymbol size={14} name="ellipsis" color={colors.textSecondary} />
+                                    </TouchableOpacity>
+                                )}
+                            </TouchableOpacity>
+
+                            {/* Reactions display */}
+                            {msg.reactions && msg.reactions.length > 0 && (
+                                <View style={styles.reactionsDisplay}>
+                                    {msg.reactions.map((emoji, idx) => (
+                                        <TouchableOpacity
+                                            key={idx}
+                                            style={[styles.reactionBadge, { backgroundColor: colors.card }]}
+                                            onPress={() => handleAddReaction(msg.id, emoji)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={styles.reactionBadgeEmoji}>{emoji}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )}
+
+                            {/* Reaction picker */}
+                            {showReactionPicker && (
+                                <View style={styles.reactionPickerContainer}>
+                                    <View style={[styles.reactionPicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                        {quickReactions.map((emoji, idx) => (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                style={styles.reactionButton}
+                                                onPress={() => handleAddReaction(msg.id, emoji)}
+                                                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                                                activeOpacity={0.6}
+                                            >
+                                                <Text style={styles.reactionEmoji}>{emoji}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Action bar (Share / Save as Quote) */}
+                            {showActions && (
+                                <View style={[styles.messageActionBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                    <TouchableOpacity
+                                        style={styles.messageActionButton}
+                                        onPress={() => handleShareMessage(msg.text)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <IconSymbol size={18} name="square.and.arrow.up" color={colors.gold} />
+                                        <Text style={[styles.messageActionText, { color: colors.text }]}>Share</Text>
+                                    </TouchableOpacity>
+                                    <View style={[styles.messageActionDivider, { backgroundColor: colors.border }]} />
+                                    <TouchableOpacity
+                                        style={styles.messageActionButton}
+                                        onPress={() => handleSaveAsQuote(msg.text)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <IconSymbol size={18} name="bookmark" color={colors.gold} />
+                                        <Text style={[styles.messageActionText, { color: colors.text }]}>Save as Quote</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                         </View>
-                    ))}
+                        );
+                    })}
                 </ScrollView>
             </WhatsAppBackground>
 
@@ -702,6 +834,88 @@ const styles = StyleSheet.create({
     messageText: {
         fontSize: 16,
         lineHeight: 22,
+    },
+    messageActionBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        borderRadius: 12,
+        borderWidth: 1,
+        marginTop: 6,
+        paddingVertical: 6,
+        paddingHorizontal: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    messageActionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        gap: 6,
+    },
+    messageActionText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    messageActionDivider: {
+        width: 1,
+        height: 20,
+    },
+    messageBubbleMenuButton: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        padding: 4,
+    },
+    reactionPickerContainer: {
+        alignItems: 'flex-start',
+        marginTop: -4,
+        marginBottom: 4,
+        zIndex: 9999,
+    },
+    reactionPicker: {
+        flexDirection: 'row',
+        borderRadius: 30,
+        padding: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 10,
+        borderWidth: 1,
+        gap: 4,
+        alignSelf: 'flex-start',
+    },
+    reactionButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    reactionEmoji: {
+        fontSize: 22,
+    },
+    reactionsDisplay: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 4,
+        marginTop: 4,
+        alignSelf: 'flex-start',
+    },
+    reactionBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    reactionBadgeEmoji: {
+        fontSize: 14,
     },
     messageInputContainer: {
         paddingHorizontal: 10,
