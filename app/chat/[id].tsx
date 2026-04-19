@@ -4,6 +4,9 @@ import { CharismaAttachmentModal } from '@/components/messages/charisma-attachme
 import { ColorPickerModal } from '@/components/messages/color-picker-modal';
 import { EmojiPickerModal } from '@/components/messages/emoji-picker-modal';
 import { ForwardModal } from '@/components/messages/forward-modal';
+import { CharismaEntriesPreview } from '@/components/profile/charisma-entries-preview';
+import { FollowButton } from '@/components/profile/follow-button';
+import { SocialLinksDisplay } from '@/components/profile/social-links-display';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WhatsAppBackground } from '@/components/ui/whatsapp-background';
 import { Attachment, Message, User } from '@/constants/message-types';
@@ -11,6 +14,13 @@ import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { formatCharismaEntryForMessage } from '@/utils/charisma-share-utils';
+import {
+    getFollowCounts,
+    getUserEntries,
+    getUserEntryCount,
+    getUserFullProfile,
+    isFollowing as checkIsFollowing,
+} from '@/utils/follow-utils';
 import {
     getCurrentUser,
     getMessages,
@@ -77,6 +87,15 @@ export default function ChatScreen() {
   const [receivedMessageTextColor, setReceivedMessageTextColor] = useState<string>('#000000');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [colorPickerMode, setColorPickerMode] = useState<'sent' | 'received'>('sent');
+
+  // Follow feature state
+  const [isFollowingUser, setIsFollowingUser] = useState(false);
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const [profileSocialLinks, setProfileSocialLinks] = useState<Record<string, string>>({});
+  const [profileBio, setProfileBio] = useState('');
+  const [profileEntries, setProfileEntries] = useState<any[]>([]);
+  const [profileEntryCount, setProfileEntryCount] = useState(0);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -542,7 +561,7 @@ export default function ChatScreen() {
     );
   };
 
-  const handleViewProfile = () => {
+  const handleViewProfile = async () => {
     setShowMenu(false);
     if (!userEmail) {
       Alert.alert(
@@ -560,6 +579,32 @@ export default function ChatScreen() {
     }
     loadProfilePhoto();
     setShowProfile(true);
+    setProfileLoading(true);
+
+    try {
+      // Load all profile data in parallel
+      const [fullProfile, followStatus, counts, entries, entryCount] = await Promise.all([
+        getUserFullProfile(otherUser.id),
+        currentUser ? checkIsFollowing(currentUser.id, otherUser.id) : Promise.resolve(false),
+        getFollowCounts(otherUser.id),
+        getUserEntries(otherUser.id, 6),
+        getUserEntryCount(otherUser.id),
+      ]);
+
+      setIsFollowingUser(followStatus);
+      setFollowCounts(counts);
+      setProfileEntries(entries);
+      setProfileEntryCount(entryCount);
+
+      if (fullProfile) {
+        setProfileBio(fullProfile.bio || '');
+        setProfileSocialLinks(fullProfile.social_links || {});
+      }
+    } catch (error) {
+      console.error('Error loading profile data:', error);
+    } finally {
+      setProfileLoading(false);
+    }
   };
 
   const loadProfilePhoto = async () => {
@@ -1313,123 +1358,90 @@ export default function ChatScreen() {
                     <Text style={[styles.profileUsername, { color: colors.textSecondary }]}>
                       @{otherUser.username}
                     </Text>
+
+                    {/* Follow Button */}
+                    {currentUser && currentUser.id !== otherUser.id && (
+                      <View style={{ marginTop: 12 }}>
+                        <FollowButton
+                          currentUserId={currentUser.id}
+                          targetUserId={otherUser.id}
+                          isFollowing={isFollowingUser}
+                          onFollowChange={(following) => {
+                            setIsFollowingUser(following);
+                            setFollowCounts(prev => ({
+                              followers: following ? prev.followers + 1 : Math.max(0, prev.followers - 1),
+                              following: prev.following,
+                            }));
+                          }}
+                        />
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Stats Row */}
+                  <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
+                    <View style={styles.statsContainer}>
+                      <View style={styles.statItem}>
+                        <Text style={[styles.statNumber, { color: colors.gold }]}>
+                          {profileLoading ? '—' : profileEntryCount}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Entries</Text>
+                      </View>
+                      <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                      <View style={styles.statItem}>
+                        <Text style={[styles.statNumber, { color: colors.gold }]}>
+                          {profileLoading ? '—' : followCounts.followers}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Followers</Text>
+                      </View>
+                      <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                      <View style={styles.statItem}>
+                        <Text style={[styles.statNumber, { color: colors.gold }]}>
+                          {profileLoading ? '—' : followCounts.following}
+                        </Text>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Following</Text>
+                      </View>
+                    </View>
                   </View>
 
                   {/* Bio Section */}
-                  <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                      About
-                    </Text>
-                    <Text style={[styles.whatsappSectionText, { color: colors.textSecondary }]}>
-                      Welcome to my charisma profile! 🌟
-                    </Text>
-                  </View>
-
-                  {/* Contact Information Section */}
-                  <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                      Contact Information
-                    </Text>
-                    <View style={styles.whatsappInfoRow}>
-                      <IconSymbol size={20} name="phone" color={colors.textSecondary} />
-                      <Text style={[styles.whatsappInfoText, { color: colors.textSecondary }]}>
-                        +1 234 567 8900
+                  {(profileBio || !profileLoading) && (
+                    <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
+                      <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
+                        About
+                      </Text>
+                      <Text style={[styles.whatsappSectionText, { color: colors.textSecondary }]}>
+                        {profileBio || 'No bio yet'}
                       </Text>
                     </View>
-                    <View style={styles.whatsappInfoRow}>
-                      <IconSymbol size={20} name="envelope" color={colors.textSecondary} />
-                      <Text style={[styles.whatsappInfoText, { color: colors.textSecondary }]}>
-                        {otherUser.username}@charismachat.com
+                  )}
+
+                  {/* Social Links Section */}
+                  {Object.keys(profileSocialLinks).length > 0 && (
+                    <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
+                      <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
+                        Social Links
                       </Text>
+                      <SocialLinksDisplay socialLinks={profileSocialLinks} />
                     </View>
-                  </View>
+                  )}
 
-                  {/* Interests Section */}
+                  {/* Charisma Collection Section */}
                   <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
                     <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                      Interests & Hobbies
+                      Charisma Collection
                     </Text>
-                    <View style={styles.interestTagsContainer}>
-                      <View style={[styles.interestTag, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                        <Text style={[styles.interestTagText, { color: colors.text }]}>Personal Development</Text>
+                    {profileLoading ? (
+                      <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color={colors.gold} />
                       </View>
-                      <View style={[styles.interestTag, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                        <Text style={[styles.interestTagText, { color: colors.text }]}>Communication</Text>
-                      </View>
-                      <View style={[styles.interestTag, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                        <Text style={[styles.interestTagText, { color: colors.text }]}>Building Connections</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Charisma Stats Section */}
-                  <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                      Charisma Stats
-                    </Text>
-                    <View style={styles.statsContainer}>
-                      <View style={styles.statItem}>
-                        <Text style={[styles.statNumber, { color: colors.gold }]}>42</Text>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Entries</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={[styles.statNumber, { color: colors.gold }]}>8.5</Text>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Avg Score</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={[styles.statNumber, { color: colors.gold }]}>15</Text>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Day Streak</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Achievements Section */}
-                  <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                      Recent Achievements
-                    </Text>
-                    <View style={styles.achievementContainer}>
-                      <View style={styles.achievementItem}>
-                        <View style={[styles.achievementIcon, { backgroundColor: colors.gold }]}>
-                          <IconSymbol size={16} name="star.fill" color="#000000" />
-                        </View>
-                        <View style={styles.achievementContent}>
-                          <Text style={[styles.achievementTitle, { color: colors.text }]}>Charisma Master</Text>
-                          <Text style={[styles.achievementDesc, { color: colors.textSecondary }]}>Completed 30-day streak</Text>
-                        </View>
-                      </View>
-                      <View style={styles.achievementItem}>
-                        <View style={[styles.achievementIcon, { backgroundColor: colors.gold }]}>
-                          <IconSymbol size={16} name="trophy.fill" color="#000000" />
-                        </View>
-                        <View style={styles.achievementContent}>
-                          <Text style={[styles.achievementTitle, { color: colors.text }]}>Top Communicator</Text>
-                          <Text style={[styles.achievementDesc, { color: colors.textSecondary }]}>High engagement score</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Settings Section */}
-                  <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                      Settings
-                    </Text>
-                    <TouchableOpacity style={styles.settingItem}>
-                      <IconSymbol size={20} name="bell" color={colors.textSecondary} />
-                      <Text style={[styles.settingText, { color: colors.text }]}>Notifications</Text>
-                      <IconSymbol size={16} name="chevron.right" color={colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.settingItem}>
-                      <IconSymbol size={20} name="lock" color={colors.textSecondary} />
-                      <Text style={[styles.settingText, { color: colors.text }]}>Privacy</Text>
-                      <IconSymbol size={16} name="chevron.right" color={colors.textSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.settingItem}>
-                      <IconSymbol size={20} name="shield" color={colors.textSecondary} />
-                      <Text style={[styles.settingText, { color: colors.text }]}>Security</Text>
-                      <IconSymbol size={16} name="chevron.right" color={colors.textSecondary} />
-                    </TouchableOpacity>
+                    ) : (
+                      <CharismaEntriesPreview
+                        entries={profileEntries}
+                        isFollowing={isFollowingUser}
+                        totalCount={profileEntryCount}
+                      />
+                    )}
                   </View>
 
                 </ScrollView>
@@ -1906,6 +1918,11 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    alignSelf: 'center',
   },
   // Achievements
   achievementContainer: {

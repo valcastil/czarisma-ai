@@ -165,6 +165,7 @@ export const updateProfile = async (updates: Partial<UserProfile>): Promise<User
         const supabaseUpdates: any = {};
         if (updates.name !== undefined) supabaseUpdates.name = updates.name;
         if (updates.bio !== undefined) supabaseUpdates.bio = updates.bio;
+        if (updates.socialLinks !== undefined) supabaseUpdates.social_links = updates.socialLinks;
         
         // Handle avatar upload if changed
         if (updates.avatar !== undefined && updates.avatar !== currentProfile.avatar) {

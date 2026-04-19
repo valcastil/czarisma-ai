@@ -13,6 +13,8 @@ interface AttemptRecord {
 const RATE_LIMIT_KEYS = {
   LOGIN: '@auth_rate_limit_login',
   SIGNUP: '@auth_rate_limit_signup',
+  PHONE_LOGIN: '@auth_rate_limit_phone_login',
+  PHONE_SIGNUP: '@auth_rate_limit_phone_signup',
   PASSWORD_RESET: '@auth_rate_limit_password_reset',
   MESSAGE: '@message_rate_limit',
 } as const;
@@ -20,6 +22,8 @@ const RATE_LIMIT_KEYS = {
 const RATE_LIMIT_CONFIG = {
   LOGIN: { maxAttempts: 5, windowMs: 15 * 60 * 1000 }, // 5 attempts per 15 minutes
   SIGNUP: { maxAttempts: 3, windowMs: 60 * 60 * 1000 }, // 3 attempts per hour
+  PHONE_LOGIN: { maxAttempts: 5, windowMs: 15 * 60 * 1000 }, // 5 attempts per 15 minutes
+  PHONE_SIGNUP: { maxAttempts: 3, windowMs: 60 * 60 * 1000 }, // 3 attempts per hour
   PASSWORD_RESET: { maxAttempts: 3, windowMs: 60 * 60 * 1000 }, // 3 attempts per hour
   MESSAGE: { maxAttempts: 30, windowMs: 60 * 1000 }, // 30 messages per minute
 } as const;

@@ -1,6 +1,12 @@
+import { OtpInput } from '@/components/auth/otp-input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
+import {
+    completePhoneAuth,
+    isFirebaseAvailable,
+    sendPhoneOtp,
+} from '@/utils/firebase-auth-utils';
 import { logger } from '@/utils/logger';
 import { isRateLimited, recordAttempt } from '@/utils/rate-limiter';
 import { detectSecurityThreats, sanitizeInput, validateEmail, validatePassword } from '@/utils/security';
@@ -37,16 +43,32 @@ export default function AuthSignInScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Auth method: 'email' or 'phone'
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [countryCode, setCountryCode] = useState('+1');
+  const [phoneConfirmation, setPhoneConfirmation] = useState<any>(null);
+  const [firebaseAvailable, setFirebaseAvailable] = useState(true);
+
   // OTP verification state
   const [showOtpVerification, setShowOtpVerification] = useState(false);
   const [otpCode, setOtpCode] = useState(['', '', '', '', '', '', '', '']);
+  const [phoneOtpCode, setPhoneOtpCode] = useState(['', '', '', '', '', '']);
   const [signUpEmail, setSignUpEmail] = useState('');
   const [pendingPassword, setPendingPassword] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpType, setOtpType] = useState<'email' | 'phone'>('email');
   const otpInputRefs = useRef<(TextInput | null)[]>([]);
   const resendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    // Check if Firebase is available (not in Expo Go)
+    const available = isFirebaseAvailable();
+    setFirebaseAvailable(available);
+    if (!available && authMethod === 'phone') {
+      setAuthMethod('email');
+    }
+
     return () => {
       if (resendTimerRef.current) clearInterval(resendTimerRef.current);
     };
@@ -140,6 +162,7 @@ export default function AuthSignInScreen() {
         setSignUpEmail(cleanEmail);
         setPendingPassword(cleanPassword);
         setOtpCode(['', '', '', '', '', '', '', '']);
+        setOtpType('email');
         setShowOtpVerification(true);
         startResendCooldown();
       } else {
@@ -191,6 +214,7 @@ export default function AuthSignInScreen() {
                   const cleanEmail = sanitizeInput(email).toLowerCase().trim();
                   setSignUpEmail(cleanEmail);
                   setOtpCode(['', '', '', '', '', '', '', '']);
+                  setOtpType('email');
                   try {
                     await supabase.auth.signInWithOtp({ email: cleanEmail, options: { shouldCreateUser: false } });
                   } catch {}
@@ -353,6 +377,134 @@ export default function AuthSignInScreen() {
     }
   };
 
+  // ── Phone Auth Handlers ──
+
+  const handlePhoneAuth = async () => {
+    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+    if (!cleanPhone || cleanPhone.length < 7) {
+      Alert.alert('Error', 'Please enter a valid phone number');
+      return;
+    }
+
+    if (!firebaseAvailable) {
+      Alert.alert(
+        'Not Available',
+        'Phone authentication requires a custom build. It is not available in Expo Go.'
+      );
+      return;
+    }
+
+    const fullPhone = `${countryCode}${cleanPhone}`;
+
+    // Rate limiting
+    const action = isSignUp ? 'PHONE_SIGNUP' : 'PHONE_LOGIN';
+    const rateLimitStatus = await isRateLimited(action, fullPhone);
+    if (rateLimitStatus.isLimited) {
+      const resetTime = new Date(rateLimitStatus.resetTime!).toLocaleTimeString();
+      Alert.alert('Too Many Attempts', `Please try again after ${resetTime}.`);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await recordAttempt(action, fullPhone);
+
+      logger.info('Sending phone OTP to:', fullPhone);
+      const confirmation = await sendPhoneOtp(fullPhone);
+      setPhoneConfirmation(confirmation);
+      setPhoneOtpCode(['', '', '', '', '', '']);
+      setOtpType('phone');
+      setShowOtpVerification(true);
+      startResendCooldown();
+    } catch (error: any) {
+      logger.error('Phone auth error:', error);
+      let msg = 'Failed to send verification code. Please try again.';
+      if (error?.message?.includes('not available')) {
+        msg = error.message;
+      } else if (error?.code === 'auth/invalid-phone-number') {
+        msg = 'Invalid phone number format. Please include your country code.';
+      } else if (error?.code === 'auth/too-many-requests') {
+        msg = 'Too many attempts. Please try again later.';
+      }
+      Alert.alert('Error', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    const code = phoneOtpCode.join('');
+    if (code.length !== 6 || phoneOtpCode.some(d => d === '')) {
+      Alert.alert('Error', 'Please enter the full 6-digit code');
+      return;
+    }
+
+    if (!phoneConfirmation) {
+      Alert.alert('Error', 'Verification session expired. Please try again.');
+      setShowOtpVerification(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      logger.info('Verifying phone OTP...');
+
+      const mode = isSignUp ? 'signup' : 'signin';
+      const user = await completePhoneAuth(phoneConfirmation, code, mode);
+
+      logger.info('Phone auth complete, user:', user?.id);
+
+      // Restore data & create trial
+      const { restoreUserDataFromSupabase } = await import('@/utils/auth-utils');
+      await restoreUserDataFromSupabase();
+
+      const { createTrialIfNeeded, refreshProStatus } = await import('@/utils/subscription-utils');
+      await refreshProStatus();
+      if (user?.id) {
+        await createTrialIfNeeded(user.id);
+      }
+
+      setShowOtpVerification(false);
+      Alert.alert(
+        'Verified! 🎉',
+        'Your phone has been verified. Welcome to Charisma!',
+        [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+      );
+    } catch (err: any) {
+      logger.error('Phone OTP verification error:', err);
+      let msg = 'Verification failed. Please try again.';
+      if (err?.message?.includes('No account found')) {
+        msg = 'No account found for this phone number. Please sign up first.';
+      } else if (err?.message?.includes('Invalid code') || err?.code === 'auth/invalid-verification-code') {
+        msg = 'The code you entered is incorrect. Please try again.';
+      }
+      Alert.alert('Error', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendPhoneOtp = async () => {
+    if (resendCooldown > 0) return;
+
+    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+    const fullPhone = `${countryCode}${cleanPhone}`;
+
+    try {
+      setLoading(true);
+      logger.info('Resending phone OTP to:', fullPhone);
+      const confirmation = await sendPhoneOtp(fullPhone);
+      setPhoneConfirmation(confirmation);
+      startResendCooldown();
+      Alert.alert('Code Sent', 'A new verification code has been sent to your phone.');
+    } catch (err: any) {
+      logger.error('Resend phone OTP error:', err);
+      Alert.alert('Error', 'Failed to resend code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const finishGoogleSignIn = async (userId?: string) => {
     console.log('Google sign-in successful, restoring user data...');
 
@@ -499,8 +651,15 @@ export default function AuthSignInScreen() {
     );
   };
 
-  // ── OTP Verification Screen ──
+  // ── OTP Verification Screen (Email & Phone) ──
   if (showOtpVerification) {
+    const isPhoneOtp = otpType === 'phone';
+    const currentOtp = isPhoneOtp ? phoneOtpCode : otpCode;
+    const digitCount = isPhoneOtp ? 6 : 8;
+    const verifyTarget = isPhoneOtp
+      ? `${countryCode}${phoneNumber}`
+      : signUpEmail;
+
     return (
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: colors.background }]}
@@ -511,13 +670,17 @@ export default function AuthSignInScreen() {
             onPress={() => {
               setShowOtpVerification(false);
               setOtpCode(['', '', '', '', '', '', '', '']);
+              setPhoneOtpCode(['', '', '', '', '', '']);
               setPendingPassword('');
+              setPhoneConfirmation(null);
             }}
             style={styles.backButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <IconSymbol name="chevron.left" size={24} color={colors.gold} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Verify Email</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {isPhoneOtp ? 'Verify Phone' : 'Verify Email'}
+          </Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -526,38 +689,21 @@ export default function AuthSignInScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled">
           <View style={styles.heroSection}>
-            <Text style={styles.heroEmoji}>📧</Text>
+            <Text style={styles.heroEmoji}>{isPhoneOtp ? '�' : '�'}</Text>
             <Text style={[styles.heroTitle, { color: colors.text }]}>Enter Verification Code</Text>
             <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-              We sent an 8-digit code to{'\n'}
-              <Text style={{ color: colors.gold, fontWeight: '600' }}>{signUpEmail}</Text>
+              We sent a {digitCount}-digit code to{'\n'}
+              <Text style={{ color: colors.gold, fontWeight: '600' }}>{verifyTarget}</Text>
             </Text>
           </View>
 
           {/* OTP Input */}
-          <View style={styles.otpContainer}>
-            {otpCode.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => { otpInputRefs.current[index] = ref; }}
-                style={[
-                  styles.otpInput,
-                  {
-                    backgroundColor: colors.card,
-                    color: colors.text,
-                    borderColor: digit ? colors.gold : colors.border,
-                  },
-                ]}
-                value={digit}
-                onChangeText={(value) => handleOtpChange(value, index)}
-                onKeyPress={(e) => handleOtpKeyPress(e, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                selectTextOnFocus
-                editable={!loading}
-              />
-            ))}
-          </View>
+          <OtpInput
+            digitCount={digitCount}
+            value={currentOtp}
+            onChange={isPhoneOtp ? setPhoneOtpCode : setOtpCode}
+            disabled={loading}
+          />
 
           {/* Verify Button */}
           <TouchableOpacity
@@ -566,7 +712,7 @@ export default function AuthSignInScreen() {
               { backgroundColor: colors.gold },
               loading && styles.authButtonDisabled,
             ]}
-            onPress={handleVerifyOtp}
+            onPress={isPhoneOtp ? handleVerifyPhoneOtp : handleVerifyOtp}
             disabled={loading}
             activeOpacity={0.8}>
             {loading ? (
@@ -582,7 +728,7 @@ export default function AuthSignInScreen() {
               Didn't receive the code?
             </Text>
             <TouchableOpacity
-              onPress={handleResendOtp}
+              onPress={isPhoneOtp ? handleResendPhoneOtp : handleResendOtp}
               disabled={resendCooldown > 0 || loading}>
               <Text
                 style={[
@@ -642,64 +788,156 @@ export default function AuthSignInScreen() {
           </Text>
         </View>
 
-        {/* Form */}
-        <View style={styles.formContainer}>
-          <View style={styles.inputContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Email</Text>
-            <TextInput
+        {/* Auth Method Toggle — shown for both sign-up and sign-in */}
+        <View style={[styles.authMethodToggle, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TouchableOpacity
               style={[
-                styles.input,
-                {
-                  backgroundColor: colors.card,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
+                styles.authMethodTab,
+                authMethod === 'email' && { backgroundColor: colors.gold },
               ]}
-              placeholder="your@email.com"
-              placeholderTextColor={colors.textSecondary}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              editable={!loading}
-            />
+              onPress={() => setAuthMethod('email')}
+              disabled={loading}>
+              <Text style={[
+                styles.authMethodTabText,
+                { color: authMethod === 'email' ? '#000' : colors.textSecondary },
+              ]}>
+                📧 Email
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.authMethodTab,
+                authMethod === 'phone' && { backgroundColor: colors.gold },
+              ]}
+              onPress={() => {
+                if (!firebaseAvailable) {
+                  Alert.alert(
+                    'Not Available',
+                    'Phone sign-up requires a custom build. It is not available in Expo Go.'
+                  );
+                  return;
+                }
+                setAuthMethod('phone');
+              }}
+              disabled={loading}>
+              <Text style={[
+                styles.authMethodTabText,
+                { color: authMethod === 'phone' ? '#000' : colors.textSecondary },
+              ]}>
+                📱 Phone
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={[styles.label, { color: colors.text }]}>Password</Text>
-            <View style={styles.passwordInputWrapper}>
+        {/* Form */}
+        <View style={styles.formContainer}>
+          {/* Email Input (shown when authMethod is email) */}
+          {authMethod === 'email' && (
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>Email</Text>
               <TextInput
                 style={[
                   styles.input,
-                  styles.passwordInput,
                   {
                     backgroundColor: colors.card,
                     color: colors.text,
                     borderColor: colors.border,
                   },
                 ]}
-                placeholder="••••••••"
+                placeholder="your@email.com"
                 placeholderTextColor={colors.textSecondary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
                 autoCapitalize="none"
-                autoComplete="password"
+                autoComplete="email"
                 editable={!loading}
               />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <IconSymbol
-                  name={showPassword ? 'eye' : 'eye.slash'}
-                  size={24}
-                  color={colors.background === '#fff' ? '#000000' : '#FFFFFF'}
-                />
-              </TouchableOpacity>
             </View>
-          </View>
+          )}
+
+          {/* Phone Input (shown when authMethod is phone) */}
+          {authMethod === 'phone' && (
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>Phone Number</Text>
+              <View style={styles.phoneInputRow}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.countryCodeInput,
+                    {
+                      backgroundColor: colors.card,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  placeholder="+1"
+                  placeholderTextColor={colors.textSecondary}
+                  value={countryCode}
+                  onChangeText={setCountryCode}
+                  keyboardType="phone-pad"
+                  editable={!loading}
+                  maxLength={4}
+                />
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.phoneNumberInput,
+                    {
+                      backgroundColor: colors.card,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  placeholder="Phone number"
+                  placeholderTextColor={colors.textSecondary}
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  editable={!loading}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Password — only for email auth */}
+          {authMethod === 'email' && (
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>Password</Text>
+              <View style={styles.passwordInputWrapper}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.passwordInput,
+                    {
+                      backgroundColor: colors.card,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.textSecondary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="password"
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <IconSymbol
+                    name={showPassword ? 'eye' : 'eye.slash'}
+                    size={24}
+                    color={colors.background === '#fff' ? '#000000' : '#FFFFFF'}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Auth Button */}
           <TouchableOpacity
@@ -708,14 +946,16 @@ export default function AuthSignInScreen() {
               { backgroundColor: colors.gold },
               loading && styles.authButtonDisabled,
             ]}
-            onPress={handleAuth}
+            onPress={authMethod === 'phone' ? handlePhoneAuth : handleAuth}
             disabled={loading}
             activeOpacity={0.8}>
             {loading ? (
               <ActivityIndicator color="#000000" />
             ) : (
               <Text style={[styles.authButtonText, { color: '#000000' }]}>
-                {isSignUp ? 'Create Account' : 'Sign In'}
+                {authMethod === 'phone'
+                  ? 'Send Verification Code'
+                  : isSignUp ? 'Create Account' : 'Sign In'}
               </Text>
             )}
           </TouchableOpacity>
@@ -877,6 +1117,36 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     paddingRight: 50,
+  },
+  // Auth method toggle
+  authMethodToggle: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 4,
+    marginBottom: 24,
+  },
+  authMethodTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  authMethodTabText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // Phone input
+  phoneInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  countryCodeInput: {
+    width: 70,
+    textAlign: 'center',
+  },
+  phoneNumberInput: {
+    flex: 1,
   },
   eyeButton: {
     position: 'absolute',

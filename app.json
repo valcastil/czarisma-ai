@@ -32,7 +32,9 @@
         ],
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["charismachat"],
+            "CFBundleURLSchemes": [
+              "charismachat"
+            ],
             "CFBundleURLName": "com.aiagentmaker.charismachat"
           }
         ],
@@ -101,6 +103,8 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       "expo-router",
       [
         "expo-av",
@@ -138,7 +142,9 @@
         }
       ],
       "./plugins/withJetifier.js",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     "experiments": {
       "typedRoutes": true,

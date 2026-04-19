@@ -186,6 +186,9 @@ const CzarContext = createContext<CzarContextType | undefined>(undefined);
 // Constants for timing
 const VISIBILITY_DURATION = 18; // seconds Czar stays visible (long enough for voice to finish)
 
+// Screens where the Czar companion should never appear (user is already interacting with AI)
+const SUPPRESSED_SCREENS = ['ai-chat'];
+
 export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreenState] = useState('index');
   const [shouldShowCzar, setShouldShowCzar] = useState(false);
@@ -223,6 +226,13 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
   // Show Czar now — pick a message for the current screen and speak it
   const showCzar = useCallback(() => {
     if (!czarEnabledRef.current) return;
+
+    // Suppress on screens where AI interaction is already active
+    if (SUPPRESSED_SCREENS.includes(currentScreenRef.current)) {
+      startIdleTimer();
+      return;
+    }
+
     const context = getScreenContext(currentScreenRef.current);
     setCzarMessage(context.actionPrompt);
     czarVisibleRef.current = true;
@@ -293,6 +303,18 @@ export function CzarProvider({ children }: { children: React.ReactNode }) {
       prevScreenRef.current = screen;
       currentScreenRef.current = screen;
       setCurrentScreenState(screen);
+
+      // Hide companion immediately when entering a suppressed screen
+      if (SUPPRESSED_SCREENS.includes(screen) && czarVisibleRef.current) {
+        if (visibilityTimerRef.current) {
+          clearTimeout(visibilityTimerRef.current);
+          visibilityTimerRef.current = null;
+        }
+        czarVisibleRef.current = false;
+        setShouldShowCzar(false);
+        setIsVisibleWindow(false);
+        stopCzarVoice().catch(() => {});
+      }
     }
   }, []);
 

@@ -17,6 +17,7 @@ import { ThemeProvider, useColorScheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
 import { initializeRevenueCat } from '@/lib/revenuecat';
 import { initializeSupabase, supabase } from '@/lib/supabase';
+import '@/lib/firebase-init';
 import { initializeVexo } from '@/lib/vexo-analytics';
 import { checkTrialExpirationAndRedirect, getLocalTrialStatus, shouldShowTrialExpiredPopup } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -229,7 +230,7 @@ export default function RootLayout() {
         } catch (error) {
           console.warn('Failed to initialize RevenueCat:', error);
         }
-        
+
         console.log('Core services initialized successfully');
       } catch (error) {
         console.error('Critical error during service initialization:', error);

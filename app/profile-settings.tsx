@@ -1,7 +1,16 @@
+import { OtpInput } from '@/components/auth/otp-input';
 import { CzarCompanion } from '@/components/czar-companion';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { UserProfile } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { supabase } from '@/lib/supabase';
+import {
+    isFirebaseAvailable,
+    linkPhoneToAccount,
+    sendPhoneOtp,
+    verifyPhoneOtp,
+} from '@/utils/firebase-auth-utils';
+import { logger } from '@/utils/logger';
 import { getCurrentUser, registerCurrentUser } from '@/utils/message-utils';
 import { getProfile, updateProfile } from '@/utils/profile-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +37,19 @@ export default function ProfileSettingsScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Linked accounts state
+  const [linkedPhone, setLinkedPhone] = useState<string | null>(null);
+  const [linkedEmail, setLinkedEmail] = useState<string | null>(null);
+  const [showLinkPhone, setShowLinkPhone] = useState(false);
+  const [linkPhoneNumber, setLinkPhoneNumber] = useState('');
+  const [linkCountryCode, setLinkCountryCode] = useState('+1');
+  const [linkPhoneConfirmation, setLinkPhoneConfirmation] = useState<any>(null);
+  const [linkPhoneOtp, setLinkPhoneOtp] = useState(['', '', '', '', '', '']);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [showLinkEmail, setShowLinkEmail] = useState(false);
+  const [linkEmail, setLinkEmail] = useState('');
+  const [canUseFirebase, setCanUseFirebase] = useState(false);
 
   const [name, setName] = useState('');
   const [about, setAbout] = useState('');
@@ -67,6 +89,23 @@ export default function ProfileSettingsScreen() {
             telegram: p.socialLinks.telegram || '',
           });
         }
+
+        // Fetch linked accounts from Supabase
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          setLinkedEmail(session.user.email || null);
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          if (profileData?.phone) {
+            setLinkedPhone(profileData.phone);
+          }
+        }
+
+        // Check Firebase availability (sync — no native module reference)
+        setCanUseFirebase(isFirebaseAvailable());
       } catch (e) {
         Alert.alert('Error', 'Unable to load profile settings');
       } finally {
@@ -165,6 +204,86 @@ export default function ProfileSettingsScreen() {
       Alert.alert('Error', 'Unable to save profile settings. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ── Link Phone Handlers ──
+
+  const handleSendLinkPhoneOtp = async () => {
+    const cleanPhone = linkPhoneNumber.replace(/[^0-9]/g, '');
+    if (!cleanPhone || cleanPhone.length < 7) {
+      Alert.alert('Error', 'Please enter a valid phone number');
+      return;
+    }
+    if (!canUseFirebase) {
+      Alert.alert('Not Available', 'Phone linking requires a custom build.');
+      return;
+    }
+
+    try {
+      setLinkLoading(true);
+      const fullPhone = `${linkCountryCode}${cleanPhone}`;
+      const confirmation = await sendPhoneOtp(fullPhone);
+      setLinkPhoneConfirmation(confirmation);
+      setLinkPhoneOtp(['', '', '', '', '', '']);
+    } catch (err: any) {
+      logger.error('Link phone OTP error:', err);
+      Alert.alert('Error', err?.message || 'Failed to send code.');
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleVerifyLinkPhone = async () => {
+    const code = linkPhoneOtp.join('');
+    if (code.length !== 6) {
+      Alert.alert('Error', 'Please enter the full 6-digit code');
+      return;
+    }
+
+    try {
+      setLinkLoading(true);
+      const idToken = await verifyPhoneOtp(linkPhoneConfirmation, code);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session');
+
+      await linkPhoneToAccount(idToken, session.user.id);
+
+      const fullPhone = `${linkCountryCode}${linkPhoneNumber.replace(/[^0-9]/g, '')}`;
+      setLinkedPhone(fullPhone);
+      setShowLinkPhone(false);
+      setLinkPhoneConfirmation(null);
+      Alert.alert('Success', 'Phone number linked to your account!');
+    } catch (err: any) {
+      logger.error('Link phone verify error:', err);
+      Alert.alert('Error', err?.message || 'Failed to link phone number.');
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleLinkEmail = async () => {
+    const trimmed = linkEmail.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    try {
+      setLinkLoading(true);
+      const { error } = await supabase.auth.updateUser({ email: trimmed });
+      if (error) throw error;
+      setShowLinkEmail(false);
+      Alert.alert(
+        'Confirmation Sent',
+        `We sent a confirmation link to ${trimmed}. Please check your inbox to complete linking.`
+      );
+    } catch (err: any) {
+      logger.error('Link email error:', err);
+      Alert.alert('Error', err?.message || 'Failed to link email.');
+    } finally {
+      setLinkLoading(false);
     }
   };
 
@@ -308,6 +427,200 @@ export default function ProfileSettingsScreen() {
             </View>
           </View>
         </View>
+
+        {/* Linked Accounts Section */}
+        <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>LINKED ACCOUNTS</Text>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* Email */}
+          <View style={styles.fieldRow}>
+            <View style={styles.socialIconWrap}>
+              <Text style={styles.socialIcon}>📧</Text>
+            </View>
+            <View style={[styles.fieldBody, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+              {linkedEmail ? (
+                <>
+                  <View>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Email</Text>
+                    <Text style={[styles.fieldInput, { color: colors.text }]}>{linkedEmail}</Text>
+                  </View>
+                  <Text style={{ color: colors.gold, fontSize: 12, fontWeight: '600' }}>Linked</Text>
+                </>
+              ) : (
+                <>
+                  <View>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Email</Text>
+                    <Text style={[styles.fieldInput, { color: colors.textSecondary }]}>Not linked</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setShowLinkEmail(true)}>
+                    <Text style={{ color: colors.gold, fontSize: 14, fontWeight: '600' }}>+ Link</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Phone */}
+          <View style={styles.fieldRow}>
+            <View style={styles.socialIconWrap}>
+              <Text style={styles.socialIcon}>📱</Text>
+            </View>
+            <View style={[styles.fieldBody, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+              {linkedPhone ? (
+                <>
+                  <View>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Phone</Text>
+                    <Text style={[styles.fieldInput, { color: colors.text }]}>{linkedPhone}</Text>
+                  </View>
+                  <Text style={{ color: colors.gold, fontSize: 12, fontWeight: '600' }}>Linked</Text>
+                </>
+              ) : (
+                <>
+                  <View>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Phone</Text>
+                    <Text style={[styles.fieldInput, { color: colors.textSecondary }]}>Not linked</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => {
+                    if (!canUseFirebase) {
+                      Alert.alert('Not Available', 'Phone linking requires a custom build (not available in Expo Go).');
+                      return;
+                    }
+                    setShowLinkPhone(true);
+                  }}>
+                    <Text style={{ color: colors.gold, fontSize: 14, fontWeight: '600' }}>+ Link</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* Link Phone Inline Form */}
+        {showLinkPhone && !linkedPhone && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {!linkPhoneConfirmation ? (
+              <>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>
+                  Enter your phone number to link:
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  <TextInput
+                    style={[styles.fieldInput, {
+                      color: colors.text, backgroundColor: colors.background,
+                      borderWidth: 1, borderColor: colors.border, borderRadius: 8,
+                      paddingHorizontal: 10, paddingVertical: 8, width: 60, textAlign: 'center',
+                    }]}
+                    value={linkCountryCode}
+                    onChangeText={setLinkCountryCode}
+                    keyboardType="phone-pad"
+                    maxLength={4}
+                  />
+                  <TextInput
+                    style={[styles.fieldInput, {
+                      color: colors.text, backgroundColor: colors.background,
+                      borderWidth: 1, borderColor: colors.border, borderRadius: 8,
+                      paddingHorizontal: 10, paddingVertical: 8, flex: 1,
+                    }]}
+                    value={linkPhoneNumber}
+                    onChangeText={setLinkPhoneNumber}
+                    placeholder="Phone number"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={[styles.secondaryButton, { borderColor: colors.border, flex: 1 }]}
+                    onPress={() => setShowLinkPhone(false)}>
+                    <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: colors.gold, borderRadius: 8, paddingVertical: 10, alignItems: 'center' }}
+                    onPress={handleSendLinkPhoneOtp}
+                    disabled={linkLoading}>
+                    {linkLoading ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <Text style={{ color: '#000', fontWeight: '600' }}>Send Code</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 12 }]}>
+                  Enter the 6-digit code sent to {linkCountryCode}{linkPhoneNumber}:
+                </Text>
+                <OtpInput
+                  digitCount={6}
+                  value={linkPhoneOtp}
+                  onChange={setLinkPhoneOtp}
+                  disabled={linkLoading}
+                />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={[styles.secondaryButton, { borderColor: colors.border, flex: 1 }]}
+                    onPress={() => { setLinkPhoneConfirmation(null); setShowLinkPhone(false); }}>
+                    <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: colors.gold, borderRadius: 8, paddingVertical: 10, alignItems: 'center' }}
+                    onPress={handleVerifyLinkPhone}
+                    disabled={linkLoading}>
+                    {linkLoading ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <Text style={{ color: '#000', fontWeight: '600' }}>Verify</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
+        {/* Link Email Inline Form */}
+        {showLinkEmail && !linkedEmail && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginBottom: 8 }]}>
+              Enter your email to link:
+            </Text>
+            <TextInput
+              style={[styles.fieldInput, {
+                color: colors.text, backgroundColor: colors.background,
+                borderWidth: 1, borderColor: colors.border, borderRadius: 8,
+                paddingHorizontal: 10, paddingVertical: 8, marginBottom: 12,
+              }]}
+              value={linkEmail}
+              onChangeText={setLinkEmail}
+              placeholder="your@email.com"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.secondaryButton, { borderColor: colors.border, flex: 1 }]}
+                onPress={() => setShowLinkEmail(false)}>
+                <Text style={[styles.secondaryButtonText, { color: colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: colors.gold, borderRadius: 8, paddingVertical: 10, alignItems: 'center' }}
+                onPress={handleLinkEmail}
+                disabled={linkLoading}>
+                {linkLoading ? (
+                  <ActivityIndicator size="small" color="#000" />
+                ) : (
+                  <Text style={{ color: '#000', fontWeight: '600' }}>Link Email</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>SOCIAL MEDIA LINKS</Text>
