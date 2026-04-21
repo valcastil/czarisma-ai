@@ -236,17 +236,28 @@ export const getRegisteredUsers = async (
 
         let q = supabase
             .from('profiles')
-            .select('id, username, name, avatar_url, is_online, last_seen')
+            .select('id, username, name, avatar_url, is_online, last_seen, handle_at, handle_hash')
             .neq('id', session.user.id)
             .order('name')
             .limit(limit);
 
         const trimmed = search?.trim();
         if (trimmed && trimmed.length >= 2) {
-            // Escape ILIKE special chars to prevent injection-like patterns.
-            const safe = trimmed.replace(/[%_\\]/g, (m) => `\\${m}`);
+            // Prefix-aware search: '@foo' -> handle_at, '#foo' -> handle_hash, else name/username/both handles.
+            const first = trimmed[0];
+            const body = (first === '@' || first === '#') ? trimmed.slice(1) : trimmed;
+            const safe = body.replace(/[%_\\]/g, (m) => `\\${m}`);
             const pattern = `%${safe}%`;
-            q = q.or(`name.ilike.${pattern},username.ilike.${pattern}`);
+
+            if (first === '@') {
+                q = q.ilike('handle_at', pattern);
+            } else if (first === '#') {
+                q = q.ilike('handle_hash', pattern);
+            } else {
+                q = q.or(
+                    `name.ilike.${pattern},username.ilike.${pattern},handle_at.ilike.${pattern},handle_hash.ilike.${pattern}`
+                );
+            }
         }
 
         const { data, error } = await q;
@@ -263,6 +274,8 @@ export const getRegisteredUsers = async (
             isOnline: profile.is_online,
             lastSeen: new Date(profile.last_seen).getTime(),
             avatarUrl: profile.avatar_url,
+            handleAt: profile.handle_at ?? null,
+            handleHash: profile.handle_hash ?? null,
         }));
     } catch (error) {
         logger.error('Error fetching registered users:', error);
@@ -323,6 +336,8 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
             isOnline: data.is_online,
             lastSeen: new Date(data.last_seen).getTime(),
             avatarUrl: data.avatar_url,
+            handleAt: data.handle_at ?? null,
+            handleHash: data.handle_hash ?? null,
         };
     } catch (error) {
         logger.error('Error fetching user profile:', error);
@@ -404,6 +419,14 @@ export const sendMessage = async (
                 messageData.attachment_duration = attachment.duration;
                 messageData.attachment_width = attachment.width;
                 messageData.attachment_height = attachment.height;
+                // Location-specific fields
+                messageData.attachment_latitude = attachment.latitude;
+                messageData.attachment_longitude = attachment.longitude;
+                messageData.attachment_location_label = attachment.locationLabel;
+                messageData.attachment_live_share_id = attachment.liveShareId;
+                messageData.attachment_live_expires_at = attachment.liveExpiresAt
+                    ? new Date(attachment.liveExpiresAt).toISOString()
+                    : null;
             }
             
             const { data, error } = await supabase
@@ -448,6 +471,13 @@ export const sendMessage = async (
                 duration: result.attachment_duration,
                 width: result.attachment_width,
                 height: result.attachment_height,
+                latitude: result.attachment_latitude ?? undefined,
+                longitude: result.attachment_longitude ?? undefined,
+                locationLabel: result.attachment_location_label ?? undefined,
+                liveShareId: result.attachment_live_share_id ?? undefined,
+                liveExpiresAt: result.attachment_live_expires_at
+                    ? new Date(result.attachment_live_expires_at).getTime()
+                    : undefined,
             } : undefined,
         };
     } catch (error: any) {
@@ -534,6 +564,13 @@ export const getMessages = async (
                 name: msg.attachment_name,
                 size: msg.attachment_size,
                 mimeType: msg.attachment_mime_type,
+                latitude: msg.attachment_latitude ?? undefined,
+                longitude: msg.attachment_longitude ?? undefined,
+                locationLabel: msg.attachment_location_label ?? undefined,
+                liveShareId: msg.attachment_live_share_id ?? undefined,
+                liveExpiresAt: msg.attachment_live_expires_at
+                    ? new Date(msg.attachment_live_expires_at).getTime()
+                    : undefined,
                 thumbnailUrl: msg.attachment_thumbnail_url,
                 duration: msg.attachment_duration,
                 width: msg.attachment_width,
@@ -624,6 +661,13 @@ export const subscribeToMessages = (
                     name: data.attachment_name,
                     size: data.attachment_size,
                     mimeType: data.attachment_mime_type,
+                    latitude: data.attachment_latitude ?? undefined,
+                    longitude: data.attachment_longitude ?? undefined,
+                    locationLabel: data.attachment_location_label ?? undefined,
+                    liveShareId: data.attachment_live_share_id ?? undefined,
+                    liveExpiresAt: data.attachment_live_expires_at
+                        ? new Date(data.attachment_live_expires_at).getTime()
+                        : undefined,
                     thumbnailUrl: data.attachment_thumbnail_url,
                     duration: data.attachment_duration,
                     width: data.attachment_width,

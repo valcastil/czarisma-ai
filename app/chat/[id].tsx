@@ -4,6 +4,11 @@ import { CharismaAttachmentModal } from '@/components/messages/charisma-attachme
 import { ColorPickerModal } from '@/components/messages/color-picker-modal';
 import { EmojiPickerModal } from '@/components/messages/emoji-picker-modal';
 import { ForwardModal } from '@/components/messages/forward-modal';
+import { LocationPickerModal, LocationSendPayload } from '@/components/messages/location-picker-modal';
+import {
+    beginLiveLocationWatcher,
+    createLiveLocationRow,
+} from '@/lib/location-service';
 import { CharismaEntriesPreview } from '@/components/profile/charisma-entries-preview';
 import { FollowButton } from '@/components/profile/follow-button';
 import { SocialLinksDisplay } from '@/components/profile/social-links-display';
@@ -73,6 +78,10 @@ export default function ChatScreen() {
   const [showMediaAttachmentModal, setShowMediaAttachmentModal] = useState(false);
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const [showCharismaModal, setShowCharismaModal] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [activeLiveShare, setActiveLiveShare] = useState<{ id: string; expiresAt: number } | null>(null);
+  const liveShareStopRef = useRef<null | (() => Promise<void>)>(null);
+  const [liveCountdownNow, setLiveCountdownNow] = useState<number>(Date.now());
   const [pendingAttachment, setPendingAttachment] = useState<Attachment | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -124,6 +133,12 @@ export default function ChatScreen() {
 
     // Subscribe to real-time messages
     const unsubscribe = subscribeToMessages(id, (newMessage) => {
+      // Validate message before processing
+      if (!newMessage || !newMessage.id) {
+        console.warn('Received invalid message:', newMessage);
+        return;
+      }
+      
       // Enrich with sender/receiver names from local state (realtime skips the join)
       const cu = currentUserRef.current;
       const ou = otherUserRef.current;
@@ -134,13 +149,27 @@ export default function ChatScreen() {
         receiverName: newMessage.receiverName || (newMessage.isFromCurrentUser ? ou?.name : cu?.name) || '',
         receiverUsername: newMessage.receiverUsername || (newMessage.isFromCurrentUser ? ou?.username : cu?.username) || '',
       };
+      
       setMessages(prev => {
-        const exists = prev.some(m => m.id === enriched.id);
-        if (!exists) {
-          return [...prev, enriched];
+        // Use a Map to ensure uniqueness and better performance
+        const messageMap = new Map(prev.map(m => [m.id, m]));
+        const existing = messageMap.get(enriched.id);
+        
+        if (!existing) {
+          // Add new message
+          messageMap.set(enriched.id, enriched);
+          return Array.from(messageMap.values());
         }
-        // Update existing message (for reactions / read status)
-        return prev.map(m => m.id === enriched.id ? enriched : m);
+        
+        // Update existing message if it's newer (for reactions / read status)
+        if (enriched.timestamp > existing.timestamp || 
+            enriched.reactions?.length !== existing.reactions?.length ||
+            enriched.isRead !== existing.isRead) {
+          messageMap.set(enriched.id, enriched);
+          return Array.from(messageMap.values());
+        }
+        
+        return prev; // No update needed
       });
     });
 
@@ -259,6 +288,8 @@ export default function ChatScreen() {
           avatarUrl: otherUserData.avatarUrl,
           isOnline: otherUserData.isOnline,
           lastSeen: otherUserData.lastSeen,
+          handleAt: otherUserData.handleAt ?? null,
+          handleHash: otherUserData.handleHash ?? null,
         });
         // Set profile photo from Supabase avatar (prefer fetched data over passed params)
         if (otherUserData.avatarUrl) {
@@ -297,11 +328,19 @@ export default function ChatScreen() {
   const loadMessages = async () => {
     try {
       const chatMessages = await getMessages(id);
-      setMessages(chatMessages);
+      // Validate and filter messages
+      const validMessages = chatMessages.filter(msg => msg && msg.id);
+      // Remove duplicates using Map
+      const uniqueMessages = Array.from(new Map(validMessages.map(m => [m.id, m])).values());
+      // Sort by timestamp to ensure correct order
+      uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
+      
+      setMessages(uniqueMessages);
       // Initial page of 50 — if we got fewer, no more pages exist.
-      setHasMoreMessages(chatMessages.length >= 50);
+      setHasMoreMessages(uniqueMessages.length >= 50);
     } catch (error) {
       console.error('Error loading messages:', error);
+      setMessages([]);
     }
   };
 
@@ -322,9 +361,26 @@ export default function ChatScreen() {
         limit: 50,
         beforeTimestamp: new Date(oldest.timestamp).toISOString(),
       });
-      if (older.length < 50) setHasMoreMessages(false);
-      if (older.length > 0) {
-        setMessages(prev => [...older, ...prev]);
+      
+      // Validate and filter older messages
+      const validOlder = older.filter(msg => msg && msg.id);
+      if (validOlder.length < 50) setHasMoreMessages(false);
+      
+      if (validOlder.length > 0) {
+        setMessages(prev => {
+          // Create a Map to ensure uniqueness across all messages
+          const messageMap = new Map(prev.map(m => [m.id, m]));
+          // Add only new older messages
+          validOlder.forEach(msg => {
+            if (!messageMap.has(msg.id)) {
+              messageMap.set(msg.id, msg);
+            }
+          });
+          // Convert back to array and sort by timestamp
+          const allMessages = Array.from(messageMap.values());
+          allMessages.sort((a, b) => a.timestamp - b.timestamp);
+          return allMessages;
+        });
       }
     } catch (err) {
       console.error('Error loading older messages:', err);
@@ -452,6 +508,116 @@ export default function ChatScreen() {
     // Close the attachment modal
     setShowCharismaModal(false);
   };
+
+  // ---------- Location sharing ----------
+
+  const handleSendLocation = async (payload: LocationSendPayload) => {
+    if (!currentUser) return;
+    try {
+      if (payload.kind === 'snapshot') {
+        const attachment: Attachment = {
+          type: 'location',
+          url: `geo:${payload.latitude},${payload.longitude}`,
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          locationLabel: payload.label,
+        };
+        const msg = await sendMessage(
+          otherUser.id,
+          otherUser.username,
+          otherUser.name,
+          '',
+          attachment,
+        );
+        setMessages((prev) => [...prev, msg]);
+        await updateConversation(msg);
+        return;
+      }
+
+      // Live share: send message first (to get message_id), then create live row,
+      // then update the message's attachment_live_share_id and begin the watcher.
+      const expiresAtMs = Date.now() + payload.durationSec * 1000;
+      const liveAttachment: Attachment = {
+        type: 'location',
+        url: `geo:${payload.initial.latitude},${payload.initial.longitude}`,
+        latitude: payload.initial.latitude,
+        longitude: payload.initial.longitude,
+        locationLabel: payload.label,
+        liveExpiresAt: expiresAtMs,
+      };
+      const msg = await sendMessage(
+        otherUser.id,
+        otherUser.username,
+        otherUser.name,
+        '',
+        liveAttachment,
+      );
+
+      const liveId = await createLiveLocationRow({
+        messageId: msg.id,
+        sharerId: currentUser.id,
+        durationSec: payload.durationSec,
+        initial: payload.initial,
+      });
+      if (!liveId) {
+        Alert.alert('Error', 'Could not start live location.');
+        setMessages((prev) => [...prev, msg]);
+        return;
+      }
+
+      // Patch the message row to reference the live share.
+      await supabase
+        .from('messages')
+        .update({ attachment_live_share_id: liveId })
+        .eq('id', msg.id);
+
+      // Begin foreground watcher.
+      const stopFn = await beginLiveLocationWatcher(liveId, expiresAtMs);
+      liveShareStopRef.current = stopFn;
+      setActiveLiveShare({ id: liveId, expiresAt: expiresAtMs });
+
+      // Patch the local message object so the UI renders the live card immediately.
+      const patched = { ...msg, attachment: { ...msg.attachment!, liveShareId: liveId } };
+      setMessages((prev) => [...prev, patched]);
+      await updateConversation(patched);
+    } catch (e) {
+      console.error('handleSendLocation failed:', e);
+      Alert.alert('Error', 'Failed to share location.');
+    }
+  };
+
+  const handleStopLiveShare = async () => {
+    if (liveShareStopRef.current) {
+      await liveShareStopRef.current();
+      liveShareStopRef.current = null;
+    }
+    setActiveLiveShare(null);
+  };
+
+  // Stop watcher on unmount, tick countdown, auto-expire when reached.
+  useEffect(() => {
+    if (!activeLiveShare) return;
+    const tick = setInterval(() => setLiveCountdownNow(Date.now()), 30_000);
+    return () => clearInterval(tick);
+  }, [activeLiveShare]);
+
+  useEffect(() => {
+    if (!activeLiveShare) return;
+    if (liveCountdownNow >= activeLiveShare.expiresAt) {
+      handleStopLiveShare();
+    }
+  }, [liveCountdownNow, activeLiveShare]);
+
+  useEffect(() => {
+    return () => {
+      // On unmount, stop any active watcher (does not cancel the share server-side
+      // if the user just backgrounds the screen — explicit stop is required via the banner).
+      if (liveShareStopRef.current) {
+        liveShareStopRef.current().catch(() => {});
+        liveShareStopRef.current = null;
+      }
+    };
+  }, []);
 
   const handleForwardMessage = async (recipientId: string, recipientUsername: string, recipientName: string) => {
     if (!messageToForward || !currentUser) return;
@@ -788,6 +954,12 @@ export default function ChatScreen() {
   };
 
   const renderMessageItem = ({ item, index }: { item: Message; index: number }) => {
+    // Safety check for invalid message data
+    if (!item || !item.id) {
+      console.warn('Invalid message item in renderMessageItem:', item);
+      return null;
+    }
+    
     // Date separator: show above the first message of each date group
     // In inverted list, index+1 is the visually-above (older) item
     const nextItem = reversedMessages[index + 1];
@@ -814,10 +986,11 @@ export default function ChatScreen() {
       const elements: React.ReactElement[] = [];
 
       lines.forEach((line, index) => {
+        const uniqueKey = `${item.id}-line-${index}`;
         if (line.startsWith('**') && line.endsWith('**')) {
           // Charisma name (bold)
           elements.push(
-            <Text key={index} style={[
+            <Text key={uniqueKey} style={[
               styles.charismaName,
               { color: isFromCurrentUser ? messageTextColor : receivedMessageTextColor }
             ]}>
@@ -827,7 +1000,7 @@ export default function ChatScreen() {
         } else if (line.startsWith('*') && line.endsWith('*')) {
           // Sub charisma (italic)
           elements.push(
-            <Text key={index} style={[
+            <Text key={uniqueKey} style={[
               styles.subCharisma,
               { color: isFromCurrentUser ? messageTextColor : receivedMessageTextColor }
             ]}>
@@ -838,7 +1011,7 @@ export default function ChatScreen() {
           // Emotions line
           const emotionText = line.replace('Emotions: ', '');
           elements.push(
-            <View key={index} style={styles.emotionsContainer}>
+            <View key={uniqueKey} style={styles.emotionsContainer}>
               <Text style={[
                 styles.emotionsLabel,
                 { color: isFromCurrentUser ? messageTextColor : receivedMessageTextColor }
@@ -852,11 +1025,11 @@ export default function ChatScreen() {
           );
         } else if (line.trim() === '') {
           // Empty line
-          elements.push(<View key={index} style={styles.emptyLine} />);
+          elements.push(<View key={uniqueKey} style={styles.emptyLine} />);
         } else {
           // Regular text (notes)
           elements.push(
-            <Text key={index} style={[
+            <Text key={uniqueKey} style={[
               styles.messageText,
               { color: isFromCurrentUser ? messageTextColor : receivedMessageTextColor }
             ]}>
@@ -991,7 +1164,7 @@ export default function ChatScreen() {
           {item.reactions && item.reactions.length > 0 && (
             <View style={styles.reactionsDisplay}>
               {item.reactions.map((emoji, index) => (
-                <View key={index} style={[styles.reactionBadge, { backgroundColor: colors.card }]}>
+                <View key={`${item.id}-reaction-${index}-${emoji}`} style={[styles.reactionBadge, { backgroundColor: colors.card }]}>
                   <Text style={styles.reactionBadgeEmoji}>{emoji}</Text>
                 </View>
               ))}
@@ -1031,7 +1204,7 @@ export default function ChatScreen() {
           >
             {quickReactions.map((emoji, index) => (
               <TouchableOpacity
-                key={index}
+                key={`${item.id}-picker-${index}-${emoji}`}
                 style={styles.reactionButton}
                 onPress={() => {
                   console.log('Reaction tapped:', emoji, 'for message:', item.id);
@@ -1108,7 +1281,7 @@ export default function ChatScreen() {
           </Text>
           <View style={styles.headerStatusRow}>
             <Text style={[styles.headerUsername, { color: colors.textSecondary }]}>
-              @{otherUser.username}
+              {otherUser.handleAt ? `@${otherUser.handleAt}` : otherUser.handleHash ? `#${otherUser.handleHash}` : `@${otherUser.username}`}
             </Text>
             {canChat && (
               <View style={[styles.subscriptionBadge, { backgroundColor: 'rgba(52, 199, 89, 0.2)' }]}>
@@ -1134,6 +1307,25 @@ export default function ChatScreen() {
         </View>
       </View>
 
+      {/* Active live-location banner */}
+      {activeLiveShare && (
+        <View style={styles.liveShareBanner}>
+          <View style={styles.liveSharePulse} />
+          <Text style={styles.liveShareText} numberOfLines={1}>
+            Sharing live location
+            {(() => {
+              const left = activeLiveShare.expiresAt - liveCountdownNow;
+              if (left <= 0) return ' · ending…';
+              const mins = Math.ceil(left / 60_000);
+              return mins < 60 ? ` · ${mins} min left` : ` · ${Math.floor(mins / 60)}h ${mins % 60}m left`;
+            })()}
+          </Text>
+          <TouchableOpacity onPress={handleStopLiveShare} style={styles.liveShareStopBtn}>
+            <Text style={styles.liveShareStopText}>Stop</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Messages area with background */}
       <WhatsAppBackground>
         {/* Messages List */}
@@ -1141,19 +1333,24 @@ export default function ChatScreen() {
           ref={flatListRef}
           data={reversedMessages}
           renderItem={renderMessageItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           inverted
           onEndReached={loadOlderMessages}
           onEndReachedThreshold={0.5}
+          removeClippedSubviews={false}
+          maxToRenderPerBatch={5}
+          updateCellsBatchingPeriod={100}
+          initialNumToRender={10}
+          windowSize={21}
           ListFooterComponent={loadingOlder ? (
-            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+            <View key="loading-footer" style={{ paddingVertical: 16, alignItems: 'center' }}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
             </View>
           ) : null}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
+            <View key="empty-state" style={styles.emptyState}>
               <IconSymbol size={64} name="message" color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No messages yet
@@ -1233,6 +1430,10 @@ export default function ChatScreen() {
             setShowMediaAttachmentModal(false);
             setShowCharismaModal(true);
           }}
+          onAttachLocation={() => {
+            setShowMediaAttachmentModal(false);
+            setShowLocationPicker(true);
+          }}
         />
 
         {/* Charisma Attachment Modal */}
@@ -1240,6 +1441,13 @@ export default function ChatScreen() {
           visible={showCharismaModal}
           onClose={() => setShowCharismaModal(false)}
           onAttach={handleAttachCharisma}
+        />
+
+        {/* Location Picker Modal */}
+        <LocationPickerModal
+          visible={showLocationPicker}
+          onClose={() => setShowLocationPicker(false)}
+          onSend={handleSendLocation}
         />
 
         {/* Forward Modal */}
@@ -1406,7 +1614,7 @@ export default function ChatScreen() {
                       {otherUser.name}
                     </Text>
                     <Text style={[styles.profileUsername, { color: colors.textSecondary }]}>
-                      @{otherUser.username}
+                      {otherUser.handleAt ? `@${otherUser.handleAt}` : otherUser.handleHash ? `#${otherUser.handleHash}` : `@${otherUser.username}`}
                     </Text>
 
                     {/* Follow Button */}
@@ -1640,7 +1848,7 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   messageBubbleWrapper: {
-    maxWidth: '80%',
+    maxWidth: '85%',
     position: 'relative',
     zIndex: 1,
     overflow: 'visible',
@@ -1651,6 +1859,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     minHeight: 60,
+    paddingRight: 28,
   },
   messageContent: {
     flexDirection: 'row',
@@ -2044,8 +2253,8 @@ const styles = StyleSheet.create({
   },
   messageMenuButton: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 8,
+    right: 6,
     padding: 4,
   },
   messageActions: {
@@ -2130,5 +2339,36 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
     marginLeft: 'auto',
+  },
+  liveShareBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#E74C3C',
+  },
+  liveSharePulse: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#fff',
+  },
+  liveShareText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  liveShareStopBtn: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  liveShareStopText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

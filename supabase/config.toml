@@ -198,7 +198,7 @@ sender_name = "Charisma Tracker"
 # Magic Link / OTP email template (sends 6-digit code via {{ .Token }})
 [auth.email.template.magic_link]
 subject = "Your Charisma verification code"
-content_path = "./templates/magic_link.html"
+content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

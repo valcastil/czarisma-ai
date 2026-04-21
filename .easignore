@@ -49,6 +49,7 @@ app-example
 
 # Sensitive credentials
 credentials.json
+credentials/
 supabase/.env
 supabase/.env.local
 

@@ -11,9 +11,10 @@ interface AttachmentModalProps {
   onClose: () => void;
   onAttachMedia: (attachment: Attachment) => void;
   onAttachCharisma?: () => void;
+  onAttachLocation?: () => void;
 }
 
-export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachCharisma }: AttachmentModalProps) {
+export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachCharisma, onAttachLocation }: AttachmentModalProps) {
   const { colors } = useTheme();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -132,6 +133,19 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
       onPress: handlePickDocument,
     },
   ];
+
+  if (onAttachLocation) {
+    attachmentOptions.push({
+      id: 'location',
+      icon: 'location.fill',
+      label: 'Location',
+      color: '#3B82F6',
+      onPress: () => {
+        onClose();
+        onAttachLocation();
+      },
+    });
+  }
 
   if (onAttachCharisma) {
     attachmentOptions.push({

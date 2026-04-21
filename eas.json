@@ -35,7 +35,20 @@
         "withoutCredentials": false
       },
       "env": {
-        "APP_VARIANT": "preview"
+        "APP_VARIANT": "preview",
+        "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "$EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "$EXPO_PUBLIC_GEMINI_API_KEY",
+        "EXPO_PUBLIC_VEXO_API_KEY": "$EXPO_PUBLIC_VEXO_API_KEY",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "$EXPO_PUBLIC_REVENUECAT_IOS_KEY",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "$EXPO_PUBLIC_REVENUECAT_ANDROID_KEY",
+        "EXPO_PUBLIC_ELEVENLABS_API_KEY": "$EXPO_PUBLIC_ELEVENLABS_API_KEY",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "$EXPO_PUBLIC_GOOGLE_CLIENT_ID",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_SECRET": "$EXPO_PUBLIC_GOOGLE_CLIENT_SECRET",
+        "EXPO_PUBLIC_SMTP_USER": "$EXPO_PUBLIC_SMTP_USER",
+        "EXPO_PUBLIC_SMTP_PASS": "$EXPO_PUBLIC_SMTP_PASS",
+        "EXPO_PUBLIC_SMTP_ADMIN_EMAIL": "$EXPO_PUBLIC_SMTP_ADMIN_EMAIL"
       }
     },
     "production": {
@@ -50,7 +63,20 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "APP_VARIANT": "production"
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "$EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "$EXPO_PUBLIC_GEMINI_API_KEY",
+        "EXPO_PUBLIC_VEXO_API_KEY": "$EXPO_PUBLIC_VEXO_API_KEY",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "$EXPO_PUBLIC_REVENUECAT_IOS_KEY",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "$EXPO_PUBLIC_REVENUECAT_ANDROID_KEY",
+        "EXPO_PUBLIC_ELEVENLABS_API_KEY": "$EXPO_PUBLIC_ELEVENLABS_API_KEY",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "$EXPO_PUBLIC_GOOGLE_CLIENT_ID",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_SECRET": "$EXPO_PUBLIC_GOOGLE_CLIENT_SECRET",
+        "EXPO_PUBLIC_SMTP_USER": "$EXPO_PUBLIC_SMTP_USER",
+        "EXPO_PUBLIC_SMTP_PASS": "$EXPO_PUBLIC_SMTP_PASS",
+        "EXPO_PUBLIC_SMTP_ADMIN_EMAIL": "$EXPO_PUBLIC_SMTP_ADMIN_EMAIL"
       }
     },
     "production-apk": {
@@ -70,14 +96,14 @@
         "sku": "charisma-chat-ios"
       },
       "android": {
-        "serviceAccountKeyPath": "./path/to/api-key.json",
+        "serviceAccountKeyPath": "./credentials/play-store-service-account.json",
         "track": "production",
         "releaseStatus": "completed"
       }
     },
     "preview": {
       "android": {
-        "serviceAccountKeyPath": "./path/to/api-key.json",
+        "serviceAccountKeyPath": "./credentials/play-store-service-account.json",
         "track": "internal"
       }
     }

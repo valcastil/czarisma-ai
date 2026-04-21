@@ -8,6 +8,12 @@ export interface Attachment {
   duration?: number;
   width?: number;
   height?: number;
+  // Location-only fields
+  latitude?: number;
+  longitude?: number;
+  locationLabel?: string;  // reverse-geocoded address or place name
+  liveShareId?: string;    // references live_locations.id when this is a live share
+  liveExpiresAt?: number;  // epoch ms; when the live share ends
 }
 
 export interface ForwardMetadata {
@@ -67,6 +73,8 @@ export interface User {
   isOnline?: boolean;
   lastSeen?: number;
   avatarUrl?: string;
+  handleAt?: string | null;
+  handleHash?: string | null;
 }
 
 export interface ForwardRecipient {

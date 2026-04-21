@@ -141,8 +141,22 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Security</Text>
-          
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { backgroundColor: colors.card }]}
+            onPress={() => router.push({ pathname: '/claim-handle', params: { mode: 'edit' } })}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                Handles
+              </Text>
+              <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
+                Manage your @ and # usernames
+              </Text>
+            </View>
+            <IconSymbol size={20} name="chevron.right" color={colors.textSecondary} />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.settingItem, { backgroundColor: colors.card }]}
             onPress={() => router.push('/change-password')}>

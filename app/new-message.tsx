@@ -268,7 +268,7 @@ export default function NewMessageScreen() {
           {currentUser && item.id === currentUser.id ? `${item.name} (You)` : item.name}
         </Text>
         <Text style={[styles.userUsername, { color: colors.textSecondary }]}>
-          @{item.username}
+          {item.handleAt ? `@${item.handleAt}` : item.handleHash ? `#${item.handleHash}` : `@${item.username}`}
         </Text>
         <Text style={[styles.userStatus, { color: colors.textSecondary }]}>
           {item.isOnline ? 'Active now' : formatLastSeen(item.lastSeen)}
@@ -344,7 +344,7 @@ export default function NewMessageScreen() {
           <IconSymbol size={20} name="magnifyingglass" color={colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search users by name or username..."
+            placeholder="Search by name, @handle, or #handle..."
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}

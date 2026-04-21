@@ -12,9 +12,17 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "updates": {
+      "url": "https://u.expo.dev/41fc9874-9a30-4bf1-9523-383d1480ed52"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.aiagentmaker.charismachat",
+      "icon": "./assets/images/icon.png",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "config": {
+        "googleMapsApiKey": "AIzaSyAfG8QcFSZS465qDzQBLKyupeVGyvYX_dM"
+      },
       "buildNumber": "1",
       "associatedDomains": [
         "applinks:charismachat.app"
@@ -27,6 +35,8 @@
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to send and receive images and videos in messages.",
         "NSCameraUsageDescription": "This app needs access to your camera to take photos and videos for messages.",
         "NSPhotoLibraryAddUsageDescription": "This app needs permission to save photos and videos.",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to share it in chats.",
+        "NSUserTrackingUsageDescription": "This identifier is used to deliver personalized features and measure usage anonymously. You can opt out anytime.",
         "NSUserActivityTypes": [
           "NSUserActivityTypeBrowsingWeb"
         ],
@@ -44,6 +54,7 @@
       }
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/splash-icon-dark.png",
@@ -63,8 +74,15 @@
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_MEDIA_AUDIO"
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAfG8QcFSZS465qDzQBLKyupeVGyvYX_dM"
+        }
+      },
       "intentFilters": [
         {
           "action": "VIEW",
@@ -114,6 +132,12 @@
       ],
       "expo-image-picker",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to share it in chats."
+        }
+      ],
+      [
         "expo-media-library",
         {
           "photosPermission": "This app needs access to your photo library to save images and videos.",
@@ -142,9 +166,7 @@
         }
       ],
       "./plugins/withJetifier.js",
-      "expo-web-browser",
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

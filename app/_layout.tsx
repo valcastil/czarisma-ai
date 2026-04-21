@@ -132,10 +132,34 @@ function RootLayoutContent() {
       } else {
         // Signed in — check if 3-month trial expired and needs PRO
         await checkTrialExpirationAndRedirect(router);
+
+        // Force handle claim if the signed-in user hasn't set one yet.
+        await enforceHandleGate();
       }
     };
     checkAuthAndTrial();
+
+    // Re-check on every sign-in so users coming from /auth-sign-in are routed.
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        enforceHandleGate().catch((e) => console.warn('Handle gate check failed:', e));
+      }
+    });
+    return () => { authSub.subscription.unsubscribe(); };
   }, []);
+
+  // Gate helper: redirects signed-in users to /claim-handle when a required handle is missing.
+  const enforceHandleGate = async () => {
+    try {
+      const { fetchCurrentHandleState, needsHandleClaim } = await import('@/utils/handle-utils');
+      const handleState = await fetchCurrentHandleState();
+      if (handleState && needsHandleClaim(handleState)) {
+        router.replace('/claim-handle');
+      }
+    } catch (e) {
+      console.warn('Handle gate check failed:', e);
+    }
+  };
 
   const customDarkTheme = {
     ...DarkTheme,
@@ -168,6 +192,7 @@ function RootLayoutContent() {
           <Stack.Screen name="new-message" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="chat/[id]" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="search" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="claim-handle" options={{ gestureEnabled: false, animation: 'fade' }} />
           <Stack.Screen
             name="entry/[id]"
             options={{

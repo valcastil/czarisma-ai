@@ -2,7 +2,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Attachment } from '@/constants/message-types';
 import { useTheme } from '@/hooks/use-theme';
 import { MediaSharingService } from '@/lib/media-sharing-service';
-import React, { useState } from 'react';
+import {
+  fetchLiveLocationRow,
+  openInMapsUrl,
+  staticMapUrl,
+  subscribeToLiveLocation,
+} from '@/lib/location-service';
+import React, { useEffect, useState } from 'react';
 import { ActionSheetIOS, Alert, Image, Linking, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface AttachmentRendererProps {
@@ -206,7 +212,118 @@ export function AttachmentRenderer({ attachment, isFromCurrentUser }: Attachment
     );
   }
 
+  if (attachment.type === 'location') {
+    return <LocationAttachmentCard attachment={attachment} />;
+  }
+
   return null;
+}
+
+// ---------- Location card ----------
+
+function LocationAttachmentCard({ attachment }: { attachment: Attachment }) {
+  const { colors } = useTheme();
+  const isLive = !!attachment.liveShareId;
+  const [coords, setCoords] = useState<{ lat: number; lng: number }>({
+    lat: attachment.latitude ?? 0,
+    lng: attachment.longitude ?? 0,
+  });
+  const [active, setActive] = useState<boolean>(isLive);
+  const [now, setNow] = useState<number>(Date.now());
+
+  // Live share: fetch current row, subscribe to changes, tick countdown.
+  useEffect(() => {
+    if (!isLive || !attachment.liveShareId) return;
+    let cancelled = false;
+
+    (async () => {
+      const row = await fetchLiveLocationRow(attachment.liveShareId!);
+      if (!row || cancelled) return;
+      setCoords({ lat: row.latitude, lng: row.longitude });
+      const expired = row.stopped_at || Date.parse(row.expires_at) <= Date.now();
+      setActive(!expired);
+    })();
+
+    const unsub = subscribeToLiveLocation(attachment.liveShareId, (row) => {
+      setCoords({ lat: row.latitude, lng: row.longitude });
+      const expired = row.stopped_at || Date.parse(row.expires_at) <= Date.now();
+      setActive(!expired);
+    });
+
+    const tick = setInterval(() => setNow(Date.now()), 30_000);
+
+    return () => {
+      cancelled = true;
+      unsub();
+      clearInterval(tick);
+    };
+  }, [isLive, attachment.liveShareId]);
+
+  const lat = coords.lat;
+  const lng = coords.lng;
+
+  // Auto-expire client-side if past liveExpiresAt.
+  useEffect(() => {
+    if (!attachment.liveExpiresAt) return;
+    if (now >= attachment.liveExpiresAt) setActive(false);
+  }, [now, attachment.liveExpiresAt]);
+
+  const handleOpenMaps = async () => {
+    const url = openInMapsUrl(lat, lng, attachment.locationLabel);
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Error', 'Could not open Maps.');
+    }
+  };
+
+  const countdownText = (() => {
+    if (!attachment.liveExpiresAt) return null;
+    const msLeft = attachment.liveExpiresAt - now;
+    if (msLeft <= 0) return 'Ended';
+    const mins = Math.ceil(msLeft / 60_000);
+    if (mins < 60) return `${mins} min left`;
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem ? `${hrs}h ${rem}m left` : `${hrs}h left`;
+  })();
+
+  if (!lat && !lng) return null;
+
+  return (
+    <TouchableOpacity
+      onPress={handleOpenMaps}
+      activeOpacity={0.85}
+      style={[styles.locationContainer, { backgroundColor: colors.background }]}
+    >
+      <Image
+        source={{ uri: staticMapUrl(lat, lng, { width: 400, height: 220 }) }}
+        style={styles.locationMap}
+        resizeMode="cover"
+      />
+      {isLive && (
+        <View style={[styles.liveBadge, { backgroundColor: active ? '#E74C3C' : '#888' }]}>
+          {active && <View style={styles.livePulse} />}
+          <Text style={styles.liveBadgeText}>{active ? 'LIVE' : 'ENDED'}</Text>
+        </View>
+      )}
+      <View style={styles.locationInfo}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.locationLabel, { color: colors.text }]} numberOfLines={1}>
+            {attachment.locationLabel ?? 'Shared location'}
+          </Text>
+          <Text style={[styles.locationHint, { color: colors.textSecondary }]} numberOfLines={1}>
+            {isLive && active && countdownText
+              ? `Live · ${countdownText}`
+              : isLive
+                ? 'Live sharing ended'
+                : 'Tap to open in Maps'}
+          </Text>
+        </View>
+        <IconSymbol size={20} name="arrow.up.right" color={colors.gold} />
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -304,5 +421,53 @@ const styles = StyleSheet.create({
   },
   actionIcon: {
     padding: 8,
+  },
+  // Location card
+  locationContainer: {
+    width: 260,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  locationMap: {
+    width: '100%',
+    height: 140,
+  },
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  locationLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  locationHint: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  liveBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  livePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  liveBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });

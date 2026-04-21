@@ -50,6 +50,7 @@ app-example
 
 # Sensitive credentials - NEVER commit these!
 credentials.json
+credentials/
 supabase/.env
 supabase/.env.local
 

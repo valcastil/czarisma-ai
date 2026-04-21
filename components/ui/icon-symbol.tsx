@@ -106,6 +106,18 @@ const MAPPING = {
   'doc.text.fill': 'description',
   'tablecells.fill': 'table-chart',
   'chart.bar.doc.horizontal.fill': 'insert-chart',
+
+  // Location icons
+  'location': 'location-on',
+  'location.fill': 'location-on',
+  'location.slash': 'location-off',
+  'mappin': 'place',
+  'mappin.circle.fill': 'location-on',
+  'dot.radiowaves.left.and.right': 'sensors',
+
+  // Claim-handle icons
+  'lock': 'lock',
+  'clock': 'schedule',
 } as IconMapping;
 
 /**
