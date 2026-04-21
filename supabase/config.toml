@@ -369,3 +369,13 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# -----------------------------------------------------------------------------
+# Edge Functions
+# -----------------------------------------------------------------------------
+# The static-map function is a public image proxy used by <Image> tags in the
+# client, which cannot send Authorization headers. Disabling JWT verification
+# is safe here: the function only serves a Google Static Maps PNG, enforces
+# parameter bounds, and never exposes the Google API key.
+[functions.static-map]
+verify_jwt = false

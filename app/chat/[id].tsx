@@ -1821,6 +1821,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     flexDirection: 'row',
     alignItems: 'flex-end',
+    width: '100%',
   },
   messageLeft: {
     justifyContent: 'flex-start',
@@ -1849,6 +1850,7 @@ const styles = StyleSheet.create({
   },
   messageBubbleWrapper: {
     maxWidth: '85%',
+    flexShrink: 1,
     position: 'relative',
     zIndex: 1,
     overflow: 'visible',

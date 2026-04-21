@@ -139,7 +139,11 @@ export function staticMapUrl(
     return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${z}&size=${w}x${h}&markers=color:red%7C${lat},${lng}&key=${devKey}`;
   }
   const base = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  return `${base}/functions/v1/static-map?lat=${lat}&lng=${lng}&w=${w}&h=${h}&z=${z}`;
+  const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+  // Supabase Edge Functions require JWT auth, but <Image> cannot send headers.
+  // Passing the anon key via `apikey` query string is Supabase's documented fallback
+  // and is safe: the function itself enforces rate limits and never exposes the Google key.
+  return `${base}/functions/v1/static-map?lat=${lat}&lng=${lng}&w=${w}&h=${h}&z=${z}&apikey=${anon}`;
 }
 
 /** Deep-link URL to open native Maps app at a location. */
