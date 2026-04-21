@@ -57,10 +57,13 @@ export const getUserProfile = async (userId: string): Promise<User | null> => {
 };
 
 /**
- * Get all registered users (excluding current user)
+ * Get registered users (excluding current user).
+ * Paginated + server-side search — see SupabaseMessageService.getRegisteredUsers.
  */
-export const getRegisteredUsers = async (): Promise<User[]> => {
-  return await SupabaseMessageService.getRegisteredUsers();
+export const getRegisteredUsers = async (
+  options?: { search?: string; limit?: number }
+): Promise<User[]> => {
+  return await SupabaseMessageService.getRegisteredUsers(options);
 };
 
 /**
@@ -281,8 +284,12 @@ export const sendMessage = async (
 
 /**
  * Get messages between current user and another user
+ * Paginated — pass { beforeTimestamp } to load older pages.
  */
-export const getMessages = async (otherUserId: string): Promise<Message[]> => {
+export const getMessages = async (
+  otherUserId: string,
+  options?: { limit?: number; beforeTimestamp?: string }
+): Promise<Message[]> => {
   try {
     const me = await getCurrentUser();
     if (me && otherUserId === me.id) {
@@ -299,7 +306,7 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
       return [];
     }
 
-    const messages = await SupabaseMessageService.getMessages(otherUserId);
+    const messages = await SupabaseMessageService.getMessages(otherUserId, options);
 
     // Decrypt message content for display
     const decryptedMessages = messages.map(msg => ({
@@ -307,13 +314,15 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
       content: decryptMessage(msg.content)
     }));
 
-    // Mark unread messages as read
-    const unreadMessages = decryptedMessages.filter(
-      msg => !msg.isRead && !msg.isFromCurrentUser
-    );
+    // Only mark as read on the initial page load, not when paginating older.
+    if (!options?.beforeTimestamp) {
+      const unreadMessages = decryptedMessages.filter(
+        msg => !msg.isRead && !msg.isFromCurrentUser
+      );
 
-    if (unreadMessages.length > 0) {
-      await markMessagesAsRead(unreadMessages.map(msg => msg.id));
+      if (unreadMessages.length > 0) {
+        await markMessagesAsRead(unreadMessages.map(msg => msg.id));
+      }
     }
 
     return decryptedMessages;

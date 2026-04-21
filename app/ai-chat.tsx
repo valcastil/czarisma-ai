@@ -819,7 +819,7 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     messageBubble: {
-        maxWidth: '80%',
+        maxWidth: '85%',
         padding: 12,
         borderRadius: 16,
     },
@@ -830,10 +830,12 @@ const styles = StyleSheet.create({
     aiBubble: {
         alignSelf: 'flex-start',
         borderBottomLeftRadius: 4,
+        paddingRight: 28,
     },
     messageText: {
         fontSize: 16,
         lineHeight: 22,
+        paddingRight: 14,
     },
     messageActionBar: {
         flexDirection: 'row',
@@ -868,7 +870,7 @@ const styles = StyleSheet.create({
     messageBubbleMenuButton: {
         position: 'absolute',
         top: 8,
-        right: 8,
+        right: 6,
         padding: 4,
     },
     reactionPickerContainer: {

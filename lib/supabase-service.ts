@@ -107,11 +107,14 @@ export const createEntry = async (entry: CharismaEntry, userId: string) => {
 };
 
 export const getEntries = async (userId: string) => {
+  // Cap at 500 most recent entries — reasonable offline cache size.
+  // If a user needs older entries, they can be loaded on-demand with pagination.
   const { data, error } = await supabase
     .from('charisma_entries')
-    .select('*')
+    .select('id, major_charisma, sub_charisma, notes, timestamp, date, time, charisma_emoji, emotion_emojis')
     .eq('user_id', userId)
-    .order('timestamp', { ascending: false });
+    .order('timestamp', { ascending: false })
+    .limit(500);
 
   if (error) throw error;
   return data;

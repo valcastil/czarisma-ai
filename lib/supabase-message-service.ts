@@ -221,25 +221,42 @@ export const createOrUpdateProfile = async (
 };
 
 /**
- * Get all registered users (excluding current user)
+ * Get registered users (excluding current user).
+ * Paginated + server-side search. At scale, NEVER fetch all profiles.
+ * - Default limit: 50
+ * - `search`: when ≥2 chars, filters by name OR username via ILIKE.
  */
-export const getRegisteredUsers = async (): Promise<User[]> => {
+export const getRegisteredUsers = async (
+    options?: { search?: string; limit?: number }
+): Promise<User[]> => {
     try {
+        const { search, limit = 50 } = options || {};
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return [];
 
-        const { data, error } = await supabase
+        let q = supabase
             .from('profiles')
-            .select('*')
+            .select('id, username, name, avatar_url, is_online, last_seen')
             .neq('id', session.user.id)
-            .order('name');
+            .order('name')
+            .limit(limit);
+
+        const trimmed = search?.trim();
+        if (trimmed && trimmed.length >= 2) {
+            // Escape ILIKE special chars to prevent injection-like patterns.
+            const safe = trimmed.replace(/[%_\\]/g, (m) => `\\${m}`);
+            const pattern = `%${safe}%`;
+            q = q.or(`name.ilike.${pattern},username.ilike.${pattern}`);
+        }
+
+        const { data, error } = await q;
 
         if (error) {
             logger.error('Error fetching registered users:', error);
             throw error;
         }
 
-        return data.map(profile => ({
+        return (data ?? []).map(profile => ({
             id: profile.id,
             username: profile.username,
             name: profile.name,
@@ -450,9 +467,16 @@ export const sendMessage = async (
 
 /**
  * Get messages between current user and another user
+ * Paginated: returns the most recent `limit` messages (default 50).
+ * Pass `beforeTimestamp` (ISO string) to load older pages.
+ * Result is always in ascending (oldest → newest) order for the UI.
  */
-export const getMessages = async (otherUserId: string): Promise<Message[]> => {
+export const getMessages = async (
+    otherUserId: string,
+    options?: { limit?: number; beforeTimestamp?: string }
+): Promise<Message[]> => {
     try {
+        const { limit = 50, beforeTimestamp } = options || {};
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return [];
 
@@ -463,7 +487,7 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
             return [];
         }
 
-        const { data, error } = await supabase
+        let q = supabase
             .from('messages')
             .select(`
         *,
@@ -471,11 +495,21 @@ export const getMessages = async (otherUserId: string): Promise<Message[]> => {
         receiver:receiver_id(username, name)
       `)
             .or(`and(sender_id.eq.${session.user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${session.user.id})`)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (beforeTimestamp) {
+            q = q.lt('created_at', beforeTimestamp);
+        }
+
+        const { data, error } = await q;
 
         if (error) throw error;
 
-        return data.map(msg => ({
+        // Re-sort ascending (oldest first) for the UI, which expects chronological order.
+        const rows = (data ?? []).slice().reverse();
+
+        return rows.map(msg => ({
             id: msg.id,
             senderId: msg.sender_id,
             senderUsername: msg.sender.username,
@@ -549,73 +583,30 @@ export const subscribeToMessages = (
 
     const handleMessageChange = async (payload: any) => {
         try {
-            logger.info('Raw payload received:', { 
-                eventType: payload.eventType, 
-                messageId: payload.new?.id,
-                oldReactions: payload.old?.reactions,
-                newReactions: payload.new?.reactions
-            });
-
-            // Fetch the complete message with sender/receiver info
-            const { data, error } = await supabase
-                .from('messages')
-                .select(`
-            *,
-            sender:sender_id(username, name),
-            receiver:receiver_id(username, name)
-          `)
-                .eq('id', payload.new.id)
-                .single();
-
-            if (error) {
-                logger.error('Error fetching message:', error);
-                return;
-            }
-
-            if (!data) {
-                logger.warn('No data found for message:', payload.new.id);
-                return;
-            }
+            // Use payload.new directly — avoids an extra DB round-trip per realtime event.
+            // Sender/receiver names are left blank; the consumer (chat screen) already has
+            // both participants loaded in local state and enriches the message there.
+            const data = payload.new;
+            if (!data) return;
 
             const { data: { session } } = await supabase.auth.getSession();
             const userId = session?.user.id;
 
-            logger.info('Checking message relevance:', {
-                messageId: data.id,
-                senderId: data.sender_id,
-                receiverId: data.receiver_id,
-                otherUserId,
-                userId,
-                reactions: data.reactions
-            });
-
             // Only process messages that involve the current conversation
-            const isRelevantMessage = 
+            const isRelevantMessage =
                 (data.sender_id === otherUserId && data.receiver_id === userId) ||
                 (data.sender_id === userId && data.receiver_id === otherUserId);
 
-            if (!isRelevantMessage) {
-                logger.info('Message not relevant, skipping:', data.id);
-                return;
-            }
-
-            logger.info('Processing realtime message:', {
-                messageId: data.id,
-                from: data.sender_id,
-                to: data.receiver_id,
-                isFromOther: data.sender_id === otherUserId,
-                reactions: data.reactions,
-                eventType: payload.eventType
-            });
+            if (!isRelevantMessage) return;
 
             onNewMessage({
                 id: data.id,
                 senderId: data.sender_id,
-                senderUsername: data.sender.username,
-                senderName: data.sender.name,
+                senderUsername: '',
+                senderName: '',
                 receiverId: data.receiver_id,
-                receiverUsername: data.receiver.username,
-                receiverName: data.receiver.name,
+                receiverUsername: '',
+                receiverName: '',
                 content: decryptMessage(data.content),
                 timestamp: new Date(data.created_at).getTime(),
                 date: new Date(data.created_at).toLocaleDateString(),

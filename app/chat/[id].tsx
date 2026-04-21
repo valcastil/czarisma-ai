@@ -32,7 +32,7 @@ import {
 } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -97,9 +97,20 @@ export default function ChatScreen() {
   const [profileEntryCount, setProfileEntryCount] = useState(0);
   const [profileLoading, setProfileLoading] = useState(false);
 
+  // Message pagination state — chat loads newest 50 first, older pages on scroll.
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+
   const flatListRef = useRef<FlatList>(null);
 
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  // Refs for realtime enrichment — realtime payloads arrive without sender/receiver
+  // profile joins (N+1 fix), so we fill them in from already-loaded local state.
+  const currentUserRef = useRef(currentUser);
+  const otherUserRef = useRef(otherUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { otherUserRef.current = otherUser; }, [otherUser]);
 
     useEffect(() => {
     initializeChat().then(() => {
@@ -113,21 +124,23 @@ export default function ChatScreen() {
 
     // Subscribe to real-time messages
     const unsubscribe = subscribeToMessages(id, (newMessage) => {
-      console.log('Realtime message received:', {
-        messageId: newMessage.id,
-        reactions: newMessage.reactions,
-        content: newMessage.content?.substring(0, 50)
-      });
+      // Enrich with sender/receiver names from local state (realtime skips the join)
+      const cu = currentUserRef.current;
+      const ou = otherUserRef.current;
+      const enriched: Message = {
+        ...newMessage,
+        senderName: newMessage.senderName || (newMessage.isFromCurrentUser ? cu?.name : ou?.name) || '',
+        senderUsername: newMessage.senderUsername || (newMessage.isFromCurrentUser ? cu?.username : ou?.username) || '',
+        receiverName: newMessage.receiverName || (newMessage.isFromCurrentUser ? ou?.name : cu?.name) || '',
+        receiverUsername: newMessage.receiverUsername || (newMessage.isFromCurrentUser ? ou?.username : cu?.username) || '',
+      };
       setMessages(prev => {
-        // Check if message already exists
-        const exists = prev.some(m => m.id === newMessage.id);
+        const exists = prev.some(m => m.id === enriched.id);
         if (!exists) {
-          console.log('Adding new message to list:', newMessage.id);
-          return [...prev, newMessage];
+          return [...prev, enriched];
         }
-        // Update existing message (for reactions)
-        console.log('Updating existing message:', newMessage.id, 'reactions:', newMessage.reactions);
-        return prev.map(m => m.id === newMessage.id ? newMessage : m);
+        // Update existing message (for reactions / read status)
+        return prev.map(m => m.id === enriched.id ? enriched : m);
       });
     });
 
@@ -285,10 +298,40 @@ export default function ChatScreen() {
     try {
       const chatMessages = await getMessages(id);
       setMessages(chatMessages);
+      // Initial page of 50 — if we got fewer, no more pages exist.
+      setHasMoreMessages(chatMessages.length >= 50);
     } catch (error) {
       console.error('Error loading messages:', error);
     }
   };
+
+  /**
+   * Load an older page of messages using the oldest currently-loaded message
+   * as the cursor. Called from FlatList onEndReached (which, because the list
+   * is inverted, corresponds to scrolling up past the oldest message).
+   */
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingOlder || !hasMoreMessages) return;
+    if (messages.length === 0) return;
+    // messages[] is ascending, so [0] is the oldest we have.
+    const oldest = messages[0];
+    if (!oldest?.timestamp) return;
+    setLoadingOlder(true);
+    try {
+      const older = await getMessages(id, {
+        limit: 50,
+        beforeTimestamp: new Date(oldest.timestamp).toISOString(),
+      });
+      if (older.length < 50) setHasMoreMessages(false);
+      if (older.length > 0) {
+        setMessages(prev => [...older, ...prev]);
+      }
+    } catch (err) {
+      console.error('Error loading older messages:', err);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [id, messages, loadingOlder, hasMoreMessages]);
 
   const handleSendMessage = async (overrideText?: string) => {
     console.log('=== handleSendMessage called ===');
@@ -1102,6 +1145,13 @@ export default function ChatScreen() {
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           inverted
+          onEndReached={loadOlderMessages}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={loadingOlder ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            </View>
+          ) : null}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <IconSymbol size={64} name="message" color={colors.textSecondary} />

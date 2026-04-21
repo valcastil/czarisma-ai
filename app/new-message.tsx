@@ -42,15 +42,58 @@ export default function NewMessageScreen() {
     loadImportedContacts();
   }, []);
 
+  // Debounced server-side user search. Scalable to 1M users — never fetches
+  // the whole user base; each keystroke issues a capped ILIKE query.
   useEffect(() => {
-    filterUsers();
+    const trimmed = searchQuery.trim();
+    // Empty query → show the initial page (already in `users`) plus self.
+    if (!trimmed) {
+      setFilteredUsers(users);
+      return;
+    }
+    // Too short → local substring match on the currently loaded page only.
+    if (trimmed.length < 2) {
+      const q = trimmed.toLowerCase();
+      setFilteredUsers(
+        users.filter(u =>
+          u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q)
+        )
+      );
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const results = await getRegisteredUsers({ search: trimmed, limit: 50 });
+        // Always include self if the query matches.
+        const selfUser: User | null = currentUser
+          ? { ...currentUser, isOnline: true, lastSeen: Date.now() }
+          : null;
+        const selfMatches = selfUser &&
+          (selfUser.name.toLowerCase().includes(trimmed.toLowerCase()) ||
+           selfUser.username.toLowerCase().includes(trimmed.toLowerCase()));
+        const combined = [
+          ...(selfMatches ? [selfUser!] : []),
+          ...results,
+        ];
+        const unique = Array.from(new Map(combined.map(u => [u.id, u])).values());
+        setFilteredUsers(unique);
+      } catch (error) {
+        console.error('Search error:', error);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [searchQuery, users, currentUser]);
+
+  useEffect(() => {
     filterContacts();
-  }, [searchQuery, users, contacts]);
+  }, [searchQuery, contacts]);
 
   const loadUsers = async () => {
     try {
+      // Initial page: first 50 registered users (server-ordered by name) + self.
+      // Beyond this, use the search box — we never fetch the whole user base.
       const [registeredUsers, currentUserData] = await Promise.all([
-        getRegisteredUsers(),
+        getRegisteredUsers({ limit: 50 }),
         getCurrentUser(),
       ]);
 
@@ -64,46 +107,9 @@ export default function NewMessageScreen() {
         }
         : null;
 
-      // Keep other users as returned by the backend, but ensure the UI can start a self-chat.
-      const otherUsers = registeredUsers;
-
-      // Add temporary demo users for testing
-      const demoUsers: User[] = [
-        {
-          id: 'demo_pro_1',
-          username: 'sarah_pro',
-          name: 'Sarah Johnson (PRO)',
-          isOnline: true,
-          lastSeen: Date.now(),
-        },
-        {
-          id: 'demo_pro_2',
-          username: 'mike_premium',
-          name: 'Mike Chen (PRO)',
-          isOnline: false,
-          lastSeen: Date.now() - (2 * 60 * 60 * 1000), // 2 hours ago
-        },
-        {
-          id: 'demo_trial_1',
-          username: 'emma_trial',
-          name: 'Emma Davis (TRIAL)',
-          isOnline: true,
-          lastSeen: Date.now(),
-        },
-        {
-          id: 'demo_trial_2',
-          username: 'alex_trying',
-          name: 'Alex Martinez (TRIAL)',
-          isOnline: false,
-          lastSeen: Date.now() - (30 * 60 * 1000), // 30 minutes ago
-        },
-      ];
-
-      // Combine demo users with real users
       const allUsers = [
         ...(selfUser ? [selfUser] : []),
-        ...demoUsers,
-        ...otherUsers,
+        ...registeredUsers,
       ];
 
       const uniqueUsers = Array.from(
@@ -131,20 +137,6 @@ export default function NewMessageScreen() {
     } catch (error) {
       console.error('Error loading imported contacts:', error);
     }
-  };
-
-  const filterUsers = () => {
-    if (!searchQuery.trim()) {
-      setFilteredUsers(users);
-      return;
-    }
-
-    const query = searchQuery.toLowerCase();
-    const filtered = users.filter(user =>
-      user.name.toLowerCase().includes(query) ||
-      user.username.toLowerCase().includes(query)
-    );
-    setFilteredUsers(filtered);
   };
 
   const filterContacts = async () => {
