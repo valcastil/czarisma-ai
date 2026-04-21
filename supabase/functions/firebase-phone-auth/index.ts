@@ -222,10 +222,12 @@ serve(async (req) => {
     const firebaseProjectId = Deno.env.get('FIREBASE_PROJECT_ID')
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET')
+    const jwtSecret = Deno.env.get('JWT_SECRET')
 
-    if (!firebaseProjectId || !supabaseUrl || !supabaseServiceKey || !jwtSecret) {
-      throw new Error('Missing required environment variables')
+    // Core secrets required by every mode. JWT secret is only needed when we
+    // mint session tokens (signup / signin); `link` mode only updates a row.
+    if (!firebaseProjectId || !supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing required environment variables: FIREBASE_PROJECT_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY')
     }
 
     const { firebaseIdToken, mode, linkToUserId } = await req.json()
@@ -333,6 +335,13 @@ serve(async (req) => {
         .from('profiles')
         .update({ phone: phoneNumber })
         .eq('id', userId)
+    }
+
+    if (!jwtSecret) {
+      return new Response(
+        JSON.stringify({ error: 'Server not configured for phone signin/signup: JWT_SECRET is missing' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     // Generate Supabase JWT
