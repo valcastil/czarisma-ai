@@ -175,7 +175,8 @@
           }
         }
       ],
-      "./plugins/withNonModularHeaders.js"
+      "./plugins/withNonModularHeaders.js",
+      "./plugins/withGoogleMapsSubspec.js"
     ],
     "experiments": {
       "typedRoutes": true,
