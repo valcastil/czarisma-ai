@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { AppState } from 'react-native';
 import { getCurrentVoiceId } from './ai-voice';
 
@@ -20,7 +20,7 @@ const CACHE_INDEX_KEY = '@czar_audio_cache_index';
 const MAX_CACHED_AUDIO = 15; // Keep at most 15 cached audio clips (~3MB)
 
 // Active sound instance — keep ref so we can stop it
-let activeSound: Audio.Sound | null = null;
+let activeSound: AudioPlayer | null = null;
 
 // Stop audio whenever app goes to background (prevents Android freeze)
 AppState.addEventListener('change', (state) => {
@@ -48,8 +48,8 @@ const hashMessage = (text: string): string => {
 export const stopCzarVoice = async (): Promise<void> => {
   if (activeSound) {
     try {
-      await activeSound.stopAsync();
-      await activeSound.unloadAsync();
+      activeSound.pause();
+      activeSound.remove();
     } catch {
       // Ignore errors on stop
     }
@@ -89,7 +89,7 @@ const cacheAudioWithEviction = async (key: string, base64Audio: string): Promise
  * Speak a message using ElevenLabs TTS.
  * - Checks AsyncStorage cache first (keyed by message hash)
  * - On cache miss: fetches from ElevenLabs, caches the base64 result
- * - Plays audio via expo-av
+ * - Plays audio via expo-audio
  * Returns estimated duration in ms (for syncing mouth animation)
  */
 export const speakCzarMessage = async (message: string): Promise<number> => {
@@ -112,13 +112,12 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
 
   // Set audio mode for playback through speaker (critical for production builds)
   try {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      interruptionModeIOS: 1, // DoNotMix - allows TTS to work properly
-      playsInSilentModeIOS: true, // Critical: allows speech when device is on silent
-      shouldDuckAndroid: true,
-      interruptionModeAndroid: 2, // DoNotMix
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      allowsRecording: false,
+      interruptionMode: 'doNotMix',
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      shouldRouteThroughEarpiece: false,
     });
     console.log('CzarVoice: Audio session configured for playback');
   } catch (e) {
@@ -183,18 +182,18 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
     }
 
     // 4. Play audio from base64
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: `data:audio/mpeg;base64,${base64Audio}` },
-      { shouldPlay: true, volume: 1.0 }
-    );
+    const player = createAudioPlayer({ uri: `data:audio/mpeg;base64,${base64Audio}` });
+    player.volume = 1.0;
+    player.play();
 
-    activeSound = sound;
+    activeSound = player;
 
     // Cleanup sound after playback finishes
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-        if (activeSound === sound) {
+    const sub = player.addListener('playbackStatusUpdate', (status) => {
+      if (status.didJustFinish) {
+        try { player.remove(); } catch {}
+        try { sub.remove(); } catch {}
+        if (activeSound === player) {
           activeSound = null;
         }
       }

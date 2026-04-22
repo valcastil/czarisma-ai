@@ -1,6 +1,11 @@
-import { Audio } from 'expo-av';
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { supabase } from './supabase';
 
 export type VoiceInputState = 'idle' | 'recording' | 'transcribing' | 'error';
@@ -12,11 +17,11 @@ interface UseVoiceInputOptions {
 
 export function useVoiceInput({ onTranscribed, onError }: UseVoiceInputOptions) {
   const [state, setState] = useState<VoiceInputState>('idle');
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
-    const { status } = await Audio.requestPermissionsAsync();
-    if (status !== 'granted') {
+    const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+    if (!granted) {
       onError?.('Microphone permission denied');
       return false;
     }
@@ -30,16 +35,14 @@ export function useVoiceInput({ onTranscribed, onError }: UseVoiceInputOptions) 
     if (!hasPermission) return;
 
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      await recorder.prepareToRecordAsync();
+      recorder.record();
 
-      recordingRef.current = recording;
       setState('recording');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to start recording';
@@ -47,21 +50,18 @@ export function useVoiceInput({ onTranscribed, onError }: UseVoiceInputOptions) 
       onError?.(msg);
       setTimeout(() => setState('idle'), 2000);
     }
-  }, [state, requestPermission, onError]);
+  }, [state, requestPermission, onError, recorder]);
 
   const stopAndTranscribe = useCallback(async () => {
-    if (state !== 'recording' || !recordingRef.current) return;
+    if (state !== 'recording') return;
 
     setState('transcribing');
 
     try {
-      const recording = recordingRef.current;
-      recordingRef.current = null;
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
 
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-
-      const uri = recording.getURI();
+      const uri = recorder.uri;
       if (!uri) throw new Error('No recording URI found');
 
       // Read file as base64
@@ -88,18 +88,16 @@ export function useVoiceInput({ onTranscribed, onError }: UseVoiceInputOptions) 
       onError?.(msg);
       setTimeout(() => setState('idle'), 2000);
     }
-  }, [state, onTranscribed, onError]);
+  }, [state, onTranscribed, onError, recorder]);
 
   const cancelRecording = useCallback(async () => {
-    if (!recordingRef.current) return;
     try {
-      await recordingRef.current.stopAndUnloadAsync();
+      await recorder.stop();
     } catch {
       // ignore
     }
-    recordingRef.current = null;
     setState('idle');
-  }, []);
+  }, [recorder]);
 
   return {
     state,

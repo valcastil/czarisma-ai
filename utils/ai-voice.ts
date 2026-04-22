@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Speech from 'expo-speech';
 import { AppState } from 'react-native';
 
@@ -30,7 +30,7 @@ const CACHE_INDEX_KEY = '@ai_chat_audio_cache_index';
 const MAX_CACHED_AUDIO = 20;
 
 // Active sound instance
-let activeSound: Audio.Sound | null = null;
+let activeSound: AudioPlayer | null = null;
 
 // Stop audio when app goes to background
 AppState.addEventListener('change', (state) => {
@@ -86,8 +86,8 @@ export const stopAIVoice = async (): Promise<void> => {
   // Stop ElevenLabs audio
   if (activeSound) {
     try {
-      await activeSound.stopAsync();
-      await activeSound.unloadAsync();
+      activeSound.pause();
+      activeSound.remove();
     } catch {
       // Ignore errors
     }
@@ -171,13 +171,12 @@ export const speakAIMessage = async (message: string): Promise<void> => {
 
   // Configure audio session
   try {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      interruptionModeIOS: 1,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      interruptionModeAndroid: 2,
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      allowsRecording: false,
+      interruptionMode: 'doNotMix',
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      shouldRouteThroughEarpiece: false,
     });
   } catch (e) {
     console.error('AIVoice: Audio mode config failed', e);
@@ -240,18 +239,18 @@ export const speakAIMessage = async (message: string): Promise<void> => {
     }
 
     // Play audio
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: `data:audio/mpeg;base64,${base64Audio}` },
-      { shouldPlay: true, volume: 1.0 }
-    );
+    const player = createAudioPlayer({ uri: `data:audio/mpeg;base64,${base64Audio}` });
+    player.volume = 1.0;
+    player.play();
 
-    activeSound = sound;
+    activeSound = player;
 
     // Cleanup after playback
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-        if (activeSound === sound) {
+    const sub = player.addListener('playbackStatusUpdate', (status) => {
+      if (status.didJustFinish) {
+        try { player.remove(); } catch {}
+        try { sub.remove(); } catch {}
+        if (activeSound === player) {
           activeSound = null;
         }
       }

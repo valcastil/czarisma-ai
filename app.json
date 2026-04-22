@@ -125,7 +125,7 @@
       "@react-native-firebase/auth",
       "expo-router",
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to use your microphone for voice messages and speech-to-text."
         }
@@ -174,7 +174,8 @@
             "useFrameworks": "static"
           }
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
