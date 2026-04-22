@@ -236,28 +236,20 @@ export const getRegisteredUsers = async (
 
         let q = supabase
             .from('profiles')
-            .select('id, username, name, avatar_url, is_online, last_seen, handle_at, handle_hash')
+            .select('id, username, name, avatar_url, is_online, last_seen')
             .neq('id', session.user.id)
             .order('name')
             .limit(limit);
 
         const trimmed = search?.trim();
         if (trimmed && trimmed.length >= 2) {
-            // Prefix-aware search: '@foo' -> handle_at, '#foo' -> handle_hash, else name/username/both handles.
-            const first = trimmed[0];
-            const body = (first === '@' || first === '#') ? trimmed.slice(1) : trimmed;
+            const body = (trimmed[0] === '@' || trimmed[0] === '#') ? trimmed.slice(1) : trimmed;
             const safe = body.replace(/[%_\\]/g, (m) => `\\${m}`);
             const pattern = `%${safe}%`;
 
-            if (first === '@') {
-                q = q.ilike('handle_at', pattern);
-            } else if (first === '#') {
-                q = q.ilike('handle_hash', pattern);
-            } else {
-                q = q.or(
-                    `name.ilike.${pattern},username.ilike.${pattern},handle_at.ilike.${pattern},handle_hash.ilike.${pattern}`
-                );
-            }
+            q = q.or(
+                `name.ilike.${pattern},username.ilike.${pattern}`
+            );
         }
 
         const { data, error } = await q;
@@ -274,8 +266,8 @@ export const getRegisteredUsers = async (
             isOnline: profile.is_online,
             lastSeen: new Date(profile.last_seen).getTime(),
             avatarUrl: profile.avatar_url,
-            handleAt: profile.handle_at ?? null,
-            handleHash: profile.handle_hash ?? null,
+            handleAt: (profile as any).handle_at ?? null,
+            handleHash: (profile as any).handle_hash ?? null,
         }));
     } catch (error) {
         logger.error('Error fetching registered users:', error);
