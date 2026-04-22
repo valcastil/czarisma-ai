@@ -190,19 +190,10 @@ function RootLayoutContent() {
           <Stack.Screen name="edit-profile" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="change-password" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="new-message" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-          <Stack.Screen name="chat/[id]" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
+          <Stack.Screen name="chat" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="search" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="claim-handle" options={{ gestureEnabled: false, animation: 'fade' }} />
-          <Stack.Screen
-            name="entry/[id]"
-            options={{
-              headerShown: true,
-              title: 'Entry Details',
-              headerBackTitle: 'Back',
-              headerStyle: { backgroundColor: colors.background },
-              headerTintColor: colors.gold,
-            }}
-          />
+          <Stack.Screen name="entry" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="light" />
         {/* Intelligent Czar - appears after 20s of inactivity */}
