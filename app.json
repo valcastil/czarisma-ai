@@ -175,7 +175,7 @@
           }
         }
       ],
-      "expo-audio"
+      "./plugins/withNonModularHeaders.js"
     ],
     "experiments": {
       "typedRoutes": true,
