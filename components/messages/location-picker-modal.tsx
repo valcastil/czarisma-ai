@@ -11,7 +11,21 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+// react-native-maps requires native modules unavailable in Expo Go.
+// Lazy-import so the chat screen doesn't crash when running in Expo Go.
+let MapView: any = null;
+let Marker: any = null;
+let PROVIDER_GOOGLE: any = null;
+type Region = { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
+
+try {
+  const maps = require('react-native-maps');
+  MapView = maps.default ?? maps;
+  Marker = maps.Marker;
+  PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+} catch {
+  // Will remain null – components guard against this below
+}
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
@@ -351,6 +365,17 @@ function CurrentTab({
     );
   }
 
+  if (!MapView) {
+    return (
+      <View style={styles.centeredFill}>
+        <IconSymbol size={48} name="map" color={colors.textSecondary} />
+        <Text style={{ color: colors.textSecondary, marginTop: 12, textAlign: 'center', paddingHorizontal: 24 }}>
+          Maps require a development build.{"\n"}Use a dev build to access this feature.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <MapView
@@ -483,6 +508,15 @@ function MapTab({
     return (
       <View style={styles.centeredFill}>
         <ActivityIndicator size="large" color={colors.gold} />
+      </View>
+    );
+  }
+  if (!MapView) {
+    return (
+      <View style={styles.centeredFill}>
+        <Text style={{ color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 24 }}>
+          Maps require a development build.
+        </Text>
       </View>
     );
   }
