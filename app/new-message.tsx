@@ -10,6 +10,7 @@ import {
     ActivityIndicator,
     Alert,
     FlatList,
+    Image,
     StyleSheet,
     Text,
     TextInput,
@@ -253,11 +254,18 @@ export default function NewMessageScreen() {
       activeOpacity={0.7}>
 
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, { backgroundColor: colors.gold }]}>
-          <Text style={styles.avatarText}>
-            {item.name.charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        {item.avatarUrl ? (
+          <Image
+            source={{ uri: item.avatarUrl }}
+            style={styles.avatar}
+          />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: colors.gold, justifyContent: 'center', alignItems: 'center' }]}>
+            <Text style={styles.avatarText}>
+              {item.name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
         {item.isOnline && (
           <View style={[styles.onlineIndicator, { backgroundColor: '#34C759', borderColor: colors.background }]} />
         )}

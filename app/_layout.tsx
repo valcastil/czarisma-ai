@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeProvider } from '@/components/stripe-provider';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';

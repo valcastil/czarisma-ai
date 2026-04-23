@@ -789,18 +789,43 @@ export default function ChatScreen() {
     loadProfilePhoto();
     setShowProfile(true);
     setProfileLoading(true);
+    await loadProfileData({ includeFollowStatus: true });
+    setProfileLoading(false);
+  };
 
+  /**
+   * Loads (or reloads) the profile modal's gated data: bio, social links,
+   * charisma entries preview, entry count, and follow counts. Called on
+   * profile open AND after follow/unfollow so newly-unlocked sections
+   * (Charisma Entries, Social Links) populate immediately without needing
+   * to reopen the modal.
+   */
+  const loadProfileData = async (opts?: { includeFollowStatus?: boolean }) => {
     try {
-      // Load all profile data in parallel
-      const [fullProfile, followStatus, counts, entries, entryCount] = await Promise.all([
+      const tasks: Promise<any>[] = [
         getUserFullProfile(otherUser.id),
-        currentUser ? checkIsFollowing(currentUser.id, otherUser.id) : Promise.resolve(false),
         getFollowCounts(otherUser.id),
         getUserEntries(otherUser.id, 6),
         getUserEntryCount(otherUser.id),
-      ]);
+      ];
+      if (opts?.includeFollowStatus) {
+        tasks.push(
+          currentUser ? checkIsFollowing(currentUser.id, otherUser.id) : Promise.resolve(false)
+        );
+      }
 
-      setIsFollowingUser(followStatus);
+      const [fullProfile, counts, entries, entryCount, followStatus] = await Promise.all(tasks);
+
+      console.log('[loadProfileData] result', {
+        otherUserId: otherUser.id,
+        includeFollowStatus: !!opts?.includeFollowStatus,
+        followStatus,
+        entriesLen: Array.isArray(entries) ? entries.length : 'not-array',
+        entryCount,
+        socialLinksKeys: fullProfile?.social_links ? Object.keys(fullProfile.social_links) : null,
+        hasBio: !!fullProfile?.bio,
+      });
+
       setFollowCounts(counts);
       setProfileEntries(entries);
       setProfileEntryCount(entryCount);
@@ -809,10 +834,12 @@ export default function ChatScreen() {
         setProfileBio(fullProfile.bio || '');
         setProfileSocialLinks(fullProfile.social_links || {});
       }
+
+      if (opts?.includeFollowStatus) {
+        setIsFollowingUser(!!followStatus);
+      }
     } catch (error) {
       console.error('Error loading profile data:', error);
-    } finally {
-      setProfileLoading(false);
     }
   };
 
@@ -1625,11 +1652,16 @@ export default function ChatScreen() {
                           targetUserId={otherUser.id}
                           isFollowing={isFollowingUser}
                           onFollowChange={(following) => {
+                            // Optimistic UI flip so the lock/unlock shows instantly.
                             setIsFollowingUser(following);
                             setFollowCounts(prev => ({
                               followers: following ? prev.followers + 1 : Math.max(0, prev.followers - 1),
                               following: prev.following,
                             }));
+                            // Refetch gated sections so newly-unlocked Charisma
+                            // Entries + Social Links populate immediately (or
+                            // re-lock correctly after unfollow).
+                            loadProfileData();
                           }}
                         />
                       </View>
@@ -2041,9 +2073,9 @@ const styles = StyleSheet.create({
   },
   // Profile Modal Styles - WhatsApp Inspired
   profileContainer: {
-    margin: 0,
-    borderRadius: 0,
-    maxHeight: '90%',
+    width: '95%',
+    height: '92%',
+    borderRadius: 16,
     overflow: 'hidden',
   },
   profileHeader: {
