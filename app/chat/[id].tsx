@@ -11,6 +11,7 @@ import {
 } from '@/lib/location-service';
 import { CharismaEntriesPreview } from '@/components/profile/charisma-entries-preview';
 import { FollowButton } from '@/components/profile/follow-button';
+import { SharedLinksPreview } from '@/components/profile/shared-links-preview';
 import { SocialLinksDisplay } from '@/components/profile/social-links-display';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WhatsAppBackground } from '@/components/ui/whatsapp-background';
@@ -24,6 +25,7 @@ import {
     getUserEntries,
     getUserEntryCount,
     getUserFullProfile,
+    getUserSharedLinks,
     isFollowing as checkIsFollowing,
 } from '@/utils/follow-utils';
 import {
@@ -104,6 +106,7 @@ export default function ChatScreen() {
   const [profileBio, setProfileBio] = useState('');
   const [profileEntries, setProfileEntries] = useState<any[]>([]);
   const [profileEntryCount, setProfileEntryCount] = useState(0);
+  const [profileSharedLinks, setProfileSharedLinks] = useState<any[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
 
   // Message pagination state — chat loads newest 50 first, older pages on scroll.
@@ -807,6 +810,7 @@ export default function ChatScreen() {
         getFollowCounts(otherUser.id),
         getUserEntries(otherUser.id, 50),
         getUserEntryCount(otherUser.id),
+        getUserSharedLinks(otherUser.id, 50),
       ];
       if (opts?.includeFollowStatus) {
         tasks.push(
@@ -814,7 +818,7 @@ export default function ChatScreen() {
         );
       }
 
-      const [fullProfile, counts, entries, entryCount, followStatus] = await Promise.all(tasks);
+      const [fullProfile, counts, entries, entryCount, sharedLinks, followStatus] = await Promise.all(tasks);
 
       console.log('[loadProfileData] result', {
         otherUserId: otherUser.id,
@@ -829,6 +833,7 @@ export default function ChatScreen() {
       setFollowCounts(counts);
       setProfileEntries(entries);
       setProfileEntryCount(entryCount);
+      setProfileSharedLinks(sharedLinks || []);
 
       if (fullProfile) {
         setProfileBio(fullProfile.bio || '');
@@ -1706,15 +1711,33 @@ export default function ChatScreen() {
                     </View>
                   )}
 
-                  {/* Social Links Section */}
+                  {/* Social Handles Section (Instagram/TikTok/etc. usernames) */}
                   {Object.keys(profileSocialLinks).length > 0 && (
                     <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
                       <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                        Social Links
+                        Social Handles
                       </Text>
                       <SocialLinksDisplay socialLinks={profileSocialLinks} />
                     </View>
                   )}
+
+                  {/* Social Links (Shared Links feed) */}
+                  <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
+                    <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
+                      Social Links
+                    </Text>
+                    {profileLoading ? (
+                      <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color={colors.gold} />
+                      </View>
+                    ) : (
+                      <SharedLinksPreview
+                        links={profileSharedLinks}
+                        isFollowing={isFollowingUser}
+                        totalCount={profileSharedLinks.length}
+                      />
+                    )}
+                  </View>
 
                   {/* Charisma Collection Section */}
                   <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>

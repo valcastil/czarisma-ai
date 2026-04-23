@@ -2,6 +2,13 @@ import { SecureStorage } from '@/utils/secure-storage';
 
 const SHARED_LINKS_KEY = '@charisma_shared_links';
 
+// Lazy-require link-sync to avoid a circular import (link-sync imports from
+// this module). Resolved on first use.
+const lazyLinkSync = () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('@/utils/link-sync') as typeof import('@/utils/link-sync');
+};
+
 export type LinkPlatform = 'youtube' | 'instagram' | 'tiktok' | 'reels' | 'unknown';
 
 export interface SharedLink {
@@ -396,6 +403,8 @@ export const addSharedLink = async (url: string): Promise<SharedLink> => {
   const existing = await getSharedLinks();
   const updated = [link, ...existing];
   await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updated));
+  // Best-effort push to Supabase so followers see the link.
+  lazyLinkSync().syncLinkToSupabase(link).catch(() => {});
   return link;
 };
 
@@ -412,6 +421,11 @@ export const addMultipleLinks = async (urls: string[], onUpdated?: () => void): 
   const updated = [...newLinks, ...existing];
   await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updated));
 
+  // 2b. Best-effort Supabase sync for each new link so followers see them.
+  newLinks.forEach((link) => {
+    lazyLinkSync().syncLinkToSupabase(link).catch(() => {});
+  });
+
   // 3. Fetch titles in background — don't block the caller
   Promise.all(
     newLinks.map(async (link) => {
@@ -425,6 +439,8 @@ export const addMultipleLinks = async (urls: string[], onUpdated?: () => void): 
             if (meta.description) current[idx].description = meta.description;
             if (!link.thumbnail && meta.thumbnail) current[idx].thumbnail = meta.thumbnail;
             await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(current));
+            // Mirror the metadata update to Supabase.
+            lazyLinkSync().updateLinkOnSupabase(current[idx]).catch(() => {});
             onUpdated?.();
           }
         }
@@ -442,8 +458,12 @@ export const addMultipleLinks = async (urls: string[], onUpdated?: () => void): 
  */
 export const deleteSharedLink = async (linkId: string): Promise<void> => {
   const existing = await getSharedLinks();
+  const toDelete = existing.find((l) => l.id === linkId);
   const filtered = existing.filter((l) => l.id !== linkId);
   await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(filtered));
+  if (toDelete) {
+    lazyLinkSync().deleteLinkOnSupabase(toDelete).catch(() => {});
+  }
 };
 
 /**

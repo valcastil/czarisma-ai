@@ -158,6 +158,30 @@ export const getUserEntryCount = async (userId: string): Promise<number> => {
 };
 
 /**
+ * Get shared links (YouTube/TikTok/Instagram etc.) for a user's profile.
+ * Gated by Supabase RLS so only the owner and followers receive rows.
+ */
+export const getUserSharedLinks = async (userId: string, limit = 50) => {
+  try {
+    const { data, error } = await supabase
+      .from('shared_links')
+      .select('id, url, platform, title, description, thumbnail_url, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching shared links:', error);
+      return [];
+    }
+    return data ?? [];
+  } catch (err) {
+    console.error('getUserSharedLinks error:', err);
+    return [];
+  }
+};
+
+/**
  * Update social links for the current user's Supabase profile
  */
 export const updateSocialLinks = async (userId: string, socialLinks: Record<string, string>): Promise<boolean> => {

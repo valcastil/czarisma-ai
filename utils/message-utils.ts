@@ -15,6 +15,7 @@ import { getProfile } from '@/utils/profile-utils';
 import { isRateLimited, recordAttempt } from '@/utils/rate-limiter';
 import { SecureStorage } from '@/utils/secure-storage';
 import { backfillLocalEntriesToSupabase } from '@/utils/entry-sync';
+import { backfillLocalLinksToSupabase } from '@/utils/link-sync';
 
 const selfMessagesKey = (userId: string) => `@charisma_self_messages_${userId}`;
 
@@ -148,6 +149,13 @@ export const registerCurrentUser = async (): Promise<void> => {
         await backfillLocalEntriesToSupabase(currentUser.id);
       } catch (backfillErr) {
         logger.error('Entry backfill error:', backfillErr);
+      }
+
+      // Same one-time backfill for shared links.
+      try {
+        await backfillLocalLinksToSupabase(currentUser.id);
+      } catch (backfillErr) {
+        logger.error('Shared link backfill error:', backfillErr);
       }
     } catch (e) {
       logger.error('Failed to sync local profile to Supabase:', e);
