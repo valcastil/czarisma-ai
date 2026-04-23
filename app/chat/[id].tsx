@@ -805,7 +805,7 @@ export default function ChatScreen() {
       const tasks: Promise<any>[] = [
         getUserFullProfile(otherUser.id),
         getFollowCounts(otherUser.id),
-        getUserEntries(otherUser.id, 6),
+        getUserEntries(otherUser.id, 50),
         getUserEntryCount(otherUser.id),
       ];
       if (opts?.includeFollowStatus) {
@@ -825,8 +825,6 @@ export default function ChatScreen() {
         socialLinksKeys: fullProfile?.social_links ? Object.keys(fullProfile.social_links) : null,
         hasBio: !!fullProfile?.bio,
       });
-      console.log('[loadProfileData] RAW fullProfile', JSON.stringify(fullProfile, null, 2));
-      console.log('[loadProfileData] RAW entries', JSON.stringify(entries, null, 2));
 
       setFollowCounts(counts);
       setProfileEntries(entries);

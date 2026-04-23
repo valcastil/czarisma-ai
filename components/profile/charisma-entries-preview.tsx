@@ -7,7 +7,10 @@ interface EntryPreview {
   major_charisma: string;
   sub_charisma: string;
   charisma_emoji: string;
+  emotion_emojis?: string[] | null;
+  notes?: string | null;
   date: string;
+  time?: string | null;
 }
 
 interface CharismaEntriesPreviewProps {
@@ -42,22 +45,56 @@ export function CharismaEntriesPreview({ entries, isFollowing, totalCount }: Cha
 
   return (
     <View style={styles.container}>
-      <View style={styles.grid}>
-        {entries.map((entry) => (
-          <View
-            key={entry.id}
-            style={[styles.entryCard, { backgroundColor: colors.background, borderColor: colors.border }]}
-          >
-            <Text style={styles.entryEmoji}>{entry.charisma_emoji || '✨'}</Text>
-            <Text style={[styles.entryTitle, { color: colors.text }]} numberOfLines={1}>
-              {entry.major_charisma}
+      {entries.map((entry) => (
+        <View
+          key={entry.id}
+          style={[styles.entryCard, { backgroundColor: colors.card }]}
+        >
+          <View style={styles.entryHeader}>
+            <Text style={[styles.entryDate, { color: colors.textSecondary }]}>
+              {entry.date}
             </Text>
-            <Text style={[styles.entrySub, { color: colors.textSecondary }]} numberOfLines={1}>
-              {entry.sub_charisma}
-            </Text>
+            {entry.time ? (
+              <Text style={[styles.entryTime, { color: colors.textSecondary }]}>
+                {entry.time}
+              </Text>
+            ) : null}
           </View>
-        ))}
-      </View>
+
+          <View style={styles.charismaSection}>
+            {entry.charisma_emoji ? (
+              <Text style={styles.charismaEmoji}>{entry.charisma_emoji}</Text>
+            ) : null}
+            <View style={styles.charismaTextContainer}>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>
+                {entry.major_charisma}
+              </Text>
+              {entry.sub_charisma ? (
+                <Text style={[styles.entrySubtitle, { color: colors.textSecondary }]}>
+                  {entry.sub_charisma}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {entry.emotion_emojis && entry.emotion_emojis.length > 0 ? (
+            <View style={styles.emotionsContainer}>
+              {entry.emotion_emojis.map((emojiItem, index) => (
+                <Text key={index} style={styles.emotionEmoji}>
+                  {emojiItem}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+
+          {entry.notes ? (
+            <Text style={[styles.entryNotes, { color: colors.textSecondary }]}>
+              {entry.notes}
+            </Text>
+          ) : null}
+        </View>
+      ))}
+
       {totalCount > entries.length && (
         <Text style={[styles.moreText, { color: colors.textSecondary }]}>
           +{totalCount - entries.length} more entries
@@ -71,32 +108,56 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingBottom: 16,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
   },
   entryCard: {
-    width: '47%',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
   },
-  entryEmoji: {
-    fontSize: 28,
-    marginBottom: 6,
+  entryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  entryDate: {
+    fontSize: 13,
+  },
+  entryTime: {
+    fontSize: 13,
+  },
+  charismaSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  charismaEmoji: {
+    fontSize: 32,
+  },
+  charismaTextContainer: {
+    flex: 1,
   },
   entryTitle: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
-    textAlign: 'center',
   },
-  entrySub: {
-    fontSize: 11,
-    textAlign: 'center',
+  entrySubtitle: {
+    fontSize: 13,
     marginTop: 2,
+  },
+  emotionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  emotionEmoji: {
+    fontSize: 22,
+  },
+  entryNotes: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
   },
   lockedContainer: {
     alignItems: 'center',

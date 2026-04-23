@@ -120,7 +120,7 @@ export const getUserEntries = async (userId: string, limit = 6) => {
   try {
     const { data, error } = await supabase
       .from('charisma_entries')
-      .select('id, major_charisma, sub_charisma, charisma_emoji, timestamp, date')
+      .select('id, major_charisma, sub_charisma, charisma_emoji, emotion_emojis, notes, timestamp, date, time')
       .eq('user_id', userId)
       .order('timestamp', { ascending: false })
       .limit(limit);
