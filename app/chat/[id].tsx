@@ -825,6 +825,8 @@ export default function ChatScreen() {
         socialLinksKeys: fullProfile?.social_links ? Object.keys(fullProfile.social_links) : null,
         hasBio: !!fullProfile?.bio,
       });
+      console.log('[loadProfileData] RAW fullProfile', JSON.stringify(fullProfile, null, 2));
+      console.log('[loadProfileData] RAW entries', JSON.stringify(entries, null, 2));
 
       setFollowCounts(counts);
       setProfileEntries(entries);

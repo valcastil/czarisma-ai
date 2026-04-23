@@ -6,6 +6,7 @@
  */
 
 import { Attachment, Conversation, Message, User } from '@/constants/message-types';
+import { supabase } from '@/lib/supabase';
 import * as SupabaseMessageService from '@/lib/supabase-message-service';
 import { decryptMessage, encryptMessage } from '@/utils/encryption';
 import { sanitizeMessage } from '@/utils/input-sanitizer';
@@ -13,6 +14,7 @@ import { logger } from '@/utils/logger';
 import { getProfile } from '@/utils/profile-utils';
 import { isRateLimited, recordAttempt } from '@/utils/rate-limiter';
 import { SecureStorage } from '@/utils/secure-storage';
+import { backfillLocalEntriesToSupabase } from '@/utils/entry-sync';
 
 const selfMessagesKey = (userId: string) => `@charisma_self_messages_${userId}`;
 
@@ -100,6 +102,52 @@ export const registerCurrentUser = async (): Promise<void> => {
         logger.info('Profile successfully synced to Supabase');
       } else {
         logger.error('Profile sync returned null - check Supabase connection');
+      }
+
+      // Also sync bio + social_links directly (createOrUpdateProfile only
+      // handles name/username/avatar). Without this, followers viewing this
+      // user's profile would never see their bio or social links because
+      // those fields are stored in local AsyncStorage only.
+      try {
+        const extraUpdates: Record<string, any> = {};
+        if (typeof localProfile?.bio === 'string') {
+          extraUpdates.bio = localProfile.bio;
+        }
+        if (localProfile?.socialLinks && typeof localProfile.socialLinks === 'object') {
+          // Strip empty strings / undefined values so the JSONB stays clean.
+          const cleaned: Record<string, string> = {};
+          for (const [k, v] of Object.entries(localProfile.socialLinks)) {
+            if (typeof v === 'string' && v.trim().length > 0) cleaned[k] = v.trim();
+          }
+          extraUpdates.social_links = cleaned;
+        }
+        if (Object.keys(extraUpdates).length > 0) {
+          const { error: extraErr } = await supabase
+            .from('profiles')
+            .update(extraUpdates)
+            .eq('id', currentUser.id);
+          if (extraErr) {
+            logger.error('Failed to sync bio/social_links to Supabase:', extraErr);
+          } else {
+            logger.info('Bio/social_links synced to Supabase', {
+              hasBio: !!extraUpdates.bio,
+              socialLinksKeys: extraUpdates.social_links
+                ? Object.keys(extraUpdates.social_links)
+                : [],
+            });
+          }
+        }
+      } catch (bioErr) {
+        logger.error('Error syncing bio/social_links:', bioErr);
+      }
+
+      // One-time backfill of any local charisma entries that were created
+      // before Supabase entry sync existed. Guarded by a flag so it only runs
+      // once per device/account.
+      try {
+        await backfillLocalEntriesToSupabase(currentUser.id);
+      } catch (backfillErr) {
+        logger.error('Entry backfill error:', backfillErr);
       }
     } catch (e) {
       logger.error('Failed to sync local profile to Supabase:', e);

@@ -5,6 +5,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { deleteAIQuote, getSavedAIQuotes } from '@/utils/ai-quote-storage';
 import { canAccessFeatures, checkPaidProStatus, checkProStatus, checkTrialExpirationAndRedirect, getTrialStatus, setProStatusForTesting, TrialStatus } from '@/utils/subscription-utils';
+import { syncEntryToSupabase } from '@/utils/entry-sync';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -830,6 +831,17 @@ export default function AddEntryScreen() {
 
       // Save to storage
       await AsyncStorage.setItem(ENTRIES_KEY, JSON.stringify(updatedEntries));
+
+      // Also sync to Supabase so followers can see it on the profile modal.
+      // Best-effort; failures are logged but don't block the local save.
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          await syncEntryToSupabase(newEntry, session.user.id);
+        }
+      } catch (syncErr) {
+        console.error('Failed to sync new entry to Supabase:', syncErr);
+      }
 
       // Clear temporary selections
       await AsyncStorage.removeItem('@temp_selected_charisma');
