@@ -196,7 +196,9 @@ export function LocationPickerModal({
       label: currentLabel ?? undefined,
     });
     setShowLiveOptions(false);
-    onClose();
+    // On iOS, dismissing two nested modals simultaneously causes a black screen.
+    // Defer the outer modal close until after the inner one has finished animating out.
+    setTimeout(() => onClose(), 350);
   };
 
   return (

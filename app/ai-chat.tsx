@@ -1,16 +1,18 @@
+import { ForwardModal } from '@/components/messages/forward-modal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { WhatsAppBackground } from '@/components/ui/whatsapp-background';
 import { useTheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
+import { supabase } from '@/lib/supabase';
+import { saveAIQuote } from '@/utils/ai-quote-storage';
 import { speakAIMessage, stopAIVoice } from '@/utils/ai-voice';
+import { sendMessage } from '@/utils/message-utils';
 import { CommonActions, useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { saveAIQuote } from '@/utils/ai-quote-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AI_CHAT_STORAGE_KEY = '@charisma_ai_chat_history';
 const NEXT_GREETING_KEY = '@charisma_next_greeting';
@@ -107,6 +109,8 @@ export default function AIChatScreen() {
     const [activePaymentTab, setActivePaymentTab] = useState<'e&' | 'gcash'>('e&');
     const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
     const [reactionMessageId, setReactionMessageId] = useState<string | null>(null);
+    const [showForwardModal, setShowForwardModal] = useState(false);
+    const [messageToShare, setMessageToShare] = useState<string | null>(null);
 
     const isMounted = React.useRef(true);
     const scrollViewRef = useRef<ScrollView>(null);
@@ -446,13 +450,51 @@ export default function AIChatScreen() {
         await AsyncStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(newMessages));
     };
 
-    const handleShareMessage = async (text: string) => {
-        try {
-            await Share.share({ message: `${text}\n\n— Czar AI` });
-        } catch (error) {
-            console.error('Error sharing message:', error);
-        }
+    const handleShareMessage = (text: string) => {
         setSelectedMessageId(null);
+        Alert.alert(
+            'Share Message',
+            'How would you like to share this?',
+            [
+                {
+                    text: 'Share to Chat',
+                    onPress: () => {
+                        setMessageToShare(text);
+                        setShowForwardModal(true);
+                    },
+                },
+                {
+                    text: 'Share Externally',
+                    onPress: async () => {
+                        try {
+                            await Share.share({ message: `${text}\n\n— Czar AI` });
+                        } catch (error) {
+                            console.error('Error sharing message:', error);
+                        }
+                    },
+                },
+                { text: 'Cancel', style: 'cancel' },
+            ]
+        );
+    };
+
+    const handleSendToChat = async (recipientId: string, recipientUsername: string, recipientName: string) => {
+        if (!messageToShare) return;
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session && !recipientId.startsWith('demo_')) {
+                Alert.alert('Sign in required', 'Please sign in to send messages.');
+                return;
+            }
+            const content = `📩 Forwarded from Czar AI\n\n${messageToShare}`;
+            await sendMessage(recipientId, recipientUsername, recipientName, content);
+            Alert.alert('Sent!', 'Message sent to chat.');
+        } catch (error) {
+            console.error('Error sending to chat:', error);
+            Alert.alert('Error', 'Failed to send message.');
+        }
+        setShowForwardModal(false);
+        setMessageToShare(null);
     };
 
     const handleSaveAsQuote = async (text: string) => {
@@ -472,6 +514,12 @@ export default function AIChatScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={0}
         >
+            <ForwardModal
+                visible={showForwardModal}
+                onClose={() => { setShowForwardModal(false); setMessageToShare(null); }}
+                onForward={handleSendToChat}
+            />
+
             {/* QR Code Payment Modal — Two Payment Channels */}
             <Modal
                 visible={showQRModal}
