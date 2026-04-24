@@ -74,7 +74,7 @@ export default function CreateCzareelScreen() {
 
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ['videos'] as any,
         allowsEditing: true,
         videoMaxDuration: MAX_DURATION_SEC,
         cameraType: cameraFacing === 'front'
@@ -96,7 +96,7 @@ export default function CreateCzareelScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ['videos'] as any,
         allowsEditing: true,
         videoMaxDuration: MAX_DURATION_SEC,
         quality: ImagePicker.UIImagePickerControllerQualityType.High,

@@ -118,6 +118,31 @@ const MAPPING = {
   // Claim-handle icons
   'lock': 'lock',
   'clock': 'schedule',
+
+  // Hamburger / menu
+  'line.3.horizontal': 'menu',
+
+  // Playback icons
+  'play.fill': 'play-arrow',
+  'play.circle': 'play-circle-outline',
+
+  // Video / camera
+  'video.slash': 'videocam-off',
+  'photo.on.rectangle': 'add-photo-alternate',
+  'camera.on.rectangle': 'photo-camera-front',
+  'camera.on.rectangle.fill': 'photo-camera-back',
+
+  // Undo / refresh
+  'arrow.counterclockwise': 'replay',
+
+  // Lock / privacy
+  'lock.fill': 'lock',
+
+  // Globe
+  'globe': 'public',
+
+  // Map / location extras
+  'map': 'map',
 } as IconMapping;
 
 /**

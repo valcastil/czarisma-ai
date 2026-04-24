@@ -35,11 +35,17 @@ create policy "czareels_owner_update" on czareels
 create policy "czareels_owner_delete" on czareels
   for delete using (auth.uid() = user_id);
 
--- Storage bucket (run in Supabase dashboard if CLI not available)
--- insert into storage.buckets (id, name, public) values ('czareels-videos', 'czareels-videos', true)
--- on conflict (id) do nothing;
+-- Storage bucket
+insert into storage.buckets (id, name, public)
+values ('czareels-videos', 'czareels-videos', true)
+on conflict (id) do nothing;
 
 -- Storage RLS
--- create policy "czareels_videos_public_read" on storage.objects for select using (bucket_id = 'czareels-videos');
--- create policy "czareels_videos_auth_insert" on storage.objects for insert with check (bucket_id = 'czareels-videos' and auth.role() = 'authenticated');
--- create policy "czareels_videos_owner_delete" on storage.objects for delete using (bucket_id = 'czareels-videos' and auth.uid()::text = (storage.foldername(name))[1]);
+create policy "czareels_videos_public_read" on storage.objects
+  for select using (bucket_id = 'czareels-videos');
+
+create policy "czareels_videos_auth_insert" on storage.objects
+  for insert with check (bucket_id = 'czareels-videos' and auth.role() = 'authenticated');
+
+create policy "czareels_videos_owner_delete" on storage.objects
+  for delete using (bucket_id = 'czareels-videos' and auth.uid()::text = (storage.foldername(name))[1]);
