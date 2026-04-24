@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Animated, BackHandler, DeviceEventEmitter, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, BackHandler, DeviceEventEmitter, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const CZAR_IMAGE = require('@/assets/images/czar.png');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,10 +67,37 @@ function AnimatedTabButton({ onPress, children, isFocused, color }: any) {
   );
 }
 
+function AddMenu({ visible, onClose, colors, insets, router }: any) {
+  const options = [
+    { emoji: '🎬', label: 'Create Czareel', onPress: () => { onClose(); router.push('/create-czareel'); } },
+    { emoji: '✨', label: 'Add Charisma Entry', onPress: () => { onClose(); router.push('/onboarding-charisma'); } },
+    { emoji: '🔗', label: 'Paste Social Link', onPress: () => { onClose(); router.push({ pathname: '/(tabs)', params: { openPasteLink: Date.now().toString() } }); } },
+  ];
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.menuBackdrop} onPress={onClose} />
+      <View style={[styles.menuSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 8 }]}>
+        <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
+        <Text style={[styles.menuTitle, { color: colors.text }]}>What would you like to do?</Text>
+        {options.map((opt) => (
+          <TouchableOpacity key={opt.label} style={[styles.menuOption, { borderBottomColor: colors.border }]} onPress={opt.onPress} activeOpacity={0.7}>
+            <Text style={styles.menuOptionEmoji}>{opt.emoji}</Text>
+            <Text style={[styles.menuOptionText, { color: colors.text }]}>{opt.label}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity style={styles.menuCancel} onPress={onClose} activeOpacity={0.7}>
+          <Text style={[styles.menuCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
 function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNewMessages }: any) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
   const focusedRouteName = state?.routes?.[state.index]?.name;
 
@@ -81,7 +108,15 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
   }, [focusedRouteName, hasNewMessages, clearNewMessages]);
 
   return (
-    <View style={[styles.tabBar, {
+    <>
+      <AddMenu
+        visible={showAddMenu}
+        onClose={() => setShowAddMenu(false)}
+        colors={colors}
+        insets={insets}
+        router={router}
+      />
+      <View style={[styles.tabBar, {
       backgroundColor: colors.background,
       borderTopColor: colors.border,
       paddingBottom: insets.bottom,
@@ -118,25 +153,7 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
             // Let's intercept "explore" if that's the intention.
             if (route.name === 'explore') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              Alert.alert(
-                'What would you like to do?',
-                '',
-                [
-                  {
-                    text: '🎬 Create Czareel',
-                    onPress: () => router.push('/create-czareel' as any),
-                  },
-                  {
-                    text: '✨ Add Charisma Entry',
-                    onPress: () => router.push('/onboarding-charisma'),
-                  },
-                  {
-                    text: '🔗 Paste Social Link',
-                    onPress: () => router.push({ pathname: '/(tabs)', params: { openPasteLink: Date.now().toString() } }),
-                  },
-                  { text: 'Cancel', style: 'cancel' },
-                ]
-              );
+              setShowAddMenu(true);
             } else if (route.name === 'czar-chat') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               try {
@@ -218,7 +235,8 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
           </AnimatedTabButton>
         );
       })}
-    </View>
+      </View>
+    </>
   );
 }
 
@@ -430,11 +448,61 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: -30, // Float effect
+    marginTop: -30,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  menuSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingHorizontal: 0,
+  },
+  menuHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  menuTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
+    opacity: 0.5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  menuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 14,
+  },
+  menuOptionEmoji: {
+    fontSize: 22,
+  },
+  menuOptionText: {
+    fontSize: 17,
+    fontWeight: '500',
+  },
+  menuCancel: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  menuCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
