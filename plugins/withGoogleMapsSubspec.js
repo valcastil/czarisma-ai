@@ -1,24 +1,45 @@
-const { withPodfile } = require('@expo/config-plugins');
+const { withDangerousMod } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * react-native-maps v1.27+ no longer ships a separate
- * "react-native-google-maps" podspec.  Google Maps support is now a
- * *subspec* of the main react-native-maps pod: react-native-maps/Google.
+ * `react-native-google-maps` podspec — Google Maps support is now a
+ * *subspec* of the main react-native-maps pod (`react-native-maps/Google`).
  *
- * Expo's built-in Maps config plugin still injects:
+ * Expo / the react-native-maps config plugin still injects
  *   pod 'react-native-google-maps', path: ...
- * which causes "No podspec found for react-native-google-maps".
+ * into the Podfile, which causes EAS iOS builds to fail with
+ *   [!] No podspec found for `react-native-google-maps` in .../react-native-maps
  *
- * This plugin uses withPodfile (not withDangerousMod) so it operates
- * on the in-memory Podfile contents AFTER Expo's built-in Maps plugin
- * has already injected the stale line.
+ * withPodfile (in-memory mod) can run BEFORE other Podfile-injecting
+ * plugins and misses the line. withDangerousMod runs at the filesystem
+ * stage, AFTER all other mods have flushed their changes to disk, so
+ * the replacement always happens on the final Podfile content.
  */
 module.exports = function withGoogleMapsSubspec(config) {
-  return withPodfile(config, (config) => {
-    config.modResults.contents = config.modResults.contents.replace(
-      /pod\s+'react-native-google-maps'/g,
-      "pod 'react-native-maps/Google'"
-    );
-    return config;
-  });
+  return withDangerousMod(config, [
+    'ios',
+    async (config) => {
+      const podfilePath = path.join(
+        config.modRequest.platformProjectRoot,
+        'Podfile'
+      );
+      if (!fs.existsSync(podfilePath)) return config;
+
+      let contents = fs.readFileSync(podfilePath, 'utf8');
+      const patched = contents
+        // Replace the whole `pod 'react-native-google-maps', path: ...` line
+        // with the correct subspec pod reference.
+        .replace(
+          /pod\s+'react-native-google-maps'[^\n]*/g,
+          "pod 'react-native-maps/Google'"
+        );
+
+      if (patched !== contents) {
+        fs.writeFileSync(podfilePath, patched, 'utf8');
+      }
+      return config;
+    },
+  ]);
 };
