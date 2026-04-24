@@ -123,11 +123,15 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
                 '',
                 [
                   {
-                    text: 'Add Charisma Entry',
+                    text: '🎬 Create Czareel',
+                    onPress: () => router.push('/create-czareel' as any),
+                  },
+                  {
+                    text: '✨ Add Charisma Entry',
                     onPress: () => router.push('/onboarding-charisma'),
                   },
                   {
-                    text: 'Paste Social Link',
+                    text: '🔗 Paste Social Link',
                     onPress: () => router.push({ pathname: '/(tabs)', params: { openPasteLink: Date.now().toString() } }),
                   },
                   { text: 'Cancel', style: 'cancel' },
