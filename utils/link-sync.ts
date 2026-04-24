@@ -10,9 +10,6 @@
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/utils/logger';
 import { getSharedLinks, SharedLink } from '@/utils/link-storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const BACKFILL_FLAG_PREFIX = '@charisma_shared_links_supabase_backfilled_';
 
 const mapLinkForInsert = (link: SharedLink, userId: string) => ({
   user_id: userId,
@@ -77,67 +74,78 @@ export const updateLinkOnSupabase = async (link: SharedLink): Promise<void> => {
 };
 
 /**
- * One-time backfill: push every local shared link to Supabase.
- * Per-user flag in AsyncStorage prevents re-runs; dedupe uses the timestamp.
+ * Reconcile local shared links with Supabase. Runs every startup (idempotent):
+ *   - Inserts any local link whose timestamp is not yet on the server.
+ *   - Updates any server row whose thumbnail/title/description differs from
+ *     the local copy (e.g. because backfill inserted before metadata was
+ *     fetched, or an older release didn't mirror refreshMissingTitles).
+ * This is what makes follower-visible thumbnails stay current.
  */
 export const backfillLocalLinksToSupabase = async (userId: string): Promise<void> => {
-  const flagKey = BACKFILL_FLAG_PREFIX + userId;
   try {
-    const alreadyDone = await AsyncStorage.getItem(flagKey);
-    if (alreadyDone === 'true') return;
-
     const localLinks = await getSharedLinks();
-    if (localLinks.length === 0) {
-      await AsyncStorage.setItem(flagKey, 'true');
-      return;
-    }
+    if (localLinks.length === 0) return;
 
-    // Fetch existing created_at stamps for this user to avoid duplicates.
     const { data: existing, error: fetchErr } = await supabase
       .from('shared_links')
-      .select('created_at')
+      .select('created_at, thumbnail_url, title, description')
       .eq('user_id', userId);
 
     if (fetchErr) {
-      logger.error('Link backfill: failed to fetch existing rows:', fetchErr);
+      logger.error('Link reconcile: failed to fetch existing rows:', fetchErr);
       return;
     }
 
-    const existingStamps = new Set(
-      (existing || []).map((r: any) => new Date(r.created_at).getTime())
-    );
-
-    const toInsert = localLinks
-      .filter(l => !existingStamps.has(l.timestamp))
-      .map(l => mapLinkForInsert(l, userId));
-
-    if (toInsert.length === 0) {
-      logger.info('Link backfill: all local links already on Supabase', {
-        localCount: localLinks.length,
+    const existingByTs = new Map<number, { thumbnail_url: string | null; title: string | null; description: string | null }>();
+    (existing || []).forEach((r: any) => {
+      existingByTs.set(new Date(r.created_at).getTime(), {
+        thumbnail_url: r.thumbnail_url ?? null,
+        title: r.title ?? null,
+        description: r.description ?? null,
       });
-      await AsyncStorage.setItem(flagKey, 'true');
-      return;
-    }
-
-    logger.info('Link backfill: uploading local shared links', {
-      total: localLinks.length,
-      toInsert: toInsert.length,
     });
 
-    const CHUNK = 50;
-    for (let i = 0; i < toInsert.length; i += CHUNK) {
-      const chunk = toInsert.slice(i, i + CHUNK);
-      const { error: insertErr } = await supabase
-        .from('shared_links')
-        .insert(chunk);
-      if (insertErr) {
-        logger.error('Link backfill: chunk insert failed:', insertErr);
-        return;
+    const toInsert: ReturnType<typeof mapLinkForInsert>[] = [];
+    const toUpdate: SharedLink[] = [];
+
+    for (const link of localLinks) {
+      const existingRow = existingByTs.get(link.timestamp);
+      if (!existingRow) {
+        toInsert.push(mapLinkForInsert(link, userId));
+        continue;
+      }
+      const needsUpdate =
+        (link.thumbnail && link.thumbnail !== existingRow.thumbnail_url) ||
+        (link.title && link.title !== existingRow.title) ||
+        (link.description && link.description !== existingRow.description);
+      if (needsUpdate) toUpdate.push(link);
+    }
+
+    if (toInsert.length === 0 && toUpdate.length === 0) return;
+
+    logger.info('Link reconcile: syncing local → Supabase', {
+      total: localLinks.length,
+      toInsert: toInsert.length,
+      toUpdate: toUpdate.length,
+    });
+
+    if (toInsert.length > 0) {
+      const CHUNK = 50;
+      for (let i = 0; i < toInsert.length; i += CHUNK) {
+        const chunk = toInsert.slice(i, i + CHUNK);
+        const { error: insertErr } = await supabase
+          .from('shared_links')
+          .insert(chunk);
+        if (insertErr) {
+          logger.error('Link reconcile: chunk insert failed:', insertErr);
+          return;
+        }
       }
     }
 
-    await AsyncStorage.setItem(flagKey, 'true');
-    logger.info('Link backfill complete');
+    for (const link of toUpdate) {
+      await updateLinkOnSupabase(link);
+    }
   } catch (e) {
     logger.error('backfillLocalLinksToSupabase error:', e);
   }

@@ -520,6 +520,13 @@ export const refreshMissingTitles = async (): Promise<boolean> => {
 
     if (updated) {
       await SecureStorage.setItem(SHARED_LINKS_KEY, JSON.stringify(updatedLinks));
+      // Mirror refreshed metadata (thumbnails/titles/descriptions) to Supabase
+      // so followers also see the updated thumbnails. Best-effort, non-blocking.
+      updatedLinks.forEach((link) => {
+        if (link.thumbnail || link.title || link.description) {
+          lazyLinkSync().updateLinkOnSupabase(link).catch(() => {});
+        }
+      });
     }
     return updated;
   } catch (error) {
