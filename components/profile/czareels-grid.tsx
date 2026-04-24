@@ -32,6 +32,35 @@ interface CzareelsGridProps {
   userId: string;
 }
 
+function ReelCell({ item, onTap }: { item: CzareelItem; onTap: (i: CzareelItem) => void }) {
+  const [imgError, setImgError] = useState(false);
+  const thumbUri = !imgError && item.thumbnail_url ? item.thumbnail_url : null;
+
+  return (
+    <TouchableOpacity onPress={() => onTap(item)} activeOpacity={0.85} style={styles.cell}>
+      {thumbUri ? (
+        <Image
+          source={{ uri: thumbUri }}
+          style={styles.thumbnail}
+          resizeMode="cover"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <View style={[styles.thumbnail, styles.thumbPlaceholder]}>
+          <Text style={styles.thumbPlaceholderEmoji}>🎬</Text>
+        </View>
+      )}
+      <View style={styles.playOverlay} pointerEvents="none">
+        <IconSymbol size={18} name="play.fill" color="rgba(255,255,255,0.9)" />
+      </View>
+      <View style={styles.viewsBadge} pointerEvents="none">
+        <IconSymbol size={10} name="eye" color="#fff" />
+        <Text style={styles.viewsText}>{formatCount(item.views)}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export function CzareelsGrid({ userId }: CzareelsGridProps) {
   const { colors } = useTheme();
   const [reels, setReels] = useState<CzareelItem[]>([]);
@@ -112,28 +141,7 @@ export function CzareelsGrid({ userId }: CzareelsGridProps) {
           scrollEnabled={false}
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.grid}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => handleTap(item)}
-              activeOpacity={0.85}
-              style={styles.cell}
-            >
-              <Image
-                source={{ uri: item.thumbnail_url ?? item.video_url }}
-                style={styles.thumbnail}
-                resizeMode="cover"
-              />
-              {/* Play overlay */}
-              <View style={styles.playOverlay} pointerEvents="none">
-                <IconSymbol size={18} name="play.fill" color="rgba(255,255,255,0.9)" />
-              </View>
-              {/* Views badge */}
-              <View style={styles.viewsBadge} pointerEvents="none">
-                <IconSymbol size={10} name="eye" color="#fff" />
-                <Text style={styles.viewsText}>{formatCount(item.views)}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => <ReelCell item={item} onTap={handleTap} />}
         />
       )}
     </View>
@@ -214,6 +222,14 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: '100%',
     height: '100%',
+  },
+  thumbPlaceholder: {
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbPlaceholderEmoji: {
+    fontSize: 28,
   },
   playOverlay: {
     position: 'absolute',

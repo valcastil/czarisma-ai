@@ -5,6 +5,7 @@ import { MediaPermissions } from '@/utils/media-permissions';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -164,8 +165,28 @@ export default function CreateCzareelScreen() {
         .from('czareels-videos')
         .getPublicUrl(fileName);
 
-      // thumbnail_url = same as video_url; VideoView renders the first frame as poster
-      const thumbnailUrl = videoUrl;
+      // Extract first-frame JPEG thumbnail and upload it
+      let thumbnailUrl: string | null = null;
+      try {
+        const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 0 });
+        const thumbBase64 = await FileSystem.readAsStringAsync(thumbUri, { encoding: 'base64' });
+        const thumbChars = atob(thumbBase64);
+        const thumbBytes = new Uint8Array(thumbChars.length);
+        for (let i = 0; i < thumbChars.length; i++) thumbBytes[i] = thumbChars.charCodeAt(i);
+        const thumbName = `${userId}/thumb_${timestamp}.jpg`;
+        const { error: thumbUploadError } = await supabase.storage
+          .from('czareels-videos')
+          .upload(thumbName, thumbBytes, { contentType: 'image/jpeg', upsert: false });
+        if (!thumbUploadError) {
+          const { data: { publicUrl: thumbPublicUrl } } = supabase.storage
+            .from('czareels-videos')
+            .getPublicUrl(thumbName);
+          thumbnailUrl = thumbPublicUrl;
+        }
+      } catch (thumbErr) {
+        console.warn('Thumbnail extraction failed, using video URL as fallback:', thumbErr);
+        thumbnailUrl = videoUrl;
+      }
 
       const { error: insertError } = await supabase.from('czareels').insert({
         user_id: userId,
