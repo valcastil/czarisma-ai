@@ -312,7 +312,7 @@ export const getProfilesByPhones = async (
 
         const { data, error } = await supabase
             .from('profiles')
-            .select('id, username, name, avatar_url, is_online, last_seen, handle_at, handle_hash, phone')
+            .select('id, username, name, avatar_url, is_online, last_seen, phone')
             .in('phone', normalized);
 
         if (error) {
@@ -329,8 +329,6 @@ export const getProfilesByPhones = async (
                 isOnline: profile.is_online,
                 lastSeen: new Date(profile.last_seen).getTime(),
                 avatarUrl: profile.avatar_url,
-                handleAt: profile.handle_at ?? null,
-                handleHash: profile.handle_hash ?? null,
             };
             result.set(profile.phone, user);
             // Also index by all normalized variants of the phone so raw lookups work
