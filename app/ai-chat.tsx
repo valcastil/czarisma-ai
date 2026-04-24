@@ -110,6 +110,14 @@ export default function AIChatScreen() {
 
     const isMounted = React.useRef(true);
     const scrollViewRef = useRef<ScrollView>(null);
+    const prevMessageCountRef = useRef(0);
+
+    useEffect(() => {
+        if (messages.length > prevMessageCountRef.current) {
+            prevMessageCountRef.current = messages.length;
+            setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
+        }
+    }, [messages.length]);
 
     const bottomInset = Math.max(insets.bottom, 10);
 
@@ -568,7 +576,6 @@ export default function AIChatScreen() {
                     style={styles.messagesContainer} 
                     contentContainerStyle={styles.messagesContent}
                     keyboardShouldPersistTaps="handled"
-                    onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
                 >
                     {messages.map((msg) => {
                         const showActions = selectedMessageId === msg.id;
