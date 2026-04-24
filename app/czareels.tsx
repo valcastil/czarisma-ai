@@ -2,13 +2,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
-  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -62,8 +62,8 @@ function ReelItem({ item, colors, insets }: ReelItemProps) {
   const name = item.profiles?.name || 'Czar User';
   const username = item.profiles?.username || 'czaruser';
 
-  const handleTap = () => {
-    if (item.video_url) Linking.openURL(item.video_url);
+  const handleTap = async () => {
+    if (item.video_url) await WebBrowser.openBrowserAsync(item.video_url);
   };
 
   return (
