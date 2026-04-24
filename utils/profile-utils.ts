@@ -166,6 +166,14 @@ export const updateProfile = async (updates: Partial<UserProfile>): Promise<User
         if (updates.name !== undefined) supabaseUpdates.name = updates.name;
         if (updates.bio !== undefined) supabaseUpdates.bio = updates.bio;
         if (updates.socialLinks !== undefined) supabaseUpdates.social_links = updates.socialLinks;
+        if (updates.privacy !== undefined) {
+          const p = updates.privacy;
+          if (p.showEmail !== undefined) supabaseUpdates.privacy_show_email = p.showEmail;
+          if (p.showPhone !== undefined) supabaseUpdates.privacy_show_phone = p.showPhone;
+          if (p.showLocation !== undefined) supabaseUpdates.privacy_show_location = p.showLocation;
+          if (p.showBirthDate !== undefined) supabaseUpdates.privacy_show_birth_date = p.showBirthDate;
+          if (p.profileVisibility !== undefined) supabaseUpdates.privacy_profile_visibility = p.profileVisibility;
+        }
         
         // Handle avatar upload if changed
         if (updates.avatar !== undefined && updates.avatar !== currentProfile.avatar) {

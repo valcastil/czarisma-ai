@@ -123,6 +123,12 @@ export default function NewMessageScreen() {
     filterContacts();
   }, [searchQuery, contacts]);
 
+  // Re-sort contacts list whenever the phone match map resolves.
+  useEffect(() => {
+    if (phoneMatchMap.size === 0) return;
+    setFilteredContacts(prev => sortContacts(prev));
+  }, [phoneMatchMap]);
+
   const loadUsers = async () => {
     try {
       // Initial page: first 50 registered users (server-ordered by name) + self.
@@ -161,13 +167,21 @@ export default function NewMessageScreen() {
     }
   };
 
+  const sortContacts = (list: ImportedContact[]): ImportedContact[] =>
+    [...list].sort((a, b) => {
+      const aOnApp = a.phoneNumbers.some(p => phoneMatchMap.has(p));
+      const bOnApp = b.phoneNumbers.some(p => phoneMatchMap.has(p));
+      if (aOnApp === bOnApp) return 0;
+      return aOnApp ? -1 : 1;
+    });
+
   const loadImportedContacts = async () => {
     try {
       const contactsData = await AsyncStorage.getItem('@imported_contacts');
       if (contactsData) {
         const parsedContacts: ImportedContact[] = JSON.parse(contactsData);
         setContacts(parsedContacts);
-        setFilteredContacts(parsedContacts);
+        setFilteredContacts(sortContacts(parsedContacts));
       }
     } catch (error) {
       console.error('Error loading imported contacts:', error);
@@ -176,7 +190,7 @@ export default function NewMessageScreen() {
 
   const filterContacts = async () => {
     if (!searchQuery.trim()) {
-      setFilteredContacts(contacts);
+      setFilteredContacts(sortContacts(contacts));
       setIsSearchingAllContacts(false);
       return;
     }
@@ -222,17 +236,17 @@ export default function NewMessageScreen() {
             }))
             .slice(0, 50); // Limit search results to 50
 
-          setFilteredContacts(allMatchingContacts);
+          setFilteredContacts(sortContacts(allMatchingContacts));
         } else {
-          setFilteredContacts(filteredImported);
+          setFilteredContacts(sortContacts(filteredImported));
         }
       } catch (error) {
         console.error('Error searching all contacts:', error);
-        setFilteredContacts(filteredImported);
+        setFilteredContacts(sortContacts(filteredImported));
       }
       setIsSearchingAllContacts(false);
     } else {
-      setFilteredContacts(filteredImported);
+      setFilteredContacts(sortContacts(filteredImported));
     }
   };
 

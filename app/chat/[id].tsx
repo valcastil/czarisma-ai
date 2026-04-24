@@ -39,6 +39,7 @@ import {
 } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -60,6 +61,7 @@ export default function ChatScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const { id, username, name, avatarUrl } = params as { id: string; username: string; name: string; avatarUrl?: string };
 
@@ -1286,7 +1288,7 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
 
       {/* Header with solid background */}
-      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 16) }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={handleBack}
@@ -1395,7 +1397,7 @@ export default function ChatScreen() {
         />
 
         {/* Message Input */}
-        <View style={[styles.messageInputContainer, { borderTopColor: colors.border }]}>
+        <View style={[styles.messageInputContainer, { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 16) }]}>
           {pendingAttachment && (
             <View style={[styles.pendingAttachmentPreview, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <AttachmentRenderer 
@@ -1703,10 +1705,10 @@ export default function ChatScreen() {
                   {(profileBio || !profileLoading) && (
                     <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
                       <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
-                        About
+                        Motto
                       </Text>
                       <Text style={[styles.whatsappSectionText, { color: colors.textSecondary }]}>
-                        {profileBio || 'No bio yet'}
+                        {profileBio || 'No motto yet'}
                       </Text>
                     </View>
                   )}
@@ -1780,7 +1782,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: 60,
+    paddingTop: 16,
     paddingHorizontal: 20,
     paddingBottom: 16,
     flexDirection: 'row',
@@ -1996,7 +1998,7 @@ const styles = StyleSheet.create({
   messageInputContainer: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingBottom: 40,
+    paddingBottom: 16,
     borderTopWidth: 1,
   },
   pendingAttachmentPreview: {

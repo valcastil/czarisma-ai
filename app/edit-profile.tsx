@@ -1,3 +1,4 @@
+import { FieldVisibilityToggle } from '@/components/profile/field-visibility-toggle';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { UserProfile } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -26,6 +27,14 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
+  const [privacy, setPrivacy] = useState<UserProfile['privacy']>({
+    profileVisibility: 'public',
+    showEmail: false,
+    showPhone: false,
+    showLocation: true,
+    showBirthDate: false,
+  });
+
   const [formData, setFormData] = useState({
     name: '',
     username: '',
@@ -67,6 +76,7 @@ export default function EditProfileScreen() {
         gender: profileData.gender || '',
         dateOfBirth: profileData.dateOfBirth ? new Date(profileData.dateOfBirth).toISOString().split('T')[0] : '',
       });
+      if (profileData.privacy) setPrivacy(profileData.privacy);
     } catch (error) {
       console.error('Error loading profile:', error);
       Alert.alert('Error', 'Unable to load profile data');
@@ -115,7 +125,7 @@ export default function EditProfileScreen() {
       };
 
       console.log('Attempting to save profile with updates:', updates);
-      await updateProfile(updates);
+      await updateProfile({ ...updates, privacy });
       console.log('Profile updated successfully');
       Alert.alert('Success', 'Profile updated successfully');
       router.back();
@@ -168,7 +178,14 @@ export default function EditProfileScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={[styles.label, { color: colors.text }]}>Email Address *</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.label, { color: colors.text }]}>Email Address *</Text>
+          <FieldVisibilityToggle
+            visible={privacy.showEmail}
+            fieldName="your email"
+            onToggle={(val) => setPrivacy(prev => ({ ...prev, showEmail: val }))}
+          />
+        </View>
         <TextInput
           style={[
             styles.input,
@@ -188,7 +205,14 @@ export default function EditProfileScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={[styles.label, { color: colors.text }]}>Phone Number (Optional)</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.label, { color: colors.text }]}>Phone Number (Optional)</Text>
+          <FieldVisibilityToggle
+            visible={privacy.showPhone}
+            fieldName="your phone number"
+            onToggle={(val) => setPrivacy(prev => ({ ...prev, showPhone: val }))}
+          />
+        </View>
         <TextInput
           style={[
             styles.input,
@@ -248,7 +272,7 @@ export default function EditProfileScreen() {
   const renderPersonalInfo = () => (
     <View style={styles.tabContent}>
       <View style={styles.inputGroup}>
-        <Text style={[styles.label, { color: colors.text }]}>Bio</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Motto</Text>
         <TextInput
           style={[
             styles.textArea,
@@ -260,7 +284,7 @@ export default function EditProfileScreen() {
           ]}
           value={formData.bio}
           onChangeText={(text) => setFormData(prev => ({ ...prev, bio: text }))}
-          placeholder="Tell us about yourself"
+          placeholder="Your motto"
           placeholderTextColor={colors.textSecondary}
           multiline
           numberOfLines={4}
@@ -290,7 +314,14 @@ export default function EditProfileScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={[styles.label, { color: colors.text }]}>Date of Birth</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.label, { color: colors.text }]}>Date of Birth</Text>
+          <FieldVisibilityToggle
+            visible={privacy.showBirthDate}
+            fieldName="your date of birth"
+            onToggle={(val) => setPrivacy(prev => ({ ...prev, showBirthDate: val }))}
+          />
+        </View>
         <TextInput
           style={[
             styles.input,
@@ -308,7 +339,14 @@ export default function EditProfileScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={[styles.label, { color: colors.text }]}>Gender</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.label, { color: colors.text }]}>Gender</Text>
+          <FieldVisibilityToggle
+            visible={privacy.showBirthDate}
+            fieldName="your gender"
+            onToggle={(val) => setPrivacy(prev => ({ ...prev, showBirthDate: val }))}
+          />
+        </View>
         <View style={styles.genderOptions}>
           {['male', 'female', 'other', 'prefer_not_to_say'].map((option) => (
             <TouchableOpacity
@@ -337,7 +375,14 @@ export default function EditProfileScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={[styles.label, { color: colors.text }]}>Location</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.label, { color: colors.text }]}>Location</Text>
+          <FieldVisibilityToggle
+            visible={privacy.showLocation}
+            fieldName="your location"
+            onToggle={(val) => setPrivacy(prev => ({ ...prev, showLocation: val }))}
+          />
+        </View>
         <View style={styles.locationRow}>
           <TextInput
             style={[

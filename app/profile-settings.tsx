@@ -1,4 +1,5 @@
 import { OtpInput } from '@/components/auth/otp-input';
+import { FieldVisibilityToggle } from '@/components/profile/field-visibility-toggle';
 import { CzarCompanion } from '@/components/czar-companion';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { UserProfile } from '@/constants/theme';
@@ -53,6 +54,13 @@ export default function ProfileSettingsScreen() {
 
   const [name, setName] = useState('');
   const [about, setAbout] = useState('');
+  const [privacy, setPrivacy] = useState<UserProfile['privacy']>({
+    profileVisibility: 'public',
+    showEmail: false,
+    showPhone: false,
+    showLocation: true,
+    showBirthDate: false,
+  });
   const [avatarUri, setAvatarUri] = useState<string | undefined>(undefined);
   const [socialLinks, setSocialLinks] = useState({
     facebook: '',
@@ -75,6 +83,7 @@ export default function ProfileSettingsScreen() {
         setName(p.name || '');
         setAbout(p.bio || '');
         setAvatarUri(p.avatar);
+        if (p.privacy) setPrivacy(p.privacy);
         if (p.socialLinks) {
           setSocialLinks({
             facebook: p.socialLinks.facebook || '',
@@ -387,7 +396,7 @@ export default function ProfileSettingsScreen() {
 
         <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}
         >
-          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>ABOUT</Text>
+          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>MOTTO</Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -415,12 +424,12 @@ export default function ProfileSettingsScreen() {
               <IconSymbol size={18} name="info.circle" color={colors.gold} />
             </View>
             <View style={styles.fieldBody}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>About</Text>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Motto</Text>
               <TextInput
                 value={about}
                 onChangeText={setAbout}
                 style={[styles.fieldInput, { color: colors.text }]}
-                placeholder="A short bio"
+                placeholder="Your motto"
                 placeholderTextColor={colors.textSecondary}
                 multiline
               />
@@ -442,8 +451,19 @@ export default function ProfileSettingsScreen() {
             <View style={[styles.fieldBody, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
               {linkedEmail ? (
                 <>
-                  <View>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Email</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Email</Text>
+                      <FieldVisibilityToggle
+                        visible={privacy.showEmail}
+                        fieldName="your email"
+                        onToggle={async (val) => {
+                          const newPrivacy = { ...privacy, showEmail: val };
+                          setPrivacy(newPrivacy);
+                          await updateProfile({ privacy: newPrivacy });
+                        }}
+                      />
+                    </View>
                     <Text style={[styles.fieldInput, { color: colors.text }]}>{linkedEmail}</Text>
                   </View>
                   <Text style={{ color: colors.gold, fontSize: 12, fontWeight: '600' }}>Linked</Text>
@@ -472,8 +492,19 @@ export default function ProfileSettingsScreen() {
             <View style={[styles.fieldBody, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
               {linkedPhone ? (
                 <>
-                  <View>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Phone</Text>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Phone</Text>
+                      <FieldVisibilityToggle
+                        visible={privacy.showPhone}
+                        fieldName="your phone number"
+                        onToggle={async (val) => {
+                          const newPrivacy = { ...privacy, showPhone: val };
+                          setPrivacy(newPrivacy);
+                          await updateProfile({ privacy: newPrivacy });
+                        }}
+                      />
+                    </View>
                     <Text style={[styles.fieldInput, { color: colors.text }]}>{linkedPhone}</Text>
                   </View>
                   <Text style={{ color: colors.gold, fontSize: 12, fontWeight: '600' }}>Linked</Text>
