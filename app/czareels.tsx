@@ -8,6 +8,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -56,33 +57,36 @@ interface ReelItemProps {
   onCreatePress: () => void;
 }
 
-function ReelItem({ item, isVisible, colors, insets }: ReelItemProps) {
+function ReelItem({ item, colors, insets }: ReelItemProps) {
   const avatar = item.profiles?.avatar_url;
   const name = item.profiles?.name || 'Czar User';
   const username = item.profiles?.username || 'czaruser';
 
+  const handleTap = () => {
+    if (item.video_url) Linking.openURL(item.video_url);
+  };
+
   return (
-    <View style={[styles.reelContainer, { height: SCREEN_HEIGHT }]}>
-      {/* Video thumbnail / placeholder */}
-      {item.video_url ? (
-        <Image
-          source={{ uri: item.video_url }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: '#111' }]} />
-      )}
+    <TouchableOpacity
+      activeOpacity={0.95}
+      onPress={handleTap}
+      style={[styles.reelContainer, { height: SCREEN_HEIGHT }]}
+    >
+      {/* Thumbnail / first-frame still */}
+      <Image
+        source={{ uri: item.video_url }}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+      />
+      {/* Play button overlay */}
+      <View style={styles.playOverlay} pointerEvents="none">
+        <View style={styles.playCircle}>
+          <IconSymbol size={40} name="play.fill" color="rgba(255,255,255,0.9)" />
+        </View>
+      </View>
 
       {/* Dark gradient overlay at bottom */}
       <View style={styles.gradientOverlay} />
-
-      {/* Play icon (static - no expo-av) */}
-      <View style={styles.playIconOverlay} pointerEvents="none">
-        <View style={styles.playIconCircle}>
-          <IconSymbol size={36} name="play.fill" color="rgba(255,255,255,0.85)" />
-        </View>
-      </View>
 
       {/* Bottom info overlay */}
       <View style={[styles.infoOverlay, { paddingBottom: insets.bottom + 80 }]}>
@@ -125,7 +129,7 @@ function ReelItem({ item, isVisible, colors, insets }: ReelItemProps) {
           ) : null}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -318,6 +322,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#111',
   },
+  playOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   gradientOverlay: {
     position: 'absolute',
     left: 0,
@@ -325,19 +342,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: '65%',
     backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  playIconOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   infoOverlay: {
     position: 'absolute',

@@ -177,7 +177,8 @@
         }
       ],
       "./plugins/withNonModularHeaders.js",
-      "./plugins/withGoogleMapsSubspec.js"
+      "./plugins/withGoogleMapsSubspec.js",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

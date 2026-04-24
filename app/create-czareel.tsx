@@ -136,11 +136,17 @@ export default function CreateCzareelScreen() {
     try {
       const userId = session.user.id;
       const timestamp = Date.now();
-      const fileName = `${userId}/reel_${timestamp}.mp4`;
+
+      // Determine extension from URI
+      const uriLower = videoUri.toLowerCase();
+      const ext = uriLower.includes('.mov') ? 'mov' : 'mp4';
+      const mimeType = ext === 'mov' ? 'video/quicktime' : 'video/mp4';
+      const fileName = `${userId}/reel_${timestamp}.${ext}`;
 
       const fileInfo = await FileSystem.getInfoAsync(videoUri);
       if (!fileInfo.exists) throw new Error('Video file not found');
 
+      // Upload video
       const base64 = await FileSystem.readAsStringAsync(videoUri, { encoding: 'base64' });
       const byteCharacters = atob(base64);
       const byteArray = new Uint8Array(byteCharacters.length);
@@ -150,17 +156,21 @@ export default function CreateCzareelScreen() {
 
       const { error: uploadError } = await supabase.storage
         .from('czareels-videos')
-        .upload(fileName, byteArray, { contentType: 'video/mp4', upsert: false });
+        .upload(fileName, byteArray, { contentType: mimeType, upsert: false });
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data: { publicUrl: videoUrl } } = supabase.storage
         .from('czareels-videos')
         .getPublicUrl(fileName);
 
+      // thumbnail_url = same as video_url; VideoView renders the first frame as poster
+      const thumbnailUrl = videoUrl;
+
       const { error: insertError } = await supabase.from('czareels').insert({
         user_id: userId,
-        video_url: publicUrl,
+        video_url: videoUrl,
+        thumbnail_url: thumbnailUrl,
         caption: caption.trim() || null,
         charisma_tag: selectedTag?.id ?? null,
         charisma_emoji: selectedTag?.emoji ?? null,
@@ -257,10 +267,14 @@ export default function CreateCzareelScreen() {
           </View>
         ) : (
           <View style={[styles.videoPreviewContainer, { backgroundColor: colors.card }]}>
-            <Image source={{ uri: videoUri }} style={styles.videoPreview} resizeMode="cover" />
-            <View style={styles.videoPreviewOverlay}>
-              <View style={styles.videoPlayIconCircle}>
-                <IconSymbol size={32} name="play.fill" color="#fff" />
+            <Image
+              source={{ uri: videoUri! }}
+              style={styles.videoPreview}
+              resizeMode="cover"
+            />
+            <View style={styles.videoPreviewPlayOverlay} pointerEvents="none">
+              <View style={styles.videoPreviewPlayCircle}>
+                <IconSymbol size={28} name="play.fill" color="#fff" />
               </View>
             </View>
             {videoDuration && (
@@ -414,6 +428,20 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   videoPreview: { width: '100%', height: '100%' },
+  videoPreviewPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  videoPreviewPlayCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   videoPreviewOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
