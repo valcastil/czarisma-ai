@@ -4,6 +4,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { getCurrentUser, getRegisteredUsers } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
+import * as SMS from 'expo-sms';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -213,17 +214,52 @@ export default function NewMessageScreen() {
     });
   };
 
-  const handleContactPress = (contact: ImportedContact) => {
-    // Create a temporary user ID for the contact
+  const handleContactPress = async (contact: ImportedContact) => {
     const contactId = `contact_${contact.id}`;
-    router.push({
-      pathname: '/chat/[id]',
-      params: {
-        id: contactId,
-        username: contact.phoneNumbers[0] || contact.emails[0] || 'contact',
-        name: contact.name,
-      },
-    });
+    const openChat = () => {
+      router.push({
+        pathname: '/chat/[id]',
+        params: {
+          id: contactId,
+          username: contact.phoneNumbers[0] || contact.emails[0] || 'contact',
+          name: contact.name,
+        },
+      });
+    };
+
+    const phoneNumber = contact.phoneNumbers[0];
+    if (!phoneNumber) {
+      openChat();
+      return;
+    }
+
+    const smsAvailable = await SMS.isAvailableAsync();
+    if (!smsAvailable) {
+      openChat();
+      return;
+    }
+
+    Alert.alert(
+      contact.name,
+      `${contact.name} isn't on Czar AI yet. Would you like to invite them?`,
+      [
+        {
+          text: 'Invite via SMS',
+          onPress: async () => {
+            const message =
+              `Hey ${contact.name}! I'm using Czar AI — a charisma-building chat app. Join me here:\n` +
+              `• iOS: https://apps.apple.com/app/czar-ai/id6761360239\n` +
+              `• Android: https://play.google.com/store/apps/details?id=com.aiagentmaker.charismachat`;
+            await SMS.sendSMSAsync([phoneNumber], message);
+          },
+        },
+        {
+          text: 'Open Chat',
+          onPress: openChat,
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const handleBack = () => {
