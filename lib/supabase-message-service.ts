@@ -276,6 +276,75 @@ export const getRegisteredUsers = async (
 };
 
 /**
+ * Normalize a device phone number to E.164 format (best-effort, UAE +971 default).
+ * Returns null if the number can't be reasonably normalized.
+ */
+const normalizePhone = (raw: string): string | null => {
+    const digits = raw.replace(/[\s\-().]/g, '');
+    if (!digits) return null;
+    if (digits.startsWith('+')) return digits;
+    // Already has country code without +
+    if (digits.startsWith('00')) return `+${digits.slice(2)}`;
+    // UAE local format: 05x xxxxxxx → +97105xxxxxxx
+    if (digits.startsWith('0') && digits.length === 10) return `+971${digits.slice(1)}`;
+    // Already a full number without leading 0 (9 digits UAE)
+    if (digits.length === 9) return `+971${digits}`;
+    return null;
+};
+
+/**
+ * Batch-lookup Czar AI profiles by phone numbers.
+ * Normalizes device numbers to E.164 before querying.
+ * Returns a Map<normalizedPhone → User> for easy lookup.
+ */
+export const getProfilesByPhones = async (
+    rawPhones: string[]
+): Promise<Map<string, User>> => {
+    const result = new Map<string, User>();
+    try {
+        if (rawPhones.length === 0) return result;
+
+        const normalized = rawPhones
+            .map(p => normalizePhone(p))
+            .filter((p): p is string => p !== null);
+
+        if (normalized.length === 0) return result;
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, username, name, avatar_url, is_online, last_seen, handle_at, handle_hash, phone')
+            .in('phone', normalized);
+
+        if (error) {
+            logger.error('getProfilesByPhones error:', error);
+            return result;
+        }
+
+        (data ?? []).forEach((profile: any) => {
+            if (!profile.phone) return;
+            const user: User = {
+                id: profile.id,
+                username: profile.username,
+                name: profile.name,
+                isOnline: profile.is_online,
+                lastSeen: new Date(profile.last_seen).getTime(),
+                avatarUrl: profile.avatar_url,
+                handleAt: profile.handle_at ?? null,
+                handleHash: profile.handle_hash ?? null,
+            };
+            result.set(profile.phone, user);
+            // Also index by all normalized variants of the phone so raw lookups work
+            normalized.forEach(n => {
+                if (n === profile.phone) result.set(n, user);
+            });
+        });
+    } catch (e) {
+        logger.error('getProfilesByPhones exception:', e);
+    }
+    return result;
+};
+
+/**
  * Update user's online status
  */
 export const updateOnlineStatus = async (isOnline: boolean): Promise<void> => {

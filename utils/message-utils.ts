@@ -70,6 +70,15 @@ export const getRegisteredUsers = async (
 };
 
 /**
+ * Batch-lookup Czar AI profiles by phone numbers.
+ */
+export const getProfilesByPhones = async (
+  rawPhones: string[]
+): Promise<Map<string, User>> => {
+  return await SupabaseMessageService.getProfilesByPhones(rawPhones);
+};
+
+/**
  * Register/update current user in the database
  */
 export const registerCurrentUser = async (): Promise<void> => {

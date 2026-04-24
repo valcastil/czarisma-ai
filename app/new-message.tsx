@@ -1,7 +1,7 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { User } from '@/constants/message-types';
 import { useTheme } from '@/hooks/use-theme';
-import { getCurrentUser, getRegisteredUsers } from '@/utils/message-utils';
+import { getCurrentUser, getProfilesByPhones, getRegisteredUsers } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
 import * as SMS from 'expo-sms';
@@ -38,11 +38,44 @@ export default function NewMessageScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSearchingAllContacts, setIsSearchingAllContacts] = useState(false);
+  const [phoneMatchMap, setPhoneMatchMap] = useState<Map<string, User>>(new Map());
 
   useEffect(() => {
     loadUsers();
     loadImportedContacts();
   }, []);
+
+  // Cross-reference imported contacts with Czar AI users by phone number.
+  useEffect(() => {
+    if (contacts.length === 0) return;
+    const allPhones = contacts.flatMap(c => c.phoneNumbers);
+    if (allPhones.length === 0) return;
+    getProfilesByPhones(allPhones).then(matchMap => {
+      setPhoneMatchMap(matchMap);
+      // Merge matched app-users into the users list so they appear in Users section.
+      if (matchMap.size === 0) return;
+      setUsers(prev => {
+        const existingIds = new Set(prev.map(u => u.id));
+        const toAdd: User[] = [];
+        matchMap.forEach(user => {
+          if (!existingIds.has(user.id)) toAdd.push(user);
+        });
+        if (toAdd.length === 0) return prev;
+        const merged = [...prev, ...toAdd];
+        return Array.from(new Map(merged.map(u => [u.id, u])).values());
+      });
+      setFilteredUsers(prev => {
+        const existingIds = new Set(prev.map(u => u.id));
+        const toAdd: User[] = [];
+        matchMap.forEach(user => {
+          if (!existingIds.has(user.id)) toAdd.push(user);
+        });
+        if (toAdd.length === 0) return prev;
+        const merged = [...prev, ...toAdd];
+        return Array.from(new Map(merged.map(u => [u.id, u])).values());
+      });
+    }).catch(() => {});
+  }, [contacts]);
 
   // Debounced server-side user search. Scalable to 1M users — never fetches
   // the whole user base; each keystroke issues a capped ILIKE query.
@@ -325,40 +358,57 @@ export default function NewMessageScreen() {
     </TouchableOpacity>
   );
 
-  const renderContactItem = ({ item }: { item: ImportedContact }) => (
-    <TouchableOpacity
-      style={[styles.userItem, { backgroundColor: colors.background === '#fff' ? '#FFFFFF' : colors.card, borderColor: colors.border }]}
-      onPress={() => handleContactPress(item)}
-      activeOpacity={0.7}>
+  const renderContactItem = ({ item }: { item: ImportedContact }) => {
+    const matchedUser = item.phoneNumbers
+      .map(p => phoneMatchMap.get(p))
+      .find(Boolean);
+    const isOnApp = !!matchedUser;
 
-      <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, { backgroundColor: '#6C757D' }]}>
-          <Text style={styles.avatarText}>
-            {item.name.charAt(0).toUpperCase()}
+    return (
+      <TouchableOpacity
+        style={[styles.userItem, { backgroundColor: colors.background === '#fff' ? '#FFFFFF' : colors.card, borderColor: colors.border }]}
+        onPress={() => handleContactPress(item)}
+        activeOpacity={0.7}>
+
+        <View style={styles.avatarContainer}>
+          {isOnApp && matchedUser!.avatarUrl ? (
+            <Image source={{ uri: matchedUser!.avatarUrl }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: isOnApp ? colors.gold : '#6C757D', justifyContent: 'center', alignItems: 'center' }]}>
+              <Text style={styles.avatarText}>
+                {item.name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          {isOnApp ? (
+            <View style={[styles.contactBadge, { backgroundColor: '#34C759' }]}>
+              <IconSymbol size={10} name="checkmark" color="#FFFFFF" />
+            </View>
+          ) : (
+            <View style={[styles.contactBadge, { backgroundColor: colors.gold }]}>
+              <IconSymbol size={10} name="person.crop.circle" color="#000000" />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.userInfo}>
+          <Text style={[styles.userName, { color: colors.text }]}>
+            {item.name}
+          </Text>
+          <Text style={[styles.userUsername, { color: colors.textSecondary }]}>
+            {item.phoneNumbers[0] || item.emails[0] || 'No contact info'}
+          </Text>
+          <Text style={[styles.userStatus, { color: isOnApp ? '#34C759' : colors.textSecondary }]}>
+            {isOnApp ? 'On Czar AI' : 'From your contacts'}
           </Text>
         </View>
-        <View style={[styles.contactBadge, { backgroundColor: colors.gold }]}>
-          <IconSymbol size={10} name="person.crop.circle" color="#000000" />
+
+        <View style={styles.arrowIndicator}>
+          <IconSymbol size={16} name="chevron.right" color={colors.textSecondary} />
         </View>
-      </View>
-
-      <View style={styles.userInfo}>
-        <Text style={[styles.userName, { color: colors.text }]}>
-          {item.name}
-        </Text>
-        <Text style={[styles.userUsername, { color: colors.textSecondary }]}>
-          {item.phoneNumbers[0] || item.emails[0] || 'No contact info'}
-        </Text>
-        <Text style={[styles.userStatus, { color: colors.textSecondary }]}>
-          From your contacts
-        </Text>
-      </View>
-
-      <View style={styles.arrowIndicator}>
-        <IconSymbol size={16} name="chevron.right" color={colors.textSecondary} />
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
