@@ -194,6 +194,8 @@ function RootLayoutContent() {
           <Stack.Screen name="search" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="claim-handle" options={{ gestureEnabled: false, animation: 'fade' }} />
           <Stack.Screen name="entry" options={{ headerShown: false }} />
+          <Stack.Screen name="czareels" options={{ headerShown: false, animation: 'slide_from_right' }} />
+          <Stack.Screen name="create-czareel" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
         </Stack>
         <StatusBar style="light" />
         {/* Intelligent Czar - appears after 20s of inactivity */}

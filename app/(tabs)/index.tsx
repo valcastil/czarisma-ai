@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+    ActionSheetIOS,
     ActivityIndicator,
     Alert,
     DeviceEventEmitter,
@@ -279,38 +280,52 @@ Forwarded from Czar AI
         </View>
 
         <TouchableOpacity
-          style={[
-            styles.subscriptionBadge,
-            {
-              backgroundColor: colors.gold,
-              borderColor: colors.gold,
-            },
-          ]}
+          style={styles.hamburgerButton}
           onPress={() => {
-            try {
-              // Use navigation.navigate for better production build compatibility
-              if (navigation && navigation.navigate) {
-                navigation.navigate('ai-chat' as never);
-              } else {
-                router.navigate('/ai-chat');
+            const navigateToAI = () => {
+              try {
+                if (navigation && navigation.navigate) {
+                  navigation.navigate('ai-chat' as never);
+                } else {
+                  router.navigate('/ai-chat');
+                }
+              } catch {
+                router.push('/ai-chat');
               }
-            } catch (error) {
-              console.error('Talk to AI navigation error:', error);
-              // Fallback to router.push
-              router.push('/ai-chat');
+            };
+            if (Platform.OS === 'ios') {
+              ActionSheetIOS.showActionSheetWithOptions(
+                {
+                  options: ['Cancel', 'Czareels', 'Social Links', 'Czarisma Entries', 'Talk to AI'],
+                  cancelButtonIndex: 0,
+                },
+                (index) => {
+                  if (index === 1) router.push('/czareels' as any);
+                  else if (index === 2) flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                  else if (index === 3) {
+                    const entriesIdx = flatListRef.current ? -1 : -1; // handled via pendingScroll
+                    pendingScrollToEntries.current = true;
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                  }
+                  else if (index === 4) navigateToAI();
+                }
+              );
+            } else {
+              Alert.alert(
+                'Menu',
+                undefined,
+                [
+                  { text: 'Czareels', onPress: () => router.push('/czareels' as any) },
+                  { text: 'Social Links', onPress: () => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }) },
+                  { text: 'Czarisma Entries', onPress: () => { pendingScrollToEntries.current = true; flatListRef.current?.scrollToEnd({ animated: true }); } },
+                  { text: 'Talk to AI', onPress: navigateToAI },
+                  { text: 'Cancel', style: 'cancel' },
+                ]
+              );
             }
           }}
-          activeOpacity={0.8}>
-          <Text
-            style={[
-              styles.subscriptionText,
-              {
-                color: '#000000',
-                fontWeight: '700',
-              },
-            ]}>
-            Talk to AI
-          </Text>
+          activeOpacity={0.7}>
+          <IconSymbol size={26} name="line.3.horizontal" color={colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -590,18 +605,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  subscriptionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  subscriptionText: {
-    fontSize: 12,
-    fontWeight: '600',
+  hamburgerButton: {
+    padding: 8,
+    marginRight: -8,
   },
   logoContainer: {
     flexDirection: 'row',
