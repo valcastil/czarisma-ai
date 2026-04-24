@@ -30,6 +30,8 @@ interface Czareel {
   mood_emojis: string[] | null;
   duration_sec: number | null;
   views: number;
+  likes: number;
+  comments: number;
   created_at: string;
   profiles: {
     name: string;
@@ -55,6 +57,12 @@ interface ReelItemProps {
   colors: any;
   insets: any;
   onCreatePress: () => void;
+}
+
+function formatCount(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 function ReelItem({ item, colors, insets }: ReelItemProps) {
@@ -87,6 +95,24 @@ function ReelItem({ item, colors, insets }: ReelItemProps) {
 
       {/* Dark gradient overlay at bottom */}
       <View style={styles.gradientOverlay} />
+
+      {/* Right-side action bar */}
+      <View style={[styles.actionBar, { bottom: insets.bottom + 100 }]} pointerEvents="none">
+        <View style={styles.actionItem}>
+          <Text style={styles.actionEmoji}>❤️</Text>
+          <Text style={styles.actionCount}>{formatCount(item.likes ?? 0)}</Text>
+        </View>
+        <View style={styles.actionItem}>
+          <Text style={styles.actionEmoji}>👁️</Text>
+          <Text style={styles.actionCount}>{formatCount(item.views ?? 0)}</Text>
+        </View>
+        {item.duration_sec ? (
+          <View style={styles.actionItem}>
+            <Text style={styles.actionEmoji}>⏱</Text>
+            <Text style={styles.actionCount}>{Math.round(item.duration_sec)}s</Text>
+          </View>
+        ) : null}
+      </View>
 
       {/* Bottom info overlay */}
       <View style={[styles.infoOverlay, { paddingBottom: insets.bottom + 80 }]}>
@@ -122,11 +148,6 @@ function ReelItem({ item, colors, insets }: ReelItemProps) {
               <Text style={styles.moodBadgeText}>{item.mood_emojis.join('  ')}</Text>
             </View>
           ) : null}
-          {item.duration_sec ? (
-            <View style={styles.durationBadge}>
-              <Text style={styles.durationBadgeText}>{Math.round(item.duration_sec)}s</Text>
-            </View>
-          ) : null}
         </View>
       </View>
     </TouchableOpacity>
@@ -156,7 +177,7 @@ export default function CzareelsScreen() {
         .from('czareels')
         .select(`
           id, user_id, video_url, thumbnail_url, caption,
-          charisma_tag, charisma_emoji, mood_emojis,
+          charisma_tag, charisma_emoji, mood_emojis, likes, comments,
           duration_sec, views, created_at,
           profiles ( name, username, avatar_url )
         `)
@@ -321,6 +342,27 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: '#111',
+  },
+  actionBar: {
+    position: 'absolute',
+    right: 12,
+    alignItems: 'center',
+    gap: 18,
+  },
+  actionItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionEmoji: {
+    fontSize: 26,
+  },
+  actionCount: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,

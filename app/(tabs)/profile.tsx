@@ -1,9 +1,11 @@
+import { CzareelsGrid } from '@/components/profile/czareels-grid';
 import { ProfileHeader } from '@/components/profile/profile-header';
 import { RecentEntries } from '@/components/profile/recent-entries';
 import { QuickActions } from '@/components/profile/settings-button';
 import { StatsCard } from '@/components/profile/stats-card';
 import { CharismaEntry, UserProfile, UserStats } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { supabase } from '@/lib/supabase';
 import { calculateUserStats, getProfile, getRecentEntries, updateProfile } from '@/utils/profile-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
@@ -23,14 +25,28 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [recentEntries, setRecentEntries] = useState<CharismaEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const isLoadingRef = useRef(false);
 
   const loadProfileData = async () => {
-    // Prevent concurrent loads which cause race conditions
     if (isLoadingRef.current) return;
     isLoadingRef.current = true;
     try {
       setLoading(true);
+
+      // Grab current user id for Czareels grid + follow counts
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id ?? null;
+      setUserId(uid);
+      if (uid) {
+        const { data: fc } = await supabase
+          .from('profiles')
+          .select('follower_count, following_count')
+          .eq('id', uid)
+          .maybeSingle();
+        if (fc) setFollowCounts({ followers: fc.follower_count ?? 0, following: fc.following_count ?? 0 });
+      }
       console.log('Starting to load profile data...');
 
       let [profileData, entriesData] = await Promise.all([
@@ -191,7 +207,10 @@ export default function ProfileScreen() {
         <ProfileHeader
           profile={profile}
           onEditPress={handleEditProfile}
+          followCounts={followCounts}
         />
+
+        {userId && <CzareelsGrid userId={userId} />}
 
         <StatsCard stats={stats} />
 

@@ -10,9 +10,10 @@ import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-
 interface ProfileHeaderProps {
   profile: UserProfile;
   onEditPress?: () => void;
+  followCounts?: { followers: number; following: number };
 }
 
-export function ProfileHeader({ profile, onEditPress }: ProfileHeaderProps) {
+export function ProfileHeader({ profile, onEditPress, followCounts }: ProfileHeaderProps) {
   const router = useRouter();
   const { colors } = useTheme();
 
@@ -212,28 +213,29 @@ export function ProfileHeader({ profile, onEditPress }: ProfileHeaderProps) {
       
       <View style={[styles.statsRow, { backgroundColor: colors.card }]}>
         <View style={styles.statItem}>
+          <Text style={[styles.statNumber, { color: colors.gold }]}>{followCounts?.followers ?? 0}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Followers</Text>
+        </View>
+
+        <View style={styles.statDivider} />
+
+        <View style={styles.statItem}>
+          <Text style={[styles.statNumber, { color: colors.gold }]}>{followCounts?.following ?? 0}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Following</Text>
+        </View>
+
+        <View style={styles.statDivider} />
+
+        <View style={styles.statItem}>
           <Text style={[styles.statNumber, { color: colors.gold }]}>{profile.totalEntries}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Entries</Text>
         </View>
-        
+
         <View style={styles.statDivider} />
-        
+
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.gold }]}>{profile.streak}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Day Streak</Text>
-        </View>
-        
-        <View style={styles.statDivider} />
-        
-        <View style={styles.statItem}>
-          <Text 
-            style={[styles.statNumber, { color: colors.gold }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.7}>
-            {getCharismaDisplayName(profile.topCharisma)}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Top Charisma</Text>
+          <Text style={[styles.statNumber, { color: colors.gold }]}>{profile.streak}🔥</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Streak</Text>
         </View>
       </View>
 
