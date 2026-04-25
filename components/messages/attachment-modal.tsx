@@ -4,7 +4,7 @@ import { MediaPickerService } from '@/lib/media-picker-service';
 import { Attachment, MediaUploadService } from '@/lib/media-upload-service';
 import { supabase } from '@/lib/supabase';
 import React, { useState } from 'react';
-import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Image, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface AttachmentModalProps {
   visible: boolean;
@@ -19,11 +19,37 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  const [previewMedia, setPreviewMedia] = useState<any>(null);
+  const [showPreview, setShowPreview] = useState(false);
+
   const handlePickImage = async () => {
-    const media = await MediaPickerService.pickImageFromGallery();
+    const media = await MediaPickerService.pickImageFromGalleryNoCrop();
     if (media) {
-      await uploadAndAttach(media, 'image');
+      setPreviewMedia(media);
+      setShowPreview(true);
     }
+  };
+
+  const handlePreviewSend = async () => {
+    setShowPreview(false);
+    if (previewMedia) {
+      await uploadAndAttach(previewMedia, 'image');
+    }
+    setPreviewMedia(null);
+  };
+
+  const handlePreviewEdit = async () => {
+    setShowPreview(false);
+    const edited = await MediaPickerService.pickImageFromGalleryWithCrop();
+    if (edited) {
+      await uploadAndAttach(edited, 'image');
+    }
+    setPreviewMedia(null);
+  };
+
+  const handlePreviewCancel = () => {
+    setShowPreview(false);
+    setPreviewMedia(null);
   };
 
   const handlePickVideo = async () => {
@@ -161,6 +187,36 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
   }
 
   return (
+    <>
+      {/* Image preview modal — shown after gallery pick, before upload */}
+      <Modal
+        visible={showPreview}
+        animationType="fade"
+        transparent={false}
+        statusBarTranslucent
+        onRequestClose={handlePreviewCancel}>
+        <View style={previewStyles.container}>
+          <TouchableOpacity style={previewStyles.closeBtn} onPress={handlePreviewCancel}>
+            <Text style={previewStyles.closeBtnText}>✕</Text>
+          </TouchableOpacity>
+          {previewMedia && (
+            <Image
+              source={{ uri: previewMedia.uri }}
+              style={previewStyles.image}
+              resizeMode="contain"
+            />
+          )}
+          <View style={previewStyles.actions}>
+            <TouchableOpacity style={previewStyles.editBtn} onPress={handlePreviewEdit}>
+              <Text style={previewStyles.editBtnText}>✏️  Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={previewStyles.sendBtn} onPress={handlePreviewSend}>
+              <Text style={previewStyles.sendBtnText}>Send  ➤</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     <Modal
       visible={visible}
       animationType="slide"
@@ -218,6 +274,7 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
         </View>
       </View>
     </Modal>
+    </>
   );
 }
 
@@ -304,5 +361,74 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
+  },
+});
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+const previewStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 48,
+    left: 20,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtnText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  image: {
+    width: SCREEN_W,
+    height: SCREEN_H * 0.75,
+  },
+  actions: {
+    position: 'absolute',
+    bottom: 48,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  editBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  sendBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#C9A84C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

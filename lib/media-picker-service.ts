@@ -49,6 +49,81 @@ export class MediaPickerService {
     }
   }
 
+  static async pickImageFromGalleryNoCrop(): Promise<PickedMedia | null> {
+    try {
+      const hasPermission = await MediaPermissions.requestMediaLibraryPermission();
+      if (!hasPermission) return null;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        allowsMultipleSelection: false,
+      });
+
+      if (result.canceled) return null;
+
+      const asset = result.assets[0];
+
+      if (asset.fileSize && asset.fileSize > this.MAX_FILE_SIZE) {
+        Alert.alert('File Too Large', 'Please select an image smaller than 50MB');
+        return null;
+      }
+
+      return {
+        type: 'image',
+        uri: asset.uri,
+        fileName: asset.fileName || `image_${Date.now()}.jpg`,
+        fileSize: asset.fileSize || 0,
+        mimeType: asset.mimeType || 'image/jpeg',
+        width: asset.width ?? undefined,
+        height: asset.height ?? undefined,
+      };
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image from gallery');
+      return null;
+    }
+  }
+
+  static async pickImageFromGalleryWithCrop(): Promise<PickedMedia | null> {
+    try {
+      const hasPermission = await MediaPermissions.requestMediaLibraryPermission();
+      if (!hasPermission) return null;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: CROP_ASPECT,
+        quality: 0.8,
+        allowsMultipleSelection: false,
+      });
+
+      if (result.canceled) return null;
+
+      const asset = result.assets[0];
+
+      if (asset.fileSize && asset.fileSize > this.MAX_FILE_SIZE) {
+        Alert.alert('File Too Large', 'Please select an image smaller than 50MB');
+        return null;
+      }
+
+      return {
+        type: 'image',
+        uri: asset.uri,
+        fileName: asset.fileName || `image_${Date.now()}.jpg`,
+        fileSize: asset.fileSize || 0,
+        mimeType: asset.mimeType || 'image/jpeg',
+        width: asset.width ?? undefined,
+        height: asset.height ?? undefined,
+      };
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image from gallery');
+      return null;
+    }
+  }
+
   static async pickImageFromGallery(): Promise<PickedMedia | null> {
     try {
       const hasPermission = await MediaPermissions.requestMediaLibraryPermission();
