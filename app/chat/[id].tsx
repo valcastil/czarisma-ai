@@ -838,6 +838,11 @@ export default function ChatScreen() {
       setProfileSharedLinks(sharedLinks || []);
 
       if (fullProfile) {
+        console.log('[SocialLinks Debug] fullProfile.social_links:', fullProfile.social_links);
+        console.log('[SocialLinks Debug] social_links type:', typeof fullProfile.social_links);
+        console.log('[SocialLinks Debug] social_links keys:', fullProfile.social_links ? Object.keys(fullProfile.social_links) : 'null');
+        console.log('[SocialLinks Debug] social_links values:', fullProfile.social_links ? Object.values(fullProfile.social_links) : 'null');
+        console.log('[SocialLinks Debug] fullProfile entire object:', fullProfile);
         setProfileBio(fullProfile.bio || '');
         setProfileSocialLinks(fullProfile.social_links || {});
       }
@@ -1714,14 +1719,26 @@ export default function ChatScreen() {
                   )}
 
                   {/* Social Handles Section (Instagram/TikTok/etc. usernames) */}
-                  {Object.keys(profileSocialLinks).length > 0 && (
+                  {isFollowingUser && Object.keys(profileSocialLinks).length > 0 ? (
                     <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
                       <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
                         Social Handles
                       </Text>
                       <SocialLinksDisplay socialLinks={profileSocialLinks} />
                     </View>
-                  )}
+                  ) : !isFollowingUser && Object.keys(profileSocialLinks).length > 0 ? (
+                    <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
+                      <Text style={[styles.whatsappSectionTitle, { color: colors.text }]}>
+                        Social Handles
+                      </Text>
+                      <View style={styles.lockedContainer}>
+                        <Text style={styles.lockEmoji}>🔒</Text>
+                        <Text style={[styles.lockedText, { color: colors.textSecondary }]}>
+                          Follow this user to see their social handles
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
 
                   {/* Social Links (Shared Links feed) */}
                   <View style={[styles.whatsappSection, { backgroundColor: colors.card }]}>
@@ -2188,6 +2205,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     lineHeight: 20,
+  },
+  lockedContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+  },
+  lockEmoji: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  lockedText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
   whatsappInfoRow: {
     flexDirection: 'row',

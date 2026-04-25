@@ -177,6 +177,7 @@ export const getUserSharedLinks = async (userId: string, limit = 50) => {
 
     const links = data ?? [];
     console.log('[getUserSharedLinks] Total links fetched:', links.length);
+    console.log('[getUserSharedLinks] Links with platforms:', links.map(l => ({ url: l.url, platform: l.platform })));
 
     // Deduplicate by URL - keep the most recent entry (first due to descending order)
     const uniqueLinks = links.filter(
@@ -185,6 +186,7 @@ export const getUserSharedLinks = async (userId: string, limit = 50) => {
     );
 
     console.log('[getUserSharedLinks] Unique links after dedup:', uniqueLinks.length);
+    console.log('[getUserSharedLinks] Unique links with platforms:', uniqueLinks.map(l => ({ url: l.url, platform: l.platform })));
     if (links.length !== uniqueLinks.length) {
       console.log('[getUserSharedLinks] Removed duplicates:', links.length - uniqueLinks.length);
     }
