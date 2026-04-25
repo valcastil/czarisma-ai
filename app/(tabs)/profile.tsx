@@ -64,6 +64,19 @@ export default function ProfileScreen() {
       const userStats = await calculateUserStats(entries);
       const recent = getRecentEntries(entries, 5);
 
+      // Fetch czareels count from Supabase
+      let czareelsCount = 0;
+      if (uid) {
+        const { count, error: czareelsError } = await supabase
+          .from('czareels')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', uid);
+        if (!czareelsError && count !== null) {
+          czareelsCount = count;
+        }
+      }
+      userStats.czareelsCount = czareelsCount;
+
       console.log('User stats calculated:', userStats);
       console.log('Top charisma type:', userStats.topCharisma.type);
       console.log('Top charisma count:', userStats.topCharisma.count);

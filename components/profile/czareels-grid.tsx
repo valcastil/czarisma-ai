@@ -2,12 +2,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
+import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Image,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -36,14 +37,29 @@ function ReelCell({ item, onTap }: { item: CzareelItem; onTap: (i: CzareelItem) 
   const [imgError, setImgError] = useState(false);
   const thumbUri = !imgError && item.thumbnail_url ? item.thumbnail_url : null;
 
+  // Debug logging for Android thumbnail issues
+  if (thumbUri && Platform.OS === 'android') {
+    console.log('[CzareelsGrid] Loading thumbnail:', thumbUri.substring(0, 80) + '...');
+  }
+
+  const handleImageError = (error: any) => {
+    console.error('[CzareelsGrid] Image load error:', {
+      platform: Platform.OS,
+      error: error?.nativeEvent || error,
+      uri: thumbUri?.substring(0, 50),
+    });
+    setImgError(true);
+  };
+
   return (
     <TouchableOpacity onPress={() => onTap(item)} activeOpacity={0.85} style={styles.cell}>
       {thumbUri ? (
         <Image
           source={{ uri: thumbUri }}
           style={styles.thumbnail}
-          resizeMode="cover"
-          onError={() => setImgError(true)}
+          contentFit="cover"
+          onError={handleImageError}
+          cachePolicy="memory-disk"
         />
       ) : (
         <View style={[styles.thumbnail, styles.thumbPlaceholder]}>

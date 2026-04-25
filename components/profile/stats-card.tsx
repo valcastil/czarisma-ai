@@ -76,8 +76,17 @@ export function StatsCard({ stats }: StatsCardProps) {
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.statRow}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: colors.gold }]}>
+                {stats.czareelsCount}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Czareels
+              </Text>
+            </View>
+            
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.gold }]}>
                 {stats.longestStreak}
@@ -86,13 +95,24 @@ export function StatsCard({ stats }: StatsCardProps) {
                 Longest Streak
               </Text>
             </View>
-            
+          </View>
+          
+          <View style={styles.statRow}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.gold }]}>
                 {formatAverage(stats.weeklyAverage)}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                 Weekly Average
+              </Text>
+            </View>
+            
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: colors.gold }]}>
+                {formatAverage(stats.monthlyAverage)}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+                Monthly Average
               </Text>
             </View>
           </View>
@@ -132,15 +152,6 @@ export function StatsCard({ stats }: StatsCardProps) {
           <View style={styles.divider} />
           
           <View style={styles.statRow}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.gold }]}>
-                {formatAverage(stats.monthlyAverage)}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                Monthly Average
-              </Text>
-            </View>
-            
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.gold }]}>
                 {Math.round((stats.currentStreak / 30) * 100)}%

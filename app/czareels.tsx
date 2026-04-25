@@ -9,6 +9,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -82,7 +83,7 @@ function ReelItem({ item, colors, insets }: ReelItemProps) {
     >
       {/* Thumbnail / first-frame still */}
       <Image
-        source={{ uri: item.video_url }}
+        source={{ uri: item.thumbnail_url || item.video_url }}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
       />
@@ -103,7 +104,7 @@ function ReelItem({ item, colors, insets }: ReelItemProps) {
           <Text style={styles.actionCount}>{formatCount(item.likes ?? 0)}</Text>
         </View>
         <View style={styles.actionItem}>
-          <Text style={styles.actionEmoji}>👁️</Text>
+          <IconSymbol size={26} name="eye" color="#fff" />
           <Text style={styles.actionCount}>{formatCount(item.views ?? 0)}</Text>
         </View>
         {item.duration_sec ? (
@@ -115,7 +116,7 @@ function ReelItem({ item, colors, insets }: ReelItemProps) {
       </View>
 
       {/* Bottom info overlay */}
-      <View style={[styles.infoOverlay, { paddingBottom: insets.bottom + 80 }]}>
+      <View style={[styles.infoOverlay, { paddingBottom: insets.bottom + (Platform.OS === 'android' ? 30 : 40) }]}>
         {/* User info */}
         <View style={styles.userRow}>
           {avatar ? (
@@ -382,7 +383,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: '65%',
+    height: Platform.OS === 'android' ? '24%' : '22%',
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   infoOverlay: {

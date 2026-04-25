@@ -395,6 +395,7 @@ export const calculateUserStats = async (entries: CharismaEntry[]): Promise<User
     topEmotion,
     weeklyAverage: weeklyEntries.length / 7,
     monthlyAverage: monthlyEntries.length / 30,
+    czareelsCount: 0, // Will be populated separately from Supabase
   };
 };
 

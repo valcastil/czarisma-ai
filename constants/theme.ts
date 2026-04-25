@@ -130,6 +130,7 @@ export interface UserStats {
   topEmotion: string;
   weeklyAverage: number;
   monthlyAverage: number;
+  czareelsCount: number;
 }
 
 export const Fonts = Platform.select({

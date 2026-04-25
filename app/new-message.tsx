@@ -26,6 +26,41 @@ interface ImportedContact {
   emails: string[];
 }
 
+/**
+ * Normalize a phone number to E.164 format for consistent matching.
+ * Matches the normalization in supabase-message-service.ts
+ */
+const normalizePhone = (raw: string): string | null => {
+  const digits = raw.replace(/[\s\-().]/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('+')) return digits;
+  if (digits.startsWith('00')) return `+${digits.slice(2)}`;
+  // UAE local format: 05x xxxxxxx → +9715xxxxxxx
+  if (digits.startsWith('0') && digits.length === 10) return `+971${digits.slice(1)}`;
+  // Already a full number without leading 0 (9 digits UAE)
+  if (digits.length === 9) return `+971${digits}`;
+  return null;
+};
+
+/**
+ * Check if a contact is on the app by checking if any of their phone numbers
+ * match any phone number in the phoneMatchMap (using normalized comparison).
+ */
+const isContactOnApp = (contact: ImportedContact, phoneMatchMap: Map<string, User>): boolean => {
+  return contact.phoneNumbers.some(p => {
+    // Check raw phone number first
+    if (phoneMatchMap.has(p)) return true;
+    // Check normalized phone number
+    const normalized = normalizePhone(p);
+    if (normalized && phoneMatchMap.has(normalized)) return true;
+    // Check if any key in the map matches this phone (reverse lookup)
+    for (const [key, user] of phoneMatchMap.entries()) {
+      if (key.includes(p.replace(/\D/g, ''))) return true;
+    }
+    return false;
+  });
+};
+
 export default function NewMessageScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -169,8 +204,8 @@ export default function NewMessageScreen() {
 
   const sortContacts = (list: ImportedContact[]): ImportedContact[] =>
     [...list].sort((a, b) => {
-      const aOnApp = a.phoneNumbers.some(p => phoneMatchMap.has(p));
-      const bOnApp = b.phoneNumbers.some(p => phoneMatchMap.has(p));
+      const aOnApp = isContactOnApp(a, phoneMatchMap);
+      const bOnApp = isContactOnApp(b, phoneMatchMap);
       if (aOnApp === bOnApp) return 0;
       return aOnApp ? -1 : 1;
     });
