@@ -3,7 +3,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { MediaPickerService } from '@/lib/media-picker-service';
 import { Attachment, MediaUploadService } from '@/lib/media-upload-service';
 import { supabase } from '@/lib/supabase';
-import React, { useState } from 'react';
+import { ImageEditorModal } from '@/components/messages/image-editor-modal';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Dimensions, Image, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface AttachmentModalProps {
@@ -21,16 +22,29 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
 
   const [previewMedia, setPreviewMedia] = useState<any>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const pendingPickRef = useRef(false);
 
-  const handlePickImage = async () => {
+  const handlePickImage = () => {
+    pendingPickRef.current = true;
     onClose();
-    await new Promise(r => setTimeout(r, 50));
+  };
+
+  const launchPickerAfterDismiss = async () => {
+    if (!pendingPickRef.current) return;
+    pendingPickRef.current = false;
     const media = await MediaPickerService.pickImageFromGalleryNoCrop();
     if (media) {
       setPreviewMedia(media);
       setShowPreview(true);
     }
   };
+
+  useEffect(() => {
+    if (!visible && pendingPickRef.current && Platform.OS === 'android') {
+      const t = setTimeout(launchPickerAfterDismiss, 300);
+      return () => clearTimeout(t);
+    }
+  }, [visible]);
 
   const handlePreviewSend = async () => {
     setShowPreview(false);
@@ -40,14 +54,31 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
     setPreviewMedia(null);
   };
 
-  const handlePreviewEdit = async () => {
+  const [showEditor, setShowEditor] = useState(false);
+
+  const handlePreviewEdit = () => {
     setShowPreview(false);
-    await new Promise(r => setTimeout(r, 50));
-    const edited = await MediaPickerService.pickImageFromGalleryWithCrop();
-    if (edited) {
-      await uploadAndAttach(edited, 'image');
-    }
+    setShowEditor(true);
+  };
+
+  const handleEditorDone = async (editedUri: string) => {
+    setShowEditor(false);
+    const media = {
+      uri: editedUri,
+      fileName: `edited_${Date.now()}.jpg`,
+      fileSize: 0,
+      mimeType: 'image/jpeg',
+      type: 'image' as const,
+    };
+    await uploadAndAttach(media, 'image');
     setPreviewMedia(null);
+  };
+
+  const handleEditorCancel = () => {
+    setShowEditor(false);
+    if (previewMedia) {
+      setShowPreview(true);
+    }
   };
 
   const handlePreviewCancel = () => {
@@ -191,6 +222,13 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
 
   return (
     <>
+      <ImageEditorModal
+        visible={showEditor}
+        imageUri={previewMedia?.uri ?? null}
+        onCancel={handleEditorCancel}
+        onDone={handleEditorDone}
+      />
+
       {/* Image preview modal — shown after gallery pick, before upload */}
       <Modal
         visible={showPreview}
@@ -224,7 +262,8 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+      onDismiss={launchPickerAfterDismiss}>
       
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
