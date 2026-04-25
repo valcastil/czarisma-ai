@@ -174,7 +174,22 @@ export const getUserSharedLinks = async (userId: string, limit = 50) => {
       console.error('Error fetching shared links:', error);
       return [];
     }
-    return data ?? [];
+
+    const links = data ?? [];
+    console.log('[getUserSharedLinks] Total links fetched:', links.length);
+
+    // Deduplicate by URL - keep the most recent entry (first due to descending order)
+    const uniqueLinks = links.filter(
+      (link, index, self) =>
+        index === self.findIndex((t) => t.url === link.url)
+    );
+
+    console.log('[getUserSharedLinks] Unique links after dedup:', uniqueLinks.length);
+    if (links.length !== uniqueLinks.length) {
+      console.log('[getUserSharedLinks] Removed duplicates:', links.length - uniqueLinks.length);
+    }
+
+    return uniqueLinks;
   } catch (err) {
     console.error('getUserSharedLinks error:', err);
     return [];

@@ -203,3 +203,124 @@ Format as a numbered list (1., 2., 3.) with each prompt being a clear question.`
     return ['What made you feel charismatic today?'];
   }
 };
+
+/**
+ * Generate context-aware questions for czareel video reflection
+ */
+export const generateCzareelQuestions = async (
+  videoContext?: string
+): Promise<string[]> => {
+  try {
+    const model = getGeminiModel();
+    if (!model) {
+      // Fallback to static questions if Gemini is unavailable
+      return [
+        'What is this video about?',
+        'Why is this moment important to you?',
+        'How will this help you grow or improve?'
+      ];
+    }
+
+    const prompt = `You are a charismatic AI companion helping users reflect on their video content for self-improvement. 
+${videoContext ? `Context: ${videoContext}` : 'No additional context provided.'}
+
+Generate 3 thoughtful, context-aware questions that will help the user reflect on:
+1. What the video represents
+2. Why it's important to them
+3. How it helps them grow or improve
+
+The questions should be:
+- Concise and direct (under 15 words each)
+- Encouraging and positive
+- Focused on self-improvement and growth
+- Similar in spirit to: "What is this video?", "Why is it important?", "How will it help you?"
+
+Respond with ONLY the 3 questions, each on a separate line, numbered 1., 2., 3.`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    const questions = text
+      .split('\n')
+      .filter(line => line.match(/^\d+\./))
+      .map(line => line.replace(/^\d+\.\s*/, '').trim())
+      .filter(q => q.length > 0);
+    
+    return questions.length === 3 ? questions : [
+      'What is this video about?',
+      'Why is this moment important to you?',
+      'How will this help you grow or improve?'
+    ];
+  } catch (error) {
+    console.error('Error generating czareel questions:', error);
+    return [
+      'What is this video about?',
+      'Why is this moment important to you?',
+      'How will this help you grow or improve?'
+    ];
+  }
+};
+
+/**
+ * Evaluate user's answers to czareel questions and provide feedback
+ */
+export const evaluateCzareelAnswers = async (
+  questions: string[],
+  answers: string[]
+): Promise<{ feedback: string; suggestions: string[] }> => {
+  try {
+    const model = getGeminiModel();
+    if (!model) {
+      return {
+        feedback: 'Great job reflecting on your video! Your answers show thoughtfulness and self-awareness.',
+        suggestions: ['Keep practicing self-reflection', 'Track your progress over time']
+      };
+    }
+
+    const qaPairs = questions.map((q, i) => `Q: ${q}\nA: ${answers[i]}`).join('\n\n');
+    
+    const prompt = `You are a supportive AI coach helping users improve themselves through video reflection. 
+Review these question-answer pairs:
+
+${qaPairs}
+
+Provide:
+1. A brief, encouraging feedback message (2-3 sentences)
+2. 2 specific, actionable suggestions for growth (one sentence each)
+
+Respond in this exact JSON format:
+{
+  "feedback": "Your encouraging feedback message here",
+  "suggestions": ["suggestion 1", "suggestion 2"]
+}`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          feedback: parsed.feedback || 'Great job reflecting on your video!',
+          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : ['Keep practicing self-reflection']
+        };
+      }
+    } catch (parseError) {
+      console.error('Error parsing Gemini response:', parseError);
+    }
+    
+    return {
+      feedback: 'Great job reflecting on your video! Your answers show thoughtfulness and self-awareness.',
+      suggestions: ['Keep practicing self-reflection', 'Track your progress over time']
+    };
+  } catch (error) {
+    console.error('Error evaluating czareel answers:', error);
+    return {
+      feedback: 'Great job reflecting on your video! Your answers show thoughtfulness and self-awareness.',
+      suggestions: ['Keep practicing self-reflection', 'Track your progress over time']
+    };
+  }
+};

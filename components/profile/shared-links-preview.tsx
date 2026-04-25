@@ -69,13 +69,21 @@ export function SharedLinksPreview({ links, isFollowing, totalCount }: SharedLin
     );
   }
 
+  // Deduplicate by URL as a safety measure
+  const uniqueLinks = links.filter(
+    (link, index, self) =>
+      index === self.findIndex((t) => t.url === link.url)
+  );
+
+  console.log('[SharedLinksPreview] Input links:', links.length, 'Unique links:', uniqueLinks.length);
+
   const openLink = (url: string) => {
     Linking.openURL(url).catch(() => {});
   };
 
   return (
     <View style={styles.container}>
-      {links.map((link) => {
+      {uniqueLinks.map((link) => {
         const platform = (link.platform || 'unknown') as LinkPlatform;
         const platformColor = getPlatformColor(platform);
         const emoji = getPlatformEmoji(platform);

@@ -1,8 +1,11 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { CzareelQuestionsModal } from '@/components/czareel-questions-modal';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { MediaPermissions } from '@/utils/media-permissions';
+import { checkPaidProStatus } from '@/utils/subscription-utils';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -53,8 +56,13 @@ export default function CreateCzareelScreen() {
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false);
+  const [czareelQuestions, setCzareelQuestions] = useState<string[]>([]);
+  const [czareelAnswers, setCzareelAnswers] = useState<string[]>([]);
+  const [czareelFeedback, setCzareelFeedback] = useState('');
+  const [questionsAnswered, setQuestionsAnswered] = useState(false);
 
-  const validateAndSetVideo = (asset: ImagePicker.ImagePickerAsset) => {
+  const validateAndSetVideo = async (asset: ImagePicker.ImagePickerAsset) => {
     const durationSec = asset.duration ? asset.duration / 1000 : null;
     if (durationSec && durationSec > MAX_DURATION_SEC) {
       Alert.alert('Video Too Long', `Please select a video shorter than ${MAX_DURATION_SEC} seconds.`);
@@ -67,6 +75,20 @@ export default function CreateCzareelScreen() {
     }
     setVideoUri(asset.uri);
     setVideoDuration(durationSec);
+
+    // Check if user can skip questions (paid pro + toggle enabled)
+    const skipQuestionsPref = await AsyncStorage.getItem('@czareel_skip_questions');
+    const isPaidPro = await checkPaidProStatus();
+    const canSkip = isPaidPro && skipQuestionsPref === 'true';
+
+    if (!canSkip) {
+      // Reset questions state
+      setCzareelQuestions([]);
+      setCzareelAnswers(['', '', '']);
+      setCzareelFeedback('');
+      setQuestionsAnswered(false);
+      setShowQuestionsModal(true);
+    }
   };
 
   const handleRecordVideo = async () => {
@@ -121,9 +143,33 @@ export default function CreateCzareelScreen() {
     });
   };
 
+  const handleQuestionsSubmit = (data: { questions: string[]; answers: string[]; feedback: string }) => {
+    setCzareelQuestions(data.questions);
+    setCzareelAnswers(data.answers);
+    setCzareelFeedback(data.feedback);
+    setQuestionsAnswered(true);
+    setShowQuestionsModal(false);
+  };
+
+  const handleQuestionsCancel = () => {
+    setShowQuestionsModal(false);
+    setVideoUri(null);
+    setVideoDuration(null);
+  };
+
   const handlePost = async () => {
     if (!videoUri) {
       Alert.alert('No video', 'Please record or upload a video first.');
+      return;
+    }
+
+    // Check if questions need to be answered
+    const skipQuestionsPref = await AsyncStorage.getItem('@czareel_skip_questions');
+    const isPaidPro = await checkPaidProStatus();
+    const canSkip = isPaidPro && skipQuestionsPref === 'true';
+
+    if (!canSkip && !questionsAnswered) {
+      Alert.alert('Questions Required', 'Please answer Czar AI questions before posting.');
       return;
     }
 
@@ -197,6 +243,13 @@ export default function CreateCzareelScreen() {
         charisma_emoji: selectedTag?.emoji ?? null,
         mood_emojis: selectedMoods.length > 0 ? selectedMoods : null,
         duration_sec: videoDuration,
+        question_1: czareelQuestions[0] || null,
+        question_2: czareelQuestions[1] || null,
+        question_3: czareelQuestions[2] || null,
+        answer_1: czareelAnswers[0] || null,
+        answer_2: czareelAnswers[1] || null,
+        answer_3: czareelAnswers[2] || null,
+        ai_feedback: czareelFeedback || null,
       });
 
       if (insertError) throw insertError;
@@ -381,6 +434,13 @@ export default function CreateCzareelScreen() {
 
         <View style={{ height: insets.bottom + 32 }} />
       </ScrollView>
+
+      <CzareelQuestionsModal
+        visible={showQuestionsModal}
+        onClose={handleQuestionsCancel}
+        onSubmit={handleQuestionsSubmit}
+        videoContext={caption || undefined}
+      />
     </KeyboardAvoidingView>
   );
 }

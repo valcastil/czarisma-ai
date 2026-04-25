@@ -14,6 +14,7 @@ import {
 import { logger } from '@/utils/logger';
 import { getCurrentUser, registerCurrentUser } from '@/utils/message-utils';
 import { getProfile, updateProfile } from '@/utils/profile-utils';
+import { checkPaidProStatus } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -38,6 +39,8 @@ export default function ProfileSettingsScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isPaidPro, setIsPaidPro] = useState(false);
+  const [skipQuestions, setSkipQuestions] = useState(false);
 
   // Linked accounts state
   const [linkedPhone, setLinkedPhone] = useState<string | null>(null);
@@ -115,6 +118,14 @@ export default function ProfileSettingsScreen() {
 
         // Check Firebase availability (sync — no native module reference)
         setCanUseFirebase(isFirebaseAvailable());
+
+        // Load skip questions preference
+        const skipQuestionsPref = await AsyncStorage.getItem('@czareel_skip_questions');
+        setSkipQuestions(skipQuestionsPref === 'true');
+
+        // Check paid pro status
+        const paidPro = await checkPaidProStatus();
+        setIsPaidPro(paidPro);
       } catch (e) {
         Alert.alert('Error', 'Unable to load profile settings');
       } finally {
