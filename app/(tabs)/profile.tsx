@@ -221,6 +221,8 @@ export default function ProfileScreen() {
           profile={profile}
           onEditPress={handleEditProfile}
           followCounts={followCounts}
+          isFollowing={true}
+          currentUserId={userId || undefined}
         />
 
         {userId && <CzareelsGrid userId={userId} />}

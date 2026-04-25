@@ -11,11 +11,31 @@ interface ProfileHeaderProps {
   profile: UserProfile;
   onEditPress?: () => void;
   followCounts?: { followers: number; following: number };
+  isFollowing?: boolean;
+  currentUserId?: string;
 }
 
-export function ProfileHeader({ profile, onEditPress, followCounts }: ProfileHeaderProps) {
+export function ProfileHeader({ profile, onEditPress, followCounts, isFollowing, currentUserId }: ProfileHeaderProps) {
   const router = useRouter();
   const { colors } = useTheme();
+
+  const canViewLists = currentUserId === profile.id || isFollowing;
+
+  const handleFollowersPress = () => {
+    if (!canViewLists) return;
+    router.push({
+      pathname: '/followers',
+      params: { userId: profile.id, type: 'followers', name: profile.name },
+    });
+  };
+
+  const handleFollowingPress = () => {
+    if (!canViewLists) return;
+    router.push({
+      pathname: '/following',
+      params: { userId: profile.id, type: 'following', name: profile.name },
+    });
+  };
 
   const getCharismaDisplayName = (type: string): string => {
     const names: { [key: string]: string } = {
@@ -212,17 +232,17 @@ export function ProfileHeader({ profile, onEditPress, followCounts }: ProfileHea
       </LinearGradient>
       
       <View style={[styles.statsRow, { backgroundColor: colors.card }]}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.gold }]}>{followCounts?.followers ?? 0}</Text>
+        <TouchableOpacity style={styles.statItem} onPress={handleFollowersPress} disabled={!canViewLists} activeOpacity={canViewLists ? 0.7 : 1}>
+          <Text style={[styles.statNumber, { color: canViewLists ? colors.gold : colors.textSecondary }]}>{followCounts?.followers ?? 0}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Followers</Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.statDivider} />
 
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.gold }]}>{followCounts?.following ?? 0}</Text>
+        <TouchableOpacity style={styles.statItem} onPress={handleFollowingPress} disabled={!canViewLists} activeOpacity={canViewLists ? 0.7 : 1}>
+          <Text style={[styles.statNumber, { color: canViewLists ? colors.gold : colors.textSecondary }]}>{followCounts?.following ?? 0}</Text>
           <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Following</Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.statDivider} />
 

@@ -201,3 +201,69 @@ export const updateSocialLinks = async (userId: string, socialLinks: Record<stri
     return false;
   }
 };
+
+/**
+ * Get list of users who follow a specific user
+ */
+export const getFollowersList = async (userId: string, limit = 50): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('follows')
+      .select(`
+        follower:profiles!follows_follower_id_fkey (
+          id,
+          username,
+          name,
+          avatar_url,
+          is_online,
+          last_seen
+        )
+      `)
+      .eq('following_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching followers list:', error);
+      return [];
+    }
+
+    return (data ?? []).map((item: any) => item.follower).filter(Boolean);
+  } catch (err) {
+    console.error('getFollowersList error:', err);
+    return [];
+  }
+};
+
+/**
+ * Get list of users that a specific user follows
+ */
+export const getFollowingList = async (userId: string, limit = 50): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('follows')
+      .select(`
+        following:profiles!follows_following_id_fkey (
+          id,
+          username,
+          name,
+          avatar_url,
+          is_online,
+          last_seen
+        )
+      `)
+      .eq('follower_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching following list:', error);
+      return [];
+    }
+
+    return (data ?? []).map((item: any) => item.following).filter(Boolean);
+  } catch (err) {
+    console.error('getFollowingList error:', err);
+    return [];
+  }
+};
