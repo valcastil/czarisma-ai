@@ -23,6 +23,8 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
   const [showPreview, setShowPreview] = useState(false);
 
   const handlePickImage = async () => {
+    onClose();
+    await new Promise(r => setTimeout(r, 50));
     const media = await MediaPickerService.pickImageFromGalleryNoCrop();
     if (media) {
       setPreviewMedia(media);
@@ -40,6 +42,7 @@ export function AttachmentModal({ visible, onClose, onAttachMedia, onAttachChari
 
   const handlePreviewEdit = async () => {
     setShowPreview(false);
+    await new Promise(r => setTimeout(r, 50));
     const edited = await MediaPickerService.pickImageFromGalleryWithCrop();
     if (edited) {
       await uploadAndAttach(edited, 'image');
