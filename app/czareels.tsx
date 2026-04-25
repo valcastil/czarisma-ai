@@ -179,7 +179,7 @@ export default function CzareelsScreen() {
           id, user_id, video_url, thumbnail_url, caption,
           charisma_tag, charisma_emoji, mood_emojis, likes, comments,
           duration_sec, views, created_at,
-          profiles ( name, username, avatar_url )
+          profiles!czareels_user_id_fkey ( name, username, avatar_url )
         `)
         .order('created_at', { ascending: false })
         .range(from, to);
