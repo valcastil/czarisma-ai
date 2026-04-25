@@ -28,10 +28,10 @@ interface ImportedContact {
 
 /**
  * Normalize a phone number to E.164 format for consistent matching.
- * Matches the normalization in supabase-message-service.ts
+ * Enhanced to handle more phone number formats.
  */
 const normalizePhone = (raw: string): string | null => {
-  const digits = raw.replace(/[\s\-().]/g, '');
+  const digits = raw.replace(/[^\d+]/g, '');
   if (!digits) return null;
   if (digits.startsWith('+')) return digits;
   if (digits.startsWith('00')) return `+${digits.slice(2)}`;
@@ -39,6 +39,8 @@ const normalizePhone = (raw: string): string | null => {
   if (digits.startsWith('0') && digits.length === 10) return `+971${digits.slice(1)}`;
   // Already a full number without leading 0 (9 digits UAE)
   if (digits.length === 9) return `+971${digits}`;
+  // Return as-is if it looks like a full international number
+  if (digits.length >= 10 && digits.length <= 15) return digits;
   return null;
 };
 
@@ -48,15 +50,39 @@ const normalizePhone = (raw: string): string | null => {
  */
 const isContactOnApp = (contact: ImportedContact, phoneMatchMap: Map<string, User>): boolean => {
   return contact.phoneNumbers.some(p => {
+    const digitsOnly = p.replace(/\D/g, '');
+    
     // Check raw phone number first
-    if (phoneMatchMap.has(p)) return true;
+    if (phoneMatchMap.has(p)) {
+      console.log('[ContactMatch] Direct match found for:', p);
+      return true;
+    }
+    
     // Check normalized phone number
     const normalized = normalizePhone(p);
-    if (normalized && phoneMatchMap.has(normalized)) return true;
+    if (normalized && phoneMatchMap.has(normalized)) {
+      console.log('[ContactMatch] Normalized match found:', p, '->', normalized);
+      return true;
+    }
+    
     // Check if any key in the map matches this phone (reverse lookup)
     for (const [key, user] of phoneMatchMap.entries()) {
-      if (key.includes(p.replace(/\D/g, ''))) return true;
+      const keyDigits = key.replace(/\D/g, '');
+      if (keyDigits === digitsOnly) {
+        console.log('[ContactMatch] Digits match found:', p, '->', key);
+        return true;
+      }
+      // Also check if the key contains the digits (for partial matches)
+      if (keyDigits.includes(digitsOnly) && digitsOnly.length >= 7) {
+        console.log('[ContactMatch] Partial digits match found:', p, '->', key);
+        return true;
+      }
+      if (digitsOnly.includes(keyDigits) && keyDigits.length >= 7) {
+        console.log('[ContactMatch] Reverse partial digits match found:', p, '->', key);
+        return true;
+      }
     }
+    
     return false;
   });
 };
@@ -86,6 +112,8 @@ export default function NewMessageScreen() {
     const allPhones = contacts.flatMap(c => c.phoneNumbers);
     if (allPhones.length === 0) return;
     getProfilesByPhones(allPhones).then(matchMap => {
+      console.log('[NewMessage] PhoneMatchMap populated with', matchMap.size, 'entries');
+      console.log('[NewMessage] PhoneMatchMap keys:', Array.from(matchMap.keys()));
       setPhoneMatchMap(matchMap);
       // Merge matched app-users into the users list so they appear in Users section.
       if (matchMap.size === 0) return;

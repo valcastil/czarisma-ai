@@ -304,9 +304,13 @@ export const getProfilesByPhones = async (
     try {
         if (rawPhones.length === 0) return result;
 
+        console.log('[getProfilesByPhones] Raw phones:', rawPhones);
+
         const normalized = rawPhones
             .map(p => normalizePhone(p))
             .filter((p): p is string => p !== null);
+
+        console.log('[getProfilesByPhones] Normalized phones:', normalized);
 
         if (normalized.length === 0) return result;
 
@@ -320,8 +324,11 @@ export const getProfilesByPhones = async (
             return result;
         }
 
+        console.log('[getProfilesByPhones] Found profiles:', data?.length || 0);
+
         (data ?? []).forEach((profile: any) => {
             if (!profile.phone) return;
+            console.log('[getProfilesByPhones] Profile:', profile.username, 'phone:', profile.phone);
             const user: User = {
                 id: profile.id,
                 username: profile.username,
@@ -335,7 +342,18 @@ export const getProfilesByPhones = async (
             normalized.forEach(n => {
                 if (n === profile.phone) result.set(n, user);
             });
+            // Also index by raw phone numbers
+            rawPhones.forEach(raw => {
+                const rawDigits = raw.replace(/\D/g, '');
+                const profileDigits = profile.phone.replace(/\D/g, '');
+                if (rawDigits === profileDigits) {
+                    result.set(raw, user);
+                    console.log('[getProfilesByPhones] Indexed raw phone:', raw, 'for user:', profile.username);
+                }
+            });
         });
+
+        console.log('[getProfilesByPhones] Map keys:', Array.from(result.keys()));
     } catch (e) {
         logger.error('getProfilesByPhones exception:', e);
     }
