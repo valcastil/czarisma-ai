@@ -1,12 +1,14 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { MaterialTopTabs } from '@/components/ui/material-top-tabs';
+import { SocialPlayerModal } from '@/components/social-player/social-player-modal';
 import { useTheme } from '@/hooks/use-theme';
 import { getCurrentUser, getUnreadCount, subscribeToConversations } from '@/utils/message-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Animated, BackHandler, DeviceEventEmitter, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getProfile } from '@/utils/profile-utils';
 
 const CZAR_IMAGE = require('@/assets/images/czar.png');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,19 +69,23 @@ function AnimatedTabButton({ onPress, children, isFocused, color }: any) {
   );
 }
 
-function AddMenu({ visible, onClose, colors, insets, router }: any) {
+function AddMenu({ visible, onClose, colors, insets, router, videoLinks, onPlayVideos }: any) {
+  const hasVideos = videoLinks && videoLinks.length >= 2;
+  
   const options = [
-    { emoji: '🎬', label: 'Create Czareel', onPress: () => { onClose(); router.push('/create-czareel'); } },
+    hasVideos && { emoji: '🎬', label: `Play ${videoLinks.length} Videos`, onPress: () => { onClose(); onPlayVideos?.(); } },
+    { emoji: '🎥', label: 'Create Czareel', onPress: () => { onClose(); router.push('/create-czareel'); } },
     { emoji: '✨', label: 'Add Charisma Entry', onPress: () => { onClose(); router.push('/onboarding-charisma'); } },
     { emoji: '🔗', label: 'Paste Social Link', onPress: () => { onClose(); router.push({ pathname: '/(tabs)', params: { openPasteLink: Date.now().toString() } }); } },
-  ];
+  ].filter(Boolean);
+  
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.menuBackdrop} onPress={onClose} />
       <View style={[styles.menuSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 8 }]}>
         <View style={[styles.menuHandle, { backgroundColor: colors.border }]} />
         <Text style={[styles.menuTitle, { color: colors.text }]}>What would you like to do?</Text>
-        {options.map((opt) => (
+        {options.map((opt: any) => (
           <TouchableOpacity key={opt.label} style={[styles.menuOption, { borderBottomColor: colors.border }]} onPress={opt.onPress} activeOpacity={0.7}>
             <Text style={styles.menuOptionEmoji}>{opt.emoji}</Text>
             <Text style={[styles.menuOptionText, { color: colors.text }]}>{opt.label}</Text>
@@ -98,6 +104,48 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(false);
+  const [videoLinks, setVideoLinks] = useState<string[]>([]);
+
+  // Load user's social video links
+  useEffect(() => {
+    const loadVideoLinks = async () => {
+      try {
+        const profile = await getProfile();
+        if (profile?.socialLinks) {
+          const videoPlatforms = ['youtube', 'tiktok', 'instagram', 'facebook'];
+          
+          const links = Object.entries(profile.socialLinks)
+            .filter(([key, value]) => videoPlatforms.includes(key) && value && value.trim().length > 0)
+            .map(([key, value]) => {
+              if (!value) return null;
+              let url = value.trim();
+              // Build full URL if needed
+              if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                const prefix = {
+                  youtube: 'https://youtube.com/',
+                  tiktok: 'https://tiktok.com/@',
+                  instagram: 'https://instagram.com/',
+                  facebook: 'https://facebook.com/',
+                }[key];
+                if (prefix) {
+                  url = prefix + url.replace(/^@/, '');
+                }
+              }
+              return url;
+            })
+            .filter((url): url is string => url !== null);
+          
+          console.log('Loaded video links:', links);
+          setVideoLinks(links);
+        }
+      } catch (error) {
+        console.error('Error loading video links:', error);
+      }
+    };
+    
+    loadVideoLinks();
+  }, []);
 
   const focusedRouteName = state?.routes?.[state.index]?.name;
 
@@ -115,6 +163,14 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
         colors={colors}
         insets={insets}
         router={router}
+        videoLinks={videoLinks}
+        onPlayVideos={() => setShowPlayer(true)}
+      />
+      <SocialPlayerModal
+        visible={showPlayer}
+        onClose={() => setShowPlayer(false)}
+        urls={videoLinks}
+        title="My Social Videos"
       />
       <View style={[styles.tabBar, {
       backgroundColor: colors.background,

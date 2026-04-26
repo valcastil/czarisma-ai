@@ -1,5 +1,6 @@
 import { useTheme } from '@/hooks/use-theme';
-import React, { memo } from 'react';
+import { SocialPlayerModal } from '@/components/social-player/social-player-modal';
+import React, { memo, useState, useMemo } from 'react';
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface SocialLinksDisplayProps {
@@ -21,10 +22,33 @@ const SOCIAL_CONFIG: Record<string, { label: string; emoji: string; color: strin
 
 export const SocialLinksDisplay = memo(function SocialLinksDisplay({ socialLinks }: SocialLinksDisplayProps) {
   const { colors } = useTheme();
+  const [playerVisible, setPlayerVisible] = useState(false);
 
   const activeLinks = Object.entries(socialLinks).filter(
     ([, value]) => value && value.trim().length > 0
   );
+
+  // Filter video links that can be played in sequence
+  const videoLinks = useMemo(() => {
+    const videoPlatforms = ['youtube', 'tiktok', 'instagram', 'facebook'];
+    return activeLinks
+      .filter(([key]) => videoPlatforms.includes(key))
+      .map(([key, value]) => {
+        let url = value!.trim();
+        // If value is a handle (no http), prepend the platform URL prefix
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          const config = SOCIAL_CONFIG[key];
+          if (config?.urlPrefix) {
+            url = config.urlPrefix + url.replace(/^@/, '');
+          } else {
+            url = 'https://' + url;
+          }
+        }
+        return url;
+      });
+  }, [activeLinks]);
+
+  const hasMultipleVideos = videoLinks.length >= 2;
 
   if (activeLinks.length === 0) return null;
 
@@ -44,6 +68,17 @@ export const SocialLinksDisplay = memo(function SocialLinksDisplay({ socialLinks
 
   return (
     <View style={styles.container}>
+      {/* Play All Videos Button */}
+      {hasMultipleVideos && (
+        <TouchableOpacity
+          style={[styles.playAllButton, { backgroundColor: colors.gold }]}
+          onPress={() => setPlayerVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.playAllText}>🎬 Play All {videoLinks.length} Videos</Text>
+        </TouchableOpacity>
+      )}
+
       {activeLinks.map(([key, value]) => {
         const config = SOCIAL_CONFIG[key];
         if (!config || !value) return null;
@@ -64,6 +99,14 @@ export const SocialLinksDisplay = memo(function SocialLinksDisplay({ socialLinks
           </TouchableOpacity>
         );
       })}
+
+      {/* Social Player Modal */}
+      <SocialPlayerModal
+        visible={playerVisible}
+        onClose={() => setPlayerVisible(false)}
+        urls={videoLinks}
+        title="Social Playlist"
+      />
     </View>
   );
 });
@@ -73,6 +116,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     gap: 8,
+  },
+  playAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  playAllText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
   },
   linkItem: {
     flexDirection: 'row',

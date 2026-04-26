@@ -1,11 +1,12 @@
 import { CharismaLogo, CharismaLogoRef } from '@/components/charisma-logo';
 import { PasteLinkModal } from '@/components/paste-link-modal';
+import { SocialPlayerModal } from '@/components/social-player/social-player-modal';
 import { SubscriptionStatusBanner } from '@/components/subscription-status-banner';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, refreshMissingTitles, SharedLink } from '@/utils/link-storage';
-import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
+import { calculateUserStats, getProfile, updateProfile } from '@/utils/profile-utils';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
@@ -18,6 +19,7 @@ import {
     FlatList,
     Image,
     Linking,
+    Modal,
     Platform,
     Share,
     StyleSheet,
@@ -45,6 +47,9 @@ export default function HomeScreen() {
   } | null>(null);
   const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
   const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(false);
+  const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
+  const [videoLinks, setVideoLinks] = useState<string[]>([]);
   const flatListRef = useRef<FlatList>(null);
   const pendingScrollToEntries = useRef(false);
   const logoRef = useRef<CharismaLogoRef>(null);
@@ -67,6 +72,60 @@ export default function HomeScreen() {
       pendingScrollToEntries.current = true;
     }
   }, [params.scrollToEntries]);
+
+  // Load user's social video links - reloads every time screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadVideoLinks = async () => {
+        try {
+          console.log('Home: Loading video links...');
+          const profile = await getProfile();
+          console.log('Home: Profile loaded:', profile?.socialLinks);
+          
+          if (profile?.socialLinks) {
+            const videoPlatforms = ['youtube', 'tiktok', 'instagram', 'facebook'];
+            
+            const links = Object.entries(profile.socialLinks)
+              .filter(([key, value]) => {
+                const isVideoPlatform = videoPlatforms.includes(key);
+                const hasValue = value && value.trim().length > 0;
+                console.log(`Home: Checking ${key}:`, { isVideoPlatform, hasValue, value });
+                return isVideoPlatform && hasValue;
+              })
+              .map(([key, value]) => {
+                if (!value) return null;
+                let url = value.trim();
+                // Build full URL if needed
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                  const prefixes: Record<string, string> = {
+                    youtube: 'https://youtube.com/',
+                    tiktok: 'https://tiktok.com/@',
+                    instagram: 'https://instagram.com/',
+                    facebook: 'https://facebook.com/',
+                  };
+                  const prefix = prefixes[key];
+                  if (prefix) {
+                    url = prefix + url.replace(/^@/, '');
+                  }
+                }
+                return url;
+              })
+              .filter((url): url is string => url !== null);
+            
+            console.log('Home: Final video links:', links);
+            setVideoLinks(links);
+          } else {
+            console.log('Home: No social links found');
+            setVideoLinks([]);
+          }
+        } catch (error) {
+          console.error('Home: Error loading video links:', error);
+        }
+      };
+      
+      loadVideoLinks();
+    }, [])
+  );
 
   // Single data loading point — useFocusEffect fires on mount AND every tab focus
   useFocusEffect(
@@ -279,51 +338,21 @@ Forwarded from Czar AI
           <Text style={[styles.title, { color: colors.text }]}>Czar AI</Text>
         </View>
 
+        {/* Yellow Play Button - shown when user has video links */}
+        {videoLinks.length >= 2 && (
+          <TouchableOpacity
+            style={[styles.playButton, { backgroundColor: colors.gold }]}
+            onPress={() => setShowPlayer(true)}
+            activeOpacity={0.8}
+          >
+            <IconSymbol size={22} name="play.fill" color="#000" />
+            <Text style={styles.playButtonText}>{videoLinks.length}</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={styles.hamburgerButton}
-          onPress={() => {
-            const navigateToAI = () => {
-              try {
-                if (navigation && navigation.navigate) {
-                  navigation.navigate('ai-chat' as never);
-                } else {
-                  router.navigate('/ai-chat');
-                }
-              } catch {
-                router.push('/ai-chat');
-              }
-            };
-            if (Platform.OS === 'ios') {
-              ActionSheetIOS.showActionSheetWithOptions(
-                {
-                  options: ['Cancel', 'Czareels', 'Social Links', 'Czarisma Entries', 'Talk to AI'],
-                  cancelButtonIndex: 0,
-                },
-                (index) => {
-                  if (index === 1) router.push('/czareels' as any);
-                  else if (index === 2) flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-                  else if (index === 3) {
-                    const entriesIdx = flatListRef.current ? -1 : -1; // handled via pendingScroll
-                    pendingScrollToEntries.current = true;
-                    flatListRef.current?.scrollToEnd({ animated: true });
-                  }
-                  else if (index === 4) navigateToAI();
-                }
-              );
-            } else {
-              Alert.alert(
-                'Menu',
-                undefined,
-                [
-                  { text: 'Czareels', onPress: () => router.push('/czareels' as any) },
-                  { text: 'Social Links', onPress: () => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }) },
-                  { text: 'Czarisma Entries', onPress: () => { pendingScrollToEntries.current = true; flatListRef.current?.scrollToEnd({ animated: true }); } },
-                  { text: 'Talk to AI', onPress: navigateToAI },
-                  { text: 'Cancel', style: 'cancel' },
-                ]
-              );
-            }
-          }}
+          onPress={() => setShowHamburgerMenu(true)}
           activeOpacity={0.7}>
           <IconSymbol size={26} name="line.3.horizontal" color={colors.text} />
         </TouchableOpacity>
@@ -357,6 +386,84 @@ Forwarded from Czar AI
           }, 300);
         }}
       />
+
+      {/* Social Player Modal */}
+      <SocialPlayerModal
+        visible={showPlayer}
+        onClose={() => setShowPlayer(false)}
+        urls={videoLinks}
+        title="My Social Videos"
+      />
+
+      {/* Hamburger Menu */}
+      <Modal
+        visible={showHamburgerMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowHamburgerMenu(false)}>
+        <TouchableOpacity
+          style={[styles.menuBackdrop, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+          onPress={() => setShowHamburgerMenu(false)}>
+          <View style={[styles.menuSheet, { backgroundColor: colors.card }]}>
+            <Text style={[styles.menuTitle, { color: colors.text }]}>Menu</Text>
+
+            <TouchableOpacity
+              style={[styles.menuOption, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setShowHamburgerMenu(false);
+                router.push('/czareels' as any);
+              }}>
+              <Text style={styles.menuIcon}>🎬</Text>
+              <Text style={[styles.menuText, { color: colors.text }]}>Czareels</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuOption, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setShowHamburgerMenu(false);
+                flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+              }}>
+              <Text style={styles.menuIcon}>🔗</Text>
+              <Text style={[styles.menuText, { color: colors.text }]}>Social Links</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuOption, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setShowHamburgerMenu(false);
+                pendingScrollToEntries.current = true;
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }}>
+              <Text style={styles.menuIcon}>📝</Text>
+              <Text style={[styles.menuText, { color: colors.text }]}>Czarisma Entries</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuOption, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setShowHamburgerMenu(false);
+                try {
+                  if (navigation && navigation.navigate) {
+                    navigation.navigate('ai-chat' as never);
+                  } else {
+                    router.navigate('/ai-chat');
+                  }
+                } catch {
+                  router.push('/ai-chat');
+                }
+              }}>
+              <Text style={styles.menuIcon}>🤖</Text>
+              <Text style={[styles.menuText, { color: colors.text }]}>Talk to AI</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuCancel, { backgroundColor: colors.border }]}
+              onPress={() => setShowHamburgerMenu(false)}>
+              <Text style={[styles.menuCancelText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
     </View>
   );
@@ -609,6 +716,20 @@ const styles = StyleSheet.create({
     padding: 8,
     marginRight: -8,
   },
+  playButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    gap: 6,
+  },
+  playButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#000',
+  },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -822,5 +943,56 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Hamburger Menu Styles
+  menuBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  menuSheet: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  menuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+  },
+  menuIcon: {
+    fontSize: 22,
+    marginRight: 12,
+    width: 28,
+    textAlign: 'center',
+  },
+  menuText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  menuCancel: {
+    marginTop: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  menuCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
