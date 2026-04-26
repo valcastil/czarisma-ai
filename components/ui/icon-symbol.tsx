@@ -143,6 +143,10 @@ const MAPPING = {
 
   // Map / location extras
   'map': 'map',
+
+  // Mail / envelope
+  'envelope': 'mail',
+  'envelope.fill': 'mail',
 } as IconMapping;
 
 /**

@@ -193,7 +193,9 @@ export default function FollowingScreen() {
         <Text style={styles.headerTitle}>
           {type === 'followers' ? `${name}'s Followers` : `${name}'s Following`}
         </Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/messages')} style={styles.backButton}>
+          <IconSymbol size={22} name="envelope" color="#000" />
+        </TouchableOpacity>
       </View>
 
       <FlatList
