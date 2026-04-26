@@ -1302,18 +1302,20 @@ export default function ChatScreen() {
           <IconSymbol size={24} name="chevron.left" color={colors.text} />
         </TouchableOpacity>
 
-        {(profilePhoto || otherUser.avatarUrl) ? (
-          <Image
-            source={{ uri: profilePhoto || otherUser.avatarUrl }}
-            style={styles.headerAvatar}
-          />
-        ) : (
-          <View style={[styles.headerAvatarPlaceholder, { backgroundColor: colors.gold }]}>
-            <Text style={styles.headerAvatarText}>
-              {otherUser.name?.charAt(0).toUpperCase() || '?'}
-            </Text>
-          </View>
-        )}
+        <TouchableOpacity onPress={handleViewProfile} activeOpacity={0.8}>
+          {(profilePhoto || otherUser.avatarUrl) ? (
+            <Image
+              source={{ uri: profilePhoto || otherUser.avatarUrl }}
+              style={styles.headerAvatar}
+            />
+          ) : (
+            <View style={[styles.headerAvatarPlaceholder, { backgroundColor: colors.gold }]}>
+              <Text style={styles.headerAvatarText}>
+                {otherUser.name?.charAt(0).toUpperCase() || '?'}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         <View style={styles.headerInfo}>
           <Text style={[styles.headerName, { color: colors.text }]}>
@@ -1694,7 +1696,7 @@ export default function ChatScreen() {
                       <TouchableOpacity
                         style={styles.statItem}
                         activeOpacity={0.7}
-                        onPress={() => router.push({ pathname: '/followers', params: { userId: id, type: 'followers', name } })}>
+                        onPress={() => { setShowProfile(false); router.push({ pathname: '/followers', params: { userId: id, type: 'followers', name } }); }}>
                         <Text style={[styles.statNumber, { color: colors.gold }]}>
                           {profileLoading ? '—' : followCounts.followers}
                         </Text>
@@ -1704,7 +1706,7 @@ export default function ChatScreen() {
                       <TouchableOpacity
                         style={styles.statItem}
                         activeOpacity={0.7}
-                        onPress={() => router.push({ pathname: '/following', params: { userId: id, type: 'following', name } })}>
+                        onPress={() => { setShowProfile(false); router.push({ pathname: '/following', params: { userId: id, type: 'following', name } }); }}>
                         <Text style={[styles.statNumber, { color: colors.gold }]}>
                           {profileLoading ? '—' : followCounts.following}
                         </Text>

@@ -2,6 +2,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { followUser, getFollowersList, getFollowingList, isFollowing, unfollowUser } from '@/utils/follow-utils';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,6 +26,7 @@ interface UserListItem {
 
 export default function FollowingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { userId, type, name } = useLocalSearchParams<{ userId: string; type: 'followers' | 'following'; name: string }>();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,7 +186,7 @@ export default function FollowingScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol size={24} name="chevron.left" color="#000" />
         </TouchableOpacity>
