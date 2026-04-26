@@ -6,7 +6,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, refreshMissingTitles, SharedLink } from '@/utils/link-storage';
-import { calculateUserStats, getProfile, updateProfile } from '@/utils/profile-utils';
+import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
 import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
@@ -49,7 +49,6 @@ export default function HomeScreen() {
   const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
-  const [videoLinks, setVideoLinks] = useState<string[]>([]);
   const flatListRef = useRef<FlatList>(null);
   const pendingScrollToEntries = useRef(false);
   const logoRef = useRef<CharismaLogoRef>(null);
@@ -73,58 +72,10 @@ export default function HomeScreen() {
     }
   }, [params.scrollToEntries]);
 
-  // Load user's social video links - reloads every time screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      const loadVideoLinks = async () => {
-        try {
-          console.log('Home: Loading video links...');
-          const profile = await getProfile();
-          console.log('Home: Profile loaded:', profile?.socialLinks);
-          
-          if (profile?.socialLinks) {
-            const videoPlatforms = ['youtube', 'tiktok', 'instagram', 'facebook'];
-            
-            const links = Object.entries(profile.socialLinks)
-              .filter(([key, value]) => {
-                const isVideoPlatform = videoPlatforms.includes(key);
-                const hasValue = value && value.trim().length > 0;
-                console.log(`Home: Checking ${key}:`, { isVideoPlatform, hasValue, value });
-                return isVideoPlatform && hasValue;
-              })
-              .map(([key, value]) => {
-                if (!value) return null;
-                let url = value.trim();
-                // Build full URL if needed
-                if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                  const prefixes: Record<string, string> = {
-                    youtube: 'https://youtube.com/',
-                    tiktok: 'https://tiktok.com/@',
-                    instagram: 'https://instagram.com/',
-                    facebook: 'https://facebook.com/',
-                  };
-                  const prefix = prefixes[key];
-                  if (prefix) {
-                    url = prefix + url.replace(/^@/, '');
-                  }
-                }
-                return url;
-              })
-              .filter((url): url is string => url !== null);
-            
-            console.log('Home: Final video links:', links);
-            setVideoLinks(links);
-          } else {
-            console.log('Home: No social links found');
-            setVideoLinks([]);
-          }
-        } catch (error) {
-          console.error('Home: Error loading video links:', error);
-        }
-      };
-      
-      loadVideoLinks();
-    }, [])
+  // Derive video links from shared links (pasted on home screen)
+  const videoLinks = useMemo(
+    () => sharedLinks.map(link => link.url),
+    [sharedLinks]
   );
 
   // Single data loading point — useFocusEffect fires on mount AND every tab focus
@@ -338,24 +289,39 @@ Forwarded from Czar AI
           <Text style={[styles.title, { color: colors.text }]}>Czar AI</Text>
         </View>
 
-        {/* Yellow Play Button - shown when user has video links */}
-        {videoLinks.length >= 2 && (
+        <View style={styles.headerActions}>
+          {/* Yellow Play Button - always visible */}
           <TouchableOpacity
             style={[styles.playButton, { backgroundColor: colors.gold }]}
-            onPress={() => setShowPlayer(true)}
+            onPress={() => {
+              if (videoLinks.length === 0) {
+                Alert.alert(
+                  'No Social Videos',
+                  'Paste social media links (YouTube, TikTok, Instagram, Facebook) on the home screen to play them continuously.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Paste Link', onPress: () => setShowPasteLinkModal(true) },
+                  ]
+                );
+              } else {
+                setShowPlayer(true);
+              }
+            }}
             activeOpacity={0.8}
           >
-            <IconSymbol size={22} name="play.fill" color="#000" />
-            <Text style={styles.playButtonText}>{videoLinks.length}</Text>
+            <IconSymbol size={18} name="play.fill" color="#000" />
+            {videoLinks.length > 0 && (
+              <Text style={styles.playButtonText}>{videoLinks.length}</Text>
+            )}
           </TouchableOpacity>
-        )}
 
-        <TouchableOpacity
-          style={styles.hamburgerButton}
-          onPress={() => setShowHamburgerMenu(true)}
-          activeOpacity={0.7}>
-          <IconSymbol size={26} name="line.3.horizontal" color={colors.text} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.hamburgerButton}
+            onPress={() => setShowHamburgerMenu(true)}
+            activeOpacity={0.7}>
+            <IconSymbol size={26} name="line.3.horizontal" color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Subscription Status Banner */}
@@ -716,14 +682,19 @@ const styles = StyleSheet.create({
     padding: 8,
     marginRight: -8,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   playButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    gap: 4,
   },
   playButtonText: {
     fontSize: 14,
