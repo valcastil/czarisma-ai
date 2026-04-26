@@ -28,6 +28,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const MAX_DURATION_SEC = 15;
 const MAX_CAPTION = 150;
 const MAX_RESOLUTION_PIXELS = 1920 * 1080; // 1080p cap
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50MB limit
+const QUESTIONS_CACHE_KEY_PREFIX = '@czareel_questions_';
+const CACHE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 const CHARISMA_TAGS = [
   { id: 'confidence', label: 'Confidence', emoji: '💪' },
@@ -43,6 +46,72 @@ const CHARISMA_TAGS = [
 ];
 
 const MOOD_EMOJIS = ['😊', '🔥', '✨', '💪', '🌟', '😎', '🙌', '💫', '🤩', '❤️', '😂', '🫂'];
+
+// Static list of generic questions for czareels (no API call needed)
+const CZAREEL_QUESTIONS = [
+  "What's the main message or vibe you wanted to convey in this video?",
+  "How did you feel while recording this? Confident? Nervous? Excited?",
+  "What part of your personality do you think shines through most here?",
+  "Did you try any specific techniques to boost your charisma in this clip?",
+  "What would you say is your strongest charisma trait shown in this video?",
+  "How do you think this video represents your authentic self?",
+  "What inspired you to create this particular czareel?",
+  "Do you feel your energy levels were where you wanted them to be?",
+  "What's one thing you love about how you came across in this video?",
+  "If you could give your past self a tip before recording, what would it be?",
+  "How does this video compare to your usual communication style?",
+  "What emotion were you hoping to evoke from viewers?",
+  "Did you step out of your comfort zone for this recording?",
+  "What makes this video uniquely 'you'?",
+  "How would you describe your body language in this clip?",
+];
+
+// Simple hash function for video URI
+const hashVideoUri = (uri: string): string => {
+  let hash = 0;
+  for (let i = 0; i < uri.length; i++) {
+    const char = uri.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+};
+
+// Get cached questions for a video URI
+const getCachedQuestions = async (videoUri: string): Promise<string[] | null> => {
+  try {
+    const cacheKey = QUESTIONS_CACHE_KEY_PREFIX + hashVideoUri(videoUri);
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (!cached) return null;
+    
+    const data = JSON.parse(cached);
+    const now = Date.now();
+    
+    // Check if cache is expired
+    if (now - data.timestamp > CACHE_EXPIRY_MS) {
+      await AsyncStorage.removeItem(cacheKey);
+      return null;
+    }
+    
+    return data.questions;
+  } catch {
+    return null;
+  }
+};
+
+// Cache questions for a video URI
+const cacheQuestions = async (videoUri: string, questions: string[]): Promise<void> => {
+  try {
+    const cacheKey = QUESTIONS_CACHE_KEY_PREFIX + hashVideoUri(videoUri);
+    const data = {
+      questions,
+      timestamp: Date.now(),
+    };
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+  } catch {
+    // Cache write failure is non-critical
+  }
+};
 
 export default function CreateCzareelScreen() {
   const router = useRouter();
@@ -61,6 +130,8 @@ export default function CreateCzareelScreen() {
   const [czareelAnswers, setCzareelAnswers] = useState<string[]>([]);
   const [czareelFeedback, setCzareelFeedback] = useState('');
   const [questionsAnswered, setQuestionsAnswered] = useState(false);
+  const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
+  const [uploadedThumbnailUrl, setUploadedThumbnailUrl] = useState<string | null>(null);
 
   const validateAndSetVideo = async (asset: ImagePicker.ImagePickerAsset) => {
     const durationSec = asset.duration ? asset.duration / 1000 : null;
@@ -73,8 +144,25 @@ export default function CreateCzareelScreen() {
       Alert.alert('Resolution Too High', 'Please use a video with maximum 1080p resolution (4K not supported).');
       return;
     }
+    
+    // Check file size
+    const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+    if (fileInfo.exists && fileInfo.size && fileInfo.size > MAX_FILE_SIZE_BYTES) {
+      const sizeMB = (fileInfo.size / (1024 * 1024)).toFixed(1);
+      Alert.alert('File Too Large', `Video size (${sizeMB}MB) exceeds the 50MB limit. Please select a smaller video.`);
+      return;
+    }
+    
     setVideoUri(asset.uri);
     setVideoDuration(durationSec);
+
+    // Reset questions state and uploaded URLs
+    setCzareelQuestions([]);
+    setCzareelAnswers(['', '', '']);
+    setCzareelFeedback('');
+    setQuestionsAnswered(false);
+    setUploadedVideoUrl(null);
+    setUploadedThumbnailUrl(null);
 
     // Check if user can skip questions (paid pro + toggle enabled)
     const skipQuestionsPref = await AsyncStorage.getItem('@czareel_skip_questions');
@@ -82,12 +170,37 @@ export default function CreateCzareelScreen() {
     const canSkip = isPaidPro && skipQuestionsPref === 'true';
 
     if (!canSkip) {
-      // Reset questions state
-      setCzareelQuestions([]);
-      setCzareelAnswers(['', '', '']);
-      setCzareelFeedback('');
-      setQuestionsAnswered(false);
+      // Generate questions immediately after selection
+      await generateAndCacheQuestions(asset.uri);
+    }
+  };
+
+  const generateAndCacheQuestions = async (videoUri: string) => {
+    try {
+      // Check cache first
+      const cachedQuestions = await getCachedQuestions(videoUri);
+      if (cachedQuestions) {
+        console.log('Using cached questions:', cachedQuestions);
+        setCzareelQuestions(cachedQuestions);
+        setShowQuestionsModal(true);
+        return;
+      }
+
+      // Randomly select 3 questions from static list
+      const shuffled = [...CZAREEL_QUESTIONS].sort(() => 0.5 - Math.random());
+      const selectedQuestions = shuffled.slice(0, 3);
+      
+      console.log('Generated questions:', selectedQuestions);
+      setCzareelQuestions(selectedQuestions);
+      
+      // Cache the questions
+      await cacheQuestions(videoUri, selectedQuestions);
+      
+      // Show questions modal immediately after setting state
       setShowQuestionsModal(true);
+    } catch (error) {
+      console.error('Error generating questions:', error);
+      Alert.alert('Error', 'Failed to generate questions. Please try again.');
     }
   };
 
@@ -153,23 +266,14 @@ export default function CreateCzareelScreen() {
 
   const handleQuestionsCancel = () => {
     setShowQuestionsModal(false);
-    setVideoUri(null);
-    setVideoDuration(null);
+    // Keep video state so cached questions can be reused if user re-opens modal
+    // Only clear if user selects a different video
   };
 
-  const handlePost = async () => {
-    if (!videoUri) {
+  const handleUploadVideo = async (uri?: string) => {
+    const videoToUpload = uri || videoUri;
+    if (!videoToUpload) {
       Alert.alert('No video', 'Please record or upload a video first.');
-      return;
-    }
-
-    // Check if questions need to be answered
-    const skipQuestionsPref = await AsyncStorage.getItem('@czareel_skip_questions');
-    const isPaidPro = await checkPaidProStatus();
-    const canSkip = isPaidPro && skipQuestionsPref === 'true';
-
-    if (!canSkip && !questionsAnswered) {
-      Alert.alert('Questions Required', 'Please answer Czar AI questions before posting.');
       return;
     }
 
@@ -185,16 +289,16 @@ export default function CreateCzareelScreen() {
       const timestamp = Date.now();
 
       // Determine extension from URI
-      const uriLower = videoUri.toLowerCase();
+      const uriLower = videoToUpload.toLowerCase();
       const ext = uriLower.includes('.mov') ? 'mov' : 'mp4';
       const mimeType = ext === 'mov' ? 'video/quicktime' : 'video/mp4';
       const fileName = `${userId}/reel_${timestamp}.${ext}`;
 
-      const fileInfo = await FileSystem.getInfoAsync(videoUri);
+      const fileInfo = await FileSystem.getInfoAsync(videoToUpload);
       if (!fileInfo.exists) throw new Error('Video file not found');
 
       // Upload video
-      const base64 = await FileSystem.readAsStringAsync(videoUri, { encoding: 'base64' });
+      const base64 = await FileSystem.readAsStringAsync(videoToUpload, { encoding: 'base64' });
       const byteCharacters = atob(base64);
       const byteArray = new Uint8Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -214,7 +318,7 @@ export default function CreateCzareelScreen() {
       // Extract first-frame JPEG thumbnail and upload it
       let thumbnailUrl: string | null = null;
       try {
-        const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 0 });
+        const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(videoToUpload, { time: 0 });
         const thumbBase64 = await FileSystem.readAsStringAsync(thumbUri, { encoding: 'base64' });
         const thumbChars = atob(thumbBase64);
         const thumbBytes = new Uint8Array(thumbChars.length);
@@ -233,6 +337,28 @@ export default function CreateCzareelScreen() {
         console.warn('Thumbnail extraction failed, using video URL as fallback:', thumbErr);
         thumbnailUrl = videoUrl;
       }
+
+      // Store uploaded URLs
+      setUploadedVideoUrl(videoUrl);
+      setUploadedThumbnailUrl(thumbnailUrl);
+    } catch (error: any) {
+      console.error('Error uploading video:', error);
+      Alert.alert('Error', error?.message || 'Failed to upload video. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const insertToDatabase = async (videoUrl: string, thumbnailUrl: string | null) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      Alert.alert('Sign in required', 'Please sign in to post a Czareel.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const userId = session.user.id;
 
       const { error: insertError } = await supabase.from('czareels').insert({
         user_id: userId,
@@ -262,6 +388,33 @@ export default function CreateCzareelScreen() {
       Alert.alert('Error', error?.message || 'Failed to post Czareel. Please try again.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handlePost = async () => {
+    if (!videoUri) {
+      Alert.alert('No video', 'Please select a video first.');
+      return;
+    }
+
+    // Check if user can skip questions (paid pro + toggle enabled)
+    const skipQuestionsPref = await AsyncStorage.getItem('@czareel_skip_questions');
+    const isPaidPro = await checkPaidProStatus();
+    const canSkip = isPaidPro && skipQuestionsPref === 'true';
+
+    if (!canSkip && !questionsAnswered) {
+      Alert.alert('Questions Required', 'Please answer Czar AI questions before posting.');
+      return;
+    }
+
+    // Upload video if not already uploaded
+    if (!uploadedVideoUrl) {
+      await handleUploadVideo(videoUri);
+    }
+
+    // Insert to database
+    if (uploadedVideoUrl) {
+      await insertToDatabase(uploadedVideoUrl, uploadedThumbnailUrl);
     }
   };
 
@@ -439,7 +592,7 @@ export default function CreateCzareelScreen() {
         visible={showQuestionsModal}
         onClose={handleQuestionsCancel}
         onSubmit={handleQuestionsSubmit}
-        videoContext={caption || undefined}
+        questions={czareelQuestions}
       />
     </KeyboardAvoidingView>
   );

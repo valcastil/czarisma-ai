@@ -1,6 +1,6 @@
 import { useTheme } from '@/hooks/use-theme';
 import { getPlatformColor, getPlatformEmoji, LinkPlatform } from '@/utils/link-storage';
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface SharedLinkRow {
@@ -45,8 +45,12 @@ const labelForPlatform = (p: string | null): string => {
   }
 };
 
-export function SharedLinksPreview({ links, isFollowing, totalCount }: SharedLinksPreviewProps) {
+export const SharedLinksPreview = memo(function SharedLinksPreview({ links, isFollowing, totalCount }: SharedLinksPreviewProps) {
   const { colors } = useTheme();
+
+  const openLink = useCallback((url: string) => {
+    Linking.openURL(url).catch(() => {});
+  }, []);
 
   if (!isFollowing) {
     return (
@@ -77,10 +81,6 @@ export function SharedLinksPreview({ links, isFollowing, totalCount }: SharedLin
 
   console.log('[SharedLinksPreview] Input links:', links.length, 'Unique links:', uniqueLinks.length);
 
-  const openLink = (url: string) => {
-    Linking.openURL(url).catch(() => {});
-  };
-
   return (
     <View style={styles.container}>
       {uniqueLinks.map((link) => {
@@ -100,7 +100,7 @@ export function SharedLinksPreview({ links, isFollowing, totalCount }: SharedLin
             activeOpacity={0.8}
           >
             {thumb ? (
-              <Image source={{ uri: thumb }} style={styles.thumbnail} resizeMode="cover" />
+              <Image source={{ uri: thumb, cache: 'force-cache' }} style={styles.thumbnail} resizeMode="cover" />
             ) : (
               <View style={[styles.thumbnailPlaceholder, { backgroundColor: platformColor + '15' }]}>
                 <Text style={styles.placeholderEmoji}>{emoji}</Text>
@@ -144,7 +144,7 @@ export function SharedLinksPreview({ links, isFollowing, totalCount }: SharedLin
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

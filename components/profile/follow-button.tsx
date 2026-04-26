@@ -1,6 +1,6 @@
 import { useTheme } from '@/hooks/use-theme';
 import { followUser, unfollowUser } from '@/utils/follow-utils';
-import React, { useState } from 'react';
+import React, { memo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 interface FollowButtonProps {
@@ -10,7 +10,7 @@ interface FollowButtonProps {
   onFollowChange: (following: boolean) => void;
 }
 
-export function FollowButton({ currentUserId, targetUserId, isFollowing: initialFollowing, onFollowChange }: FollowButtonProps) {
+export const FollowButton = memo(function FollowButton({ currentUserId, targetUserId, isFollowing: initialFollowing, onFollowChange }: FollowButtonProps) {
   const { colors } = useTheme();
   const [following, setFollowing] = useState(initialFollowing);
   const [loading, setLoading] = useState(false);
@@ -65,7 +65,7 @@ export function FollowButton({ currentUserId, targetUserId, isFollowing: initial
       )}
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   button: {

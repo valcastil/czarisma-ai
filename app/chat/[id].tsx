@@ -206,8 +206,9 @@ export default function ChatScreen() {
       const sentColorKey = `@message_text_color_${id}`;
       const receivedColorKey = `@received_message_text_color_${id}`;
       
-      const savedSentColor = await AsyncStorage.getItem(sentColorKey);
-      const savedReceivedColor = await AsyncStorage.getItem(receivedColorKey);
+      const colors = await AsyncStorage.multiGet([sentColorKey, receivedColorKey]);
+      const savedSentColor = colors[0][1];
+      const savedReceivedColor = colors[1][1];
       
       if (savedSentColor) {
         setMessageTextColor(savedSentColor);
@@ -487,18 +488,18 @@ export default function ChatScreen() {
     }
   };
 
-  const handleAttachMedia = (attachment: Attachment) => {
+  const handleAttachMedia = useCallback((attachment: Attachment) => {
     console.log('=== handleAttachMedia called ===');
     console.log('attachment:', attachment);
     setPendingAttachment(attachment);
     setShowMediaAttachmentModal(false);
-  };
+  }, []);
 
-  const handleClearAttachment = () => {
+  const handleClearAttachment = useCallback(() => {
     setPendingAttachment(null);
-  };
+  }, []);
 
-  const handleAttachCharisma = (entry: CharismaEntry) => {
+  const handleAttachCharisma = useCallback((entry: CharismaEntry) => {
     console.log('=== handleAttachCharisma called ===');
     console.log('entry:', entry);
 
@@ -512,7 +513,7 @@ export default function ChatScreen() {
 
     // Close the attachment modal
     setShowCharismaModal(false);
-  };
+  }, []);
 
   // ---------- Location sharing ----------
 
@@ -647,10 +648,10 @@ export default function ChatScreen() {
     }
   };
 
-  const handleCopyMessage = (content: string) => {
+  const handleCopyMessage = useCallback((content: string) => {
     Alert.alert('Copied', 'Message copied to clipboard');
     setSelectedMessageId(null);
-  };
+  }, []);
 
   const handleDeleteMessage = (messageId: string) => {
     Alert.alert(
@@ -711,7 +712,7 @@ export default function ChatScreen() {
     }
   };
 
-  const handleMenuPress = () => {
+  const handleMenuPress = useCallback(() => {
     if (!canChat || !userEmail) {
       Alert.alert(
         'Sign In Required',
@@ -721,7 +722,7 @@ export default function ChatScreen() {
       return;
     }
     setShowMenu(!showMenu);
-  };
+  }, [canChat, userEmail]);
 
   const handleClearChat = async () => {
     Alert.alert(
@@ -736,25 +737,23 @@ export default function ChatScreen() {
             try {
               // Clear messages from AsyncStorage
               const MESSAGES_KEY = '@charisma_messages';
-              const messagesData = await AsyncStorage.getItem(MESSAGES_KEY);
+              const CONVERSATIONS_KEY = '@charisma_conversations';
+              
+              const [messagesData, conversationsData] = await AsyncStorage.multiGet([MESSAGES_KEY, CONVERSATIONS_KEY]);
 
-              if (messagesData) {
-                const allMessages = JSON.parse(messagesData);
+              if (messagesData[1]) {
+                const allMessages = JSON.parse(messagesData[1]);
                 // Filter out messages for this conversation
                 const filteredMessages = allMessages.filter((msg: any) =>
                   !(msg.senderId === currentUser?.id && msg.receiverId === otherUser.id) &&
                   !(msg.senderId === otherUser.id && msg.receiverId === currentUser?.id)
                 );
-
                 await AsyncStorage.setItem(MESSAGES_KEY, JSON.stringify(filteredMessages));
               }
 
               // Clear conversation from conversations list
-              const CONVERSATIONS_KEY = '@charisma_conversations';
-              const conversationsData = await AsyncStorage.getItem(CONVERSATIONS_KEY);
-
-              if (conversationsData) {
-                const conversations = JSON.parse(conversationsData);
+              if (conversationsData[1]) {
+                const conversations = JSON.parse(conversationsData[1]);
                 const filteredConversations = conversations.filter((conv: any) =>
                   conv.userId !== otherUser.id
                 );
@@ -898,7 +897,7 @@ export default function ChatScreen() {
 
   const [isMuted, setIsMuted] = useState(false);
 
-  const handleMuteNotifications = () => {
+  const handleMuteNotifications = useCallback(() => {
     setShowMenu(false);
     setIsMuted(!isMuted);
 
@@ -911,7 +910,7 @@ export default function ChatScreen() {
       AsyncStorage.removeItem(muteKey);
       Alert.alert('Unmuted', `Notifications enabled for ${otherUser.name}`);
     }
-  };
+  }, [isMuted, otherUser.id, otherUser.name]);
 
   const handleBlockUser = () => {
     Alert.alert(
@@ -924,13 +923,21 @@ export default function ChatScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Get current blocked users list
+              // Get current blocked users list and clear conversation data in parallel
               const BLOCKED_USERS_KEY = '@charisma_blocked_users';
-              const blockedData = await AsyncStorage.getItem(BLOCKED_USERS_KEY);
+              const MESSAGES_KEY = '@charisma_messages';
+              const CONVERSATIONS_KEY = '@charisma_conversations';
+              
+              const [blockedData, messagesData, conversationsData] = await AsyncStorage.multiGet([
+                BLOCKED_USERS_KEY,
+                MESSAGES_KEY,
+                CONVERSATIONS_KEY
+              ]);
+              
               let blockedUsers: string[] = [];
 
-              if (blockedData) {
-                blockedUsers = JSON.parse(blockedData);
+              if (blockedData[1]) {
+                blockedUsers = JSON.parse(blockedData[1]);
               }
 
               // Add user to blocked list
@@ -940,11 +947,8 @@ export default function ChatScreen() {
               }
 
               // Clear all messages from this conversation
-              const MESSAGES_KEY = '@charisma_messages';
-              const messagesData = await AsyncStorage.getItem(MESSAGES_KEY);
-
-              if (messagesData) {
-                const allMessages = JSON.parse(messagesData);
+              if (messagesData[1]) {
+                const allMessages = JSON.parse(messagesData[1]);
                 const filteredMessages = allMessages.filter((msg: any) =>
                   !(msg.senderId === currentUser?.id && msg.receiverId === otherUser.id) &&
                   !(msg.senderId === otherUser.id && msg.receiverId === currentUser?.id)
@@ -954,11 +958,8 @@ export default function ChatScreen() {
               }
 
               // Remove conversation from conversations list
-              const CONVERSATIONS_KEY = '@charisma_conversations';
-              const conversationsData = await AsyncStorage.getItem(CONVERSATIONS_KEY);
-
-              if (conversationsData) {
-                const conversations = JSON.parse(conversationsData);
+              if (conversationsData[1]) {
+                const conversations = JSON.parse(conversationsData[1]);
                 const filteredConversations = conversations.filter((conv: any) =>
                   conv.userId !== otherUser.id
                 );
@@ -979,18 +980,18 @@ export default function ChatScreen() {
   };
 
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     router.back();
-  };
+  }, [router]);
 
-  const formatMessageTime = (timestamp: number) => {
+  const formatMessageTime = useCallback((timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     });
-  };
+  }, []);
 
   const renderMessageItem = ({ item, index }: { item: Message; index: number }) => {
     // Safety check for invalid message data
@@ -1100,7 +1101,7 @@ export default function ChatScreen() {
           {/* Avatar for received messages (left side) */}
           {!isFromCurrentUser && (
             (profilePhoto || otherUser.avatarUrl) ? (
-              <Image source={{ uri: profilePhoto || otherUser.avatarUrl }} style={styles.messageAvatar} />
+              <Image source={{ uri: profilePhoto || otherUser.avatarUrl, cache: 'force-cache' }} style={styles.messageAvatar} />
             ) : (
               <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.gold }]}>
                 <Text style={styles.messageAvatarText}>
@@ -1214,7 +1215,7 @@ export default function ChatScreen() {
           {/* Avatar for sent messages (right side) */}
           {isFromCurrentUser && (
             (currentUserPhoto || currentUser?.avatarUrl) ? (
-              <Image source={{ uri: currentUserPhoto || currentUser?.avatarUrl }} style={styles.messageAvatar} />
+              <Image source={{ uri: currentUserPhoto || currentUser?.avatarUrl, cache: 'force-cache' }} style={styles.messageAvatar} />
             ) : (
               <View style={[styles.messageAvatarPlaceholder, { backgroundColor: colors.gold }]}>
                 <Text style={styles.messageAvatarText}>
@@ -1642,7 +1643,7 @@ export default function ChatScreen() {
                   <View style={styles.profileHeaderSection}>
                     <View style={styles.profileAvatarContainer}>
                       {(profilePhoto || otherUser.avatarUrl) ? (
-                        <Image source={{ uri: profilePhoto || otherUser.avatarUrl }} style={styles.profilePhoto} />
+                        <Image source={{ uri: profilePhoto || otherUser.avatarUrl, cache: 'force-cache' }} style={styles.profilePhoto} />
                       ) : (
                         <View style={[styles.profileAvatar, { backgroundColor: colors.card }]}>
                           <IconSymbol size={40} name="person" color={colors.text} />

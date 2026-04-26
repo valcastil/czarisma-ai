@@ -57,13 +57,23 @@ export class SecureStorage {
       } else {
         return await AsyncStorage.getItem(key);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error retrieving data:', error);
+      // Check if error is due to AsyncStorage not being initialized yet
+      if (error?.message?.includes('window is not defined') || error?.message?.includes('window')) {
+        console.warn('AsyncStorage not initialized yet, returning null');
+        return null;
+      }
       // Fallback to AsyncStorage if EncryptedStorage fails
       try {
         return await AsyncStorage.getItem(key);
-      } catch (fallbackError) {
+      } catch (fallbackError: any) {
         console.error('Fallback storage also failed:', fallbackError);
+        // Check if fallback error is also due to initialization
+        if (fallbackError?.message?.includes('window is not defined') || fallbackError?.message?.includes('window')) {
+          console.warn('AsyncStorage fallback not initialized yet, returning null');
+          return null;
+        }
         return null;
       }
     }

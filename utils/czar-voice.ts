@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { getCurrentVoiceId } from './ai-voice';
 
 // Get API key from environment variable or app.json extra config
@@ -86,6 +86,92 @@ const cacheAudioWithEviction = async (key: string, base64Audio: string): Promise
 };
 
 /**
+ * Preload multiple TTS messages by fetching and caching them without playing.
+ * Returns true if all messages were successfully cached.
+ */
+export const preloadTTSMessages = async (messages: string[]): Promise<boolean> => {
+  const runtimeApiKey = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY || 
+                      Constants.expoConfig?.extra?.elevenLabsApiKey || 
+                      ELEVENLABS_API_KEY;
+  
+  if (!runtimeApiKey || runtimeApiKey === 'your-elevenlabs-api-key') {
+    console.warn('CzarVoice: No ElevenLabs API key configured for preloading');
+    return false;
+  }
+
+  const voiceId = await getCurrentVoiceId();
+  console.log('CzarVoice: Preloading', messages.length, 'messages with voice', voiceId);
+
+  try {
+    for (const message of messages) {
+      // Strip emojis and special chars for cleaner TTS
+      const cleanMessage = message.replace(/[\u{1F300}-\u{1FFFF}]/gu, '').replace(/[*_~`]/g, '').trim();
+      if (!cleanMessage) continue;
+
+      const cacheKey = CACHE_PREFIX + voiceId + '_' + hashMessage(cleanMessage);
+      
+      // Check if already cached
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (cached) {
+        console.log('CzarVoice: Message already cached:', cleanMessage.substring(0, 30) + '...');
+        continue;
+      }
+
+      // Fetch from ElevenLabs
+      console.log('CzarVoice: Fetching audio for:', cleanMessage.substring(0, 30) + '...');
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          method: 'POST',
+          headers: {
+            'xi-api-key': runtimeApiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg',
+          },
+          body: JSON.stringify({
+            text: cleanMessage,
+            model_id: MODEL_ID,
+            voice_settings: {
+              stability: 0.6,
+              similarity_boost: 0.75,
+              style: 0.3,
+              use_speaker_boost: true,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error(`CzarVoice: ElevenLabs API error ${response.status}`);
+        continue;
+      }
+
+      // Convert response to base64 and cache
+      const arrayBuffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Audio = btoa(binary);
+
+      try {
+        await cacheAudioWithEviction(cacheKey, base64Audio);
+        console.log('CzarVoice: Cached message:', cleanMessage.substring(0, 30) + '...');
+      } catch {
+        // Cache write failure is non-critical
+      }
+    }
+    
+    console.log('CzarVoice: Preloading complete');
+    return true;
+  } catch (error) {
+    console.error('CzarVoice: Preloading error', error);
+    return false;
+  }
+};
+
+/**
  * Speak a message using ElevenLabs TTS.
  * - Checks AsyncStorage cache first (keyed by message hash)
  * - On cache miss: fetches from ElevenLabs, caches the base64 result
@@ -112,14 +198,22 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
 
   // Set audio mode for playback through speaker (critical for production builds)
   try {
-    await setAudioModeAsync({
-      allowsRecording: false,
-      interruptionMode: 'doNotMix',
-      playsInSilentMode: true,
-      shouldPlayInBackground: false,
-      shouldRouteThroughEarpiece: false,
-    });
-    console.log('CzarVoice: Audio session configured for playback');
+    const audioMode: any = Platform.OS === 'android' 
+      ? {
+          allowsRecording: false,
+          interruptionMode: 'doNotMix',
+          shouldPlayInBackground: false,
+          shouldRouteThroughEarpiece: false,
+        }
+      : {
+          allowsRecording: false,
+          interruptionMode: 'doNotMix',
+          playsInSilentMode: true,
+          shouldPlayInBackground: false,
+          shouldRouteThroughEarpiece: false,
+        };
+    await setAudioModeAsync(audioMode);
+    console.log('CzarVoice: Audio session configured for playback on', Platform.OS);
   } catch (e) {
     console.error('CzarVoice: Audio mode config failed', e);
     // Continue even if audio mode fails
@@ -182,26 +276,77 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
     }
 
     // 4. Play audio from base64
+    console.log('CzarVoice: Creating audio player for', Platform.OS);
     const player = createAudioPlayer({ uri: `data:audio/mpeg;base64,${base64Audio}` });
     player.volume = 1.0;
-    player.play();
-
+    
     activeSound = player;
 
-    // Cleanup sound after playback finishes
-    const sub = player.addListener('playbackStatusUpdate', (status) => {
-      if (status.didJustFinish) {
-        try { player.remove(); } catch {}
-        try { sub.remove(); } catch {}
-        if (activeSound === player) {
-          activeSound = null;
-        }
-      }
-    });
-
-    // Estimate duration for mouth animation sync (~80ms per character)
+    // Estimate duration for fallback (~80ms per character)
     const estimatedDuration = Math.max(2000, cleanMessage.length * 80);
-    return estimatedDuration;
+
+    // Wait for playback to actually finish before resolving
+    return new Promise<number>((resolve) => {
+      let hasFinished = false;
+      
+      const sub = player.addListener('playbackStatusUpdate', (status) => {
+        console.log('CzarVoice: Playback status on', Platform.OS, ':', status);
+        
+        // Check if playback is actually playing
+        if (status.playing) {
+          console.log('CzarVoice: Audio is now playing on', Platform.OS);
+        }
+        
+        if (status.didJustFinish && !hasFinished) {
+          hasFinished = true;
+          console.log('CzarVoice: Playback finished on', Platform.OS);
+          try { player.remove(); } catch {}
+          try { sub.remove(); } catch {}
+          if (activeSound === player) {
+            activeSound = null;
+          }
+          resolve(estimatedDuration);
+        }
+      });
+      
+      // Android-specific: Small delay before playing to ensure audio session is ready
+      const playDelay = Platform.OS === 'android' ? 100 : 0;
+      
+      setTimeout(() => {
+        console.log('CzarVoice: Starting audio playback on', Platform.OS);
+        player.play();
+        
+        // Android fallback: resolve after estimated duration if didJustFinish doesn't fire
+        if (Platform.OS === 'android') {
+          setTimeout(() => {
+            if (!hasFinished) {
+              console.log('CzarVoice: Android fallback timeout - forcing resolve');
+              hasFinished = true;
+              try { player.remove(); } catch {}
+              try { sub.remove(); } catch {}
+              if (activeSound === player) {
+                activeSound = null;
+              }
+              resolve(estimatedDuration);
+            }
+          }, estimatedDuration + 3000);
+        }
+      }, playDelay);
+      
+      // General fallback: resolve after estimated duration + buffer
+      setTimeout(() => {
+        if (!hasFinished) {
+          console.log('CzarVoice: General fallback timeout resolving');
+          hasFinished = true;
+          try { player.remove(); } catch {}
+          try { sub.remove(); } catch {}
+          if (activeSound === player) {
+            activeSound = null;
+          }
+          resolve(estimatedDuration);
+        }
+      }, estimatedDuration + 8000);
+    });
 
   } catch (error) {
     console.error('CzarVoice: Playback error', error);

@@ -706,6 +706,44 @@ export default function ProfileSettingsScreen() {
           ))}
         </View>
 
+        <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>CZAR AI SETTINGS</Text>
+        </View>
+
+        {isPaidPro && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fieldLabel, { color: colors.text }]}>Skip Czar AI Questions</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>Skip questions when creating czareels (Pro feature)</Text>
+              </View>
+              <TouchableOpacity
+                style={{
+                  width: 50,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: skipQuestions ? colors.gold : colors.border,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+                onPress={async () => {
+                  const newValue = !skipQuestions;
+                  setSkipQuestions(newValue);
+                  await AsyncStorage.setItem('@czareel_skip_questions', newValue.toString());
+                }}
+              >
+                <View style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: '#fff',
+                  transform: [{ translateX: skipQuestions ? 22 : 2 }],
+                }} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={styles.footerSpacer} />
       </ScrollView>
     </KeyboardAvoidingView>

@@ -1,5 +1,5 @@
 import { useTheme } from '@/hooks/use-theme';
-import React from 'react';
+import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 interface EntryPreview {
@@ -19,7 +19,7 @@ interface CharismaEntriesPreviewProps {
   totalCount: number;
 }
 
-export function CharismaEntriesPreview({ entries, isFollowing, totalCount }: CharismaEntriesPreviewProps) {
+export const CharismaEntriesPreview = memo(function CharismaEntriesPreview({ entries, isFollowing, totalCount }: CharismaEntriesPreviewProps) {
   const { colors } = useTheme();
 
   if (!isFollowing) {
@@ -102,7 +102,7 @@ export function CharismaEntriesPreview({ entries, isFollowing, totalCount }: Cha
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

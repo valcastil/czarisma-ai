@@ -1,5 +1,5 @@
 import { useTheme } from '@/hooks/use-theme';
-import React from 'react';
+import React, { memo } from 'react';
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface SocialLinksDisplayProps {
@@ -19,7 +19,7 @@ const SOCIAL_CONFIG: Record<string, { label: string; emoji: string; color: strin
   whatsapp: { label: 'WhatsApp', emoji: '💬', color: '#25D366' },
 };
 
-export function SocialLinksDisplay({ socialLinks }: SocialLinksDisplayProps) {
+export const SocialLinksDisplay = memo(function SocialLinksDisplay({ socialLinks }: SocialLinksDisplayProps) {
   const { colors } = useTheme();
 
   const activeLinks = Object.entries(socialLinks).filter(
@@ -66,7 +66,7 @@ export function SocialLinksDisplay({ socialLinks }: SocialLinksDisplayProps) {
       })}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

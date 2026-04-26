@@ -1,11 +1,13 @@
-import { CzarCompanion } from '@/components/czar-companion';
-import { evaluateCzareelAnswers, generateCzareelQuestions } from '@/lib/gemini';
+import { evaluateCzareelAnswers } from '@/lib/gemini';
 import { useTheme } from '@/hooks/use-theme';
-import React, { useEffect, useState } from 'react';
+import { preloadTTSMessages, speakCzarMessage } from '@/utils/czar-voice';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,45 +24,93 @@ interface CzareelQuestionsModalProps {
     answers: string[];
     feedback: string;
   }) => void;
-  videoContext?: string;
+  questions: string[];
 }
 
 export function CzareelQuestionsModal({
   visible,
   onClose,
   onSubmit,
-  videoContext,
+  questions: initialQuestions,
 }: CzareelQuestionsModalProps) {
   const { colors } = useTheme();
-  const [questions, setQuestions] = useState<string[]>([]);
+  const [questions, setQuestions] = useState<string[]>(initialQuestions);
   const [answers, setAnswers] = useState<string[]>(['', '', '']);
   const [feedback, setFeedback] = useState<string>('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setFeedbackLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [czarMessage, setCzarMessage] = useState('');
+  const [showQuestionsUI, setShowQuestionsUI] = useState(false);
+  const hasSpokenRef = useRef(false);
 
   const MAX_CHARS = 500;
 
   useEffect(() => {
-    if (visible) {
-      generateQuestions();
-    }
-  }, [visible]);
+    setQuestions(initialQuestions);
+  }, [initialQuestions]);
 
-  const generateQuestions = async () => {
-    setGenerating(true);
-    setCzarMessage('Let me think of some questions for you...');
+  useEffect(() => {
+    if (visible && initialQuestions.length > 0 && !hasSpokenRef.current) {
+      hasSpokenRef.current = true;
+      // Show questions UI immediately
+      setShowQuestionsUI(true);
+      // Preload all TTS audio first, then speak
+      preloadAndSpeakQuestions();
+    }
+    if (!visible) {
+      hasSpokenRef.current = false;
+      setShowQuestionsUI(false);
+    }
+  }, [visible, initialQuestions]);
+
+  const preloadAndSpeakQuestions = async () => {
+    console.log('Preloading TTS audio for questions:', initialQuestions);
+    
+    const welcomeMessage = 'I have some questions for you about your video!';
+    
+    // Preload welcome message and all questions
+    const messagesToPreload = [welcomeMessage, ...initialQuestions];
+    
+    // Preload all audio first
+    await preloadTTSMessages(messagesToPreload);
+    console.log('TTS audio preloaded, starting speech');
+    
+    // Now start speaking after preloading is complete
+    await speakQuestions(welcomeMessage);
+  };
+
+  const speakQuestions = async (welcomeMessage: string) => {
+    console.log('speakQuestions called with questions:', initialQuestions);
+    
     try {
-      const generatedQuestions = await generateCzareelQuestions(videoContext);
-      setQuestions(generatedQuestions);
-      setCzarMessage('I have some questions for you about your video!');
+      // Speak welcome message and wait for it to finish completely
+      console.log('Speaking welcome message');
+      await speakCzarMessage(welcomeMessage);
+      
+      // Meaningful pause after welcome before first question (2 seconds)
+      console.log('Pausing 2 seconds before first question...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Read each question sequentially with slow, meaningful pacing
+      for (let i = 0; i < initialQuestions.length; i++) {
+        const question = initialQuestions[i];
+        
+        console.log(`Speaking question ${i + 1}:`, question);
+        
+        // Speak the question and wait for it to finish completely
+        await speakCzarMessage(question);
+        
+        // Add a meaningful 2-second pause after question finishes completely
+        // Don't pause after the last question
+        if (i < initialQuestions.length - 1) {
+          console.log('Pausing 2 seconds before next question...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      console.log('All questions spoken');
     } catch (error) {
-      console.error('Error generating questions:', error);
-      Alert.alert('Error', 'Failed to generate questions. Please try again.');
-      onClose();
-    } finally {
-      setGenerating(false);
+      console.error('Error speaking questions:', error);
     }
   };
 
@@ -78,12 +128,25 @@ export function CzareelQuestionsModal({
     }
 
     setFeedbackLoading(true);
-    setCzarMessage('Let me review your answers...');
     try {
       const result = await evaluateCzareelAnswers(questions, answers);
       setFeedback(result.feedback);
       setSuggestions(result.suggestions);
-      setCzarMessage('Here is my feedback on your answers!');
+      
+      const feedbackMessage = 'Here is my feedback on your answers!';
+      const fullFeedback = `${result.feedback}. ${result.suggestions.map(s => s).join('. ')}`;
+      
+      // Preload feedback audio before speaking
+      await preloadTTSMessages([feedbackMessage, fullFeedback]);
+      
+      // Speak intro message and wait for it to finish completely
+      await speakCzarMessage(feedbackMessage);
+      
+      // Add a meaningful pause before reading the full feedback (2 seconds)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Speak the actual feedback and wait for it to finish
+      await speakCzarMessage(fullFeedback);
     } catch (error) {
       console.error('Error getting feedback:', error);
       Alert.alert('Error', 'Failed to get feedback. Please try again.');
@@ -131,16 +194,9 @@ export function CzareelQuestionsModal({
       <Modal visible={visible} transparent animationType="fade">
         <View style={styles.overlay}>
           <View style={[styles.container, { backgroundColor: colors.card }]}>
-            <CzarCompanion
-              message={czarMessage}
-              size="large"
-              mood="thinking"
-              intelligent
-              onDismiss={onClose}
-            />
             <ActivityIndicator size="large" color={colors.gold} style={styles.loader} />
             <Text style={[styles.loadingText, { color: colors.text }]}>
-              Generating questions...
+              Loading questions...
             </Text>
           </View>
         </View>
@@ -150,7 +206,11 @@ export function CzareelQuestionsModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <View style={[styles.container, { backgroundColor: colors.card }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>Czar AI Questions</Text>
@@ -159,16 +219,8 @@ export function CzareelQuestionsModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollContent}>
-            <CzarCompanion
-              message={czarMessage}
-              size="medium"
-              mood="happy"
-              intelligent
-              onDismiss={handleCancel}
-            />
-
-            {questions.map((question, index) => (
+          <ScrollView style={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            {showQuestionsUI && questions.map((question, index) => (
               <View key={index} style={styles.questionCard}>
                 <Text style={[styles.questionText, { color: colors.text }]}>
                   {question}
@@ -228,7 +280,7 @@ export function CzareelQuestionsModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
