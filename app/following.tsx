@@ -125,7 +125,8 @@ export default function FollowingScreen() {
     return (
       <TouchableOpacity
         style={styles.userItem}
-        activeOpacity={0.7}>
+        activeOpacity={0.7}
+        onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id, username: item.username, name: item.name } })}>
         <View style={styles.avatarContainer}>
           {item.avatar_url ? (
             <Image source={{ uri: item.avatar_url }} style={styles.avatar} />

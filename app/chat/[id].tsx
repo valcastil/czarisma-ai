@@ -1691,19 +1691,25 @@ export default function ChatScreen() {
                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Entries</Text>
                       </View>
                       <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                      <View style={styles.statItem}>
+                      <TouchableOpacity
+                        style={styles.statItem}
+                        activeOpacity={0.7}
+                        onPress={() => router.push({ pathname: '/followers', params: { userId: id, type: 'followers', name } })}>
                         <Text style={[styles.statNumber, { color: colors.gold }]}>
                           {profileLoading ? '—' : followCounts.followers}
                         </Text>
                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Followers</Text>
-                      </View>
+                      </TouchableOpacity>
                       <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                      <View style={styles.statItem}>
+                      <TouchableOpacity
+                        style={styles.statItem}
+                        activeOpacity={0.7}
+                        onPress={() => router.push({ pathname: '/following', params: { userId: id, type: 'following', name } })}>
                         <Text style={[styles.statNumber, { color: colors.gold }]}>
                           {profileLoading ? '—' : followCounts.following}
                         </Text>
                         <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Following</Text>
-                      </View>
+                      </TouchableOpacity>
                     </View>
                   </View>
 
