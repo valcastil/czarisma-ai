@@ -76,7 +76,8 @@
         "android.permission.ACCESS_MEDIA_LOCATION",
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "config": {
         "googleMaps": {
@@ -178,7 +179,14 @@
       ],
       "./plugins/withNonModularHeaders.js",
       "./plugins/withGoogleMapsSubspec.js",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/adaptive-icon.png",
+          "color": "#F5C23B"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

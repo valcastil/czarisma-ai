@@ -20,7 +20,13 @@ import { initializeSupabase, supabase } from '@/lib/supabase';
 import '@/lib/firebase-init';
 import { initializeVexo } from '@/lib/vexo-analytics';
 import { checkTrialExpirationAndRedirect, getLocalTrialStatus, shouldShowTrialExpiredPopup } from '@/utils/subscription-utils';
+import { advancePlaylist, PLAYLIST_NOTIFICATION_TYPE } from '@/utils/playlist-scheduler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+
+// expo-notifications is removed from Expo Go (Android) since SDK 53.
+// Lazy-load it so the app doesn't crash in Expo Go.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 // ⚠️ TEMPORARY: Set to true to reset onboarding, then set back to false
 const DEV_RESET_ONBOARDING = false;
@@ -146,6 +152,34 @@ function RootLayoutContent() {
       }
     });
     return () => { authSub.subscription.unsubscribe(); };
+  }, []);
+
+  // Playlist notification tap handler — advance to next video
+  useEffect(() => {
+    if (isExpoGo) return; // expo-notifications not supported in Expo Go (Android SDK 53+)
+    let sub: { remove: () => void } | undefined;
+    (async () => {
+      try {
+        const Notifications = await import('expo-notifications');
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+          }),
+        });
+        sub = Notifications.addNotificationResponseReceivedListener((response) => {
+          const type = response.notification.request.content.data?.type;
+          if (type === PLAYLIST_NOTIFICATION_TYPE) {
+            advancePlaylist().catch((e) => console.warn('advancePlaylist failed:', e));
+          }
+        });
+      } catch (e) {
+        console.warn('expo-notifications setup failed:', e);
+      }
+    })();
+    return () => { sub?.remove(); };
   }, []);
 
   // Gate helper: redirects signed-in users to /claim-handle when a required handle is missing.

@@ -15,6 +15,9 @@ import {
   Dimensions,
 } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { WebViewPlayer } from '@/components/social-player/webview-player';
+import { startPlaylist } from '@/utils/playlist-scheduler';
 import {
   parseSocialUrl,
   type ParsedSocialUrl,
@@ -51,6 +54,7 @@ export function SocialPlayerModal({
   const [loading, setLoading] = useState(false);
   const [appStatus, setAppStatus] = useState<Record<string, boolean>>({});
   const [lastResult, setLastResult] = useState<OpenVideoResult | null>(null);
+  const [showWebPlayer, setShowWebPlayer] = useState(false);
 
   // Parse URLs when modal opens
   useEffect(() => {
@@ -167,10 +171,13 @@ export function SocialPlayerModal({
       <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.9)' }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={[styles.closeText, { color: colors.text }]}>✕</Text>
+          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <IconSymbol size={36} name="chevron.left" color={colors.gold} />
           </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+            {title}
+          </Text>
+          <View style={styles.headerSpacer} />
         </View>
 
         {/* Video Count Summary */}
@@ -280,20 +287,14 @@ export function SocialPlayerModal({
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={playCurrent}
-            disabled={loading}
+            onPress={() => setShowWebPlayer(true)}
+            disabled={parsedVideos.length === 0}
             style={[
               styles.playButton,
               { backgroundColor: colors.gold },
             ]}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.playButtonText}>
-                {isPlaying ? '▶ Play Again' : '▶ Play Now'}
-              </Text>
-            )}
+            <Text style={styles.playButtonText}>▶ Play Now</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -313,10 +314,10 @@ export function SocialPlayerModal({
           </TouchableOpacity>
         </View>
 
-        {/* Play All Button */}
+        {/* Play All Button - native apps with notification nudge */}
         {parsedVideos.length > 1 && (
           <TouchableOpacity
-            onPress={playAll}
+            onPress={() => startPlaylist(parsedVideos.map(v => v.originalUrl))}
             disabled={loading}
             style={[
               styles.playAllButton,
@@ -327,7 +328,7 @@ export function SocialPlayerModal({
             ]}
           >
             <Text style={[styles.playAllText, { color: colors.text }]}>
-              🎬 Play All {parsedVideos.length} Videos
+              🎬 Play All {parsedVideos.length} in Native Apps
             </Text>
           </TouchableOpacity>
         )}
@@ -410,6 +411,14 @@ export function SocialPlayerModal({
           </View>
         )}
       </View>
+
+      {/* In-app WebView player (Play Now) */}
+      <WebViewPlayer
+        visible={showWebPlayer}
+        urls={parsedVideos.map(v => v.originalUrl)}
+        startIndex={currentIndex}
+        onClose={() => setShowWebPlayer(false)}
+      />
     </Modal>
   );
 }
@@ -427,8 +436,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
+  },
+  headerSpacer: {
+    width: 36,
   },
   closeButton: {
     padding: 10,
