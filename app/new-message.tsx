@@ -45,46 +45,48 @@ const normalizePhone = (raw: string): string | null => {
 };
 
 /**
+ * Find the matched User for a contact using normalized/digit-aware comparison.
+ * Returns the first User match, or null if none found.
+ * Works on both iOS and Android regardless of how the OS formats phone numbers.
+ */
+const getMatchedUser = (contact: ImportedContact, phoneMatchMap: Map<string, User>): User | null => {
+  for (const p of contact.phoneNumbers) {
+    const digitsOnly = p.replace(/\D/g, '');
+
+    // 1. Direct raw key match
+    const direct = phoneMatchMap.get(p);
+    if (direct) return direct;
+
+    // 2. Normalized E.164 match
+    const normalized = normalizePhone(p);
+    if (normalized) {
+      const byNorm = phoneMatchMap.get(normalized);
+      if (byNorm) return byNorm;
+    }
+
+    // 3. Digit-only comparison (handles spaces, dashes, parentheses variations)
+    if (digitsOnly.length >= 7) {
+      for (const [key, user] of phoneMatchMap.entries()) {
+        const keyDigits = key.replace(/\D/g, '');
+        if (
+          keyDigits === digitsOnly ||
+          (keyDigits.includes(digitsOnly) && digitsOnly.length >= 7) ||
+          (digitsOnly.includes(keyDigits) && keyDigits.length >= 7)
+        ) {
+          return user;
+        }
+      }
+    }
+  }
+  return null;
+};
+
+/**
  * Check if a contact is on the app by checking if any of their phone numbers
  * match any phone number in the phoneMatchMap (using normalized comparison).
  */
 const isContactOnApp = (contact: ImportedContact, phoneMatchMap: Map<string, User>): boolean => {
-  return contact.phoneNumbers.some(p => {
-    const digitsOnly = p.replace(/\D/g, '');
-    
-    // Check raw phone number first
-    if (phoneMatchMap.has(p)) {
-      console.log('[ContactMatch] Direct match found for:', p);
-      return true;
-    }
-    
-    // Check normalized phone number
-    const normalized = normalizePhone(p);
-    if (normalized && phoneMatchMap.has(normalized)) {
-      console.log('[ContactMatch] Normalized match found:', p, '->', normalized);
-      return true;
-    }
-    
-    // Check if any key in the map matches this phone (reverse lookup)
-    for (const [key, user] of phoneMatchMap.entries()) {
-      const keyDigits = key.replace(/\D/g, '');
-      if (keyDigits === digitsOnly) {
-        console.log('[ContactMatch] Digits match found:', p, '->', key);
-        return true;
-      }
-      // Also check if the key contains the digits (for partial matches)
-      if (keyDigits.includes(digitsOnly) && digitsOnly.length >= 7) {
-        console.log('[ContactMatch] Partial digits match found:', p, '->', key);
-        return true;
-      }
-      if (digitsOnly.includes(keyDigits) && keyDigits.length >= 7) {
-        console.log('[ContactMatch] Reverse partial digits match found:', p, '->', key);
-        return true;
-      }
-    }
-    
-    return false;
-  });
+  return getMatchedUser(contact, phoneMatchMap) !== null;
 };
 
 export default function NewMessageScreen() {
@@ -240,14 +242,38 @@ export default function NewMessageScreen() {
 
   const loadImportedContacts = async () => {
     try {
+      // Show cached snapshot immediately so list isn't empty while loading.
       const contactsData = await AsyncStorage.getItem('@imported_contacts');
       if (contactsData) {
         const parsedContacts: ImportedContact[] = JSON.parse(contactsData);
         setContacts(parsedContacts);
         setFilteredContacts(sortContacts(parsedContacts));
       }
+
+      // Always read ALL device contacts live so phone-linked users who fell
+      // outside the cached 100-contact snapshot are still detected and sorted to top.
+      const { status } = await Contacts.getPermissionsAsync();
+      if (status !== 'granted') return;
+
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+      });
+
+      const allContacts: ImportedContact[] = data
+        .filter((c: any) => c.name || (c.phoneNumbers && c.phoneNumbers.length > 0))
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name || 'Unknown',
+          phoneNumbers: c.phoneNumbers?.map((p: any) => p.number) || [],
+          emails: c.emails?.map((e: any) => e.email) || [],
+        }));
+
+      if (allContacts.length > 0) {
+        setContacts(allContacts);
+        setFilteredContacts(sortContacts(allContacts));
+      }
     } catch (error) {
-      console.error('Error loading imported contacts:', error);
+      console.error('Error loading contacts:', error);
     }
   };
 
@@ -325,6 +351,20 @@ export default function NewMessageScreen() {
   };
 
   const handleContactPress = async (contact: ImportedContact) => {
+    // If contact is on the app, route directly to their Czar AI chat
+    const matchedUser = getMatchedUser(contact, phoneMatchMap);
+    if (matchedUser) {
+      router.push({
+        pathname: '/chat/[id]',
+        params: {
+          id: matchedUser.id,
+          username: matchedUser.username,
+          name: matchedUser.name,
+        },
+      });
+      return;
+    }
+
     const contactId = `contact_${contact.id}`;
     const openChat = () => {
       router.push({
@@ -436,10 +476,8 @@ export default function NewMessageScreen() {
   );
 
   const renderContactItem = ({ item }: { item: ImportedContact }) => {
-    const matchedUser = item.phoneNumbers
-      .map(p => phoneMatchMap.get(p))
-      .find(Boolean);
-    const isOnApp = !!matchedUser;
+    const matchedUser = getMatchedUser(item, phoneMatchMap);
+    const isOnApp = matchedUser !== null;
 
     return (
       <TouchableOpacity

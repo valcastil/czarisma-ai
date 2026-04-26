@@ -280,15 +280,17 @@ export const getRegisteredUsers = async (
  * Returns null if the number can't be reasonably normalized.
  */
 const normalizePhone = (raw: string): string | null => {
-    const digits = raw.replace(/[\s\-().]/g, '');
+    const digits = raw.replace(/[^\d+]/g, '');
     if (!digits) return null;
     if (digits.startsWith('+')) return digits;
     // Already has country code without +
     if (digits.startsWith('00')) return `+${digits.slice(2)}`;
-    // UAE local format: 05x xxxxxxx → +97105xxxxxxx
+    // UAE local format: 05x xxxxxxx → +9715xxxxxxx
     if (digits.startsWith('0') && digits.length === 10) return `+971${digits.slice(1)}`;
     // Already a full number without leading 0 (9 digits UAE)
     if (digits.length === 9) return `+971${digits}`;
+    // Full international number without + (e.g. 971501234567)
+    if (digits.length >= 10 && digits.length <= 15) return `+${digits}`;
     return null;
 };
 
