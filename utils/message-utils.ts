@@ -405,6 +405,13 @@ export const markMessagesAsRead = async (messageIds: string[]): Promise<void> =>
 };
 
 /**
+ * Set current conversation (for read receipt tracking)
+ */
+export const setCurrentConversation = async (conversationUserId: string | null): Promise<void> => {
+  await SupabaseMessageService.setCurrentConversation(conversationUserId);
+};
+
+/**
  * Subscribe to new messages in a conversation
  * Returns an unsubscribe function
  */

@@ -468,17 +468,20 @@ export const sendMessage = async (
             throw new Error('Message must have content or attachment');
         }
         
-        // Check if receiver profile exists
+        // Check if receiver profile exists and get their current conversation
         const { data: receiverProfile, error: receiverError } = await supabase
             .from('profiles')
-            .select('id, username, name')
+            .select('id, username, name, is_online, current_conversation_id')
             .eq('id', receiverId)
             .single();
-        
+
         if (receiverError || !receiverProfile) {
             throw new Error('Receiver profile not found. They may need to sign in first.');
         }
-        
+
+        // Check if receiver is currently in THIS specific chat (not just online)
+        const isReceiverInThisChat = receiverProfile.current_conversation_id === userId;
+
         // Send message with retry logic
         const result = await retryOperation(async () => {
             const messageData: any = {
@@ -486,6 +489,13 @@ export const sendMessage = async (
                 receiver_id: receiverId,
                 content: content?.trim() || '',
             };
+
+            // If receiver is actively in THIS chat, mark as read immediately (they can see it in real-time)
+            if (isReceiverInThisChat) {
+                messageData.is_read = true;
+                messageData.read_at = new Date().toISOString();
+                messageData.delivery_status = 'read';
+            }
             
             // Add attachment fields if present
             if (attachment) {
@@ -539,6 +549,8 @@ export const sendMessage = async (
                 hour12: true,
             }),
             isRead: result.is_read,
+
+            deliveryStatus: result.delivery_status || (result.is_read ? 'read' : 'sent'),
             isFromCurrentUser: result.sender_id === userId,
             attachment: result.attachment_type ? {
                 type: result.attachment_type,
@@ -635,6 +647,7 @@ export const getMessages = async (
                 hour12: true,
             }),
             isRead: msg.is_read,
+            deliveryStatus: msg.delivery_status || (msg.is_read ? 'read' : 'sent'),
             isFromCurrentUser: msg.sender_id === session.user.id,
             reactions: msg.reactions || [],
             attachment: msg.attachment_type ? {
@@ -672,12 +685,33 @@ export const markMessagesAsRead = async (messageIds: string[]): Promise<void> =>
             .update({
                 is_read: true,
                 read_at: new Date().toISOString(),
+                delivery_status: 'read',
             })
             .in('id', messageIds);
 
         if (error) throw error;
     } catch (error) {
         console.error('Error marking messages as read:', error);
+    }
+};
+
+/**
+ * Set the current conversation the user is actively viewing
+ * Pass null to indicate user is not in any chat
+ */
+export const setCurrentConversation = async (conversationUserId: string | null): Promise<void> => {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({ current_conversation_id: conversationUserId })
+            .eq('id', session.user.id);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error setting current conversation:', error);
     }
 };
 
@@ -732,6 +766,7 @@ export const subscribeToMessages = (
                     hour12: true,
                 }),
                 isRead: data.is_read,
+                deliveryStatus: data.delivery_status || (data.is_read ? 'read' : 'sent'),
                 isFromCurrentUser: data.sender_id === userId,
                 reactions: data.reactions || [],
                 attachment: data.attachment_type ? {

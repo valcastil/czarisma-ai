@@ -44,6 +44,7 @@ export interface Message {
   date: string;
   time: string;
   isRead: boolean;
+  deliveryStatus?: 'sent' | 'delivered' | 'read';
   isFromCurrentUser: boolean;
   reactions?: string[];
   attachment?: Attachment;

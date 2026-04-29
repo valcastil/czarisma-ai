@@ -3,6 +3,7 @@ import { MaterialTopTabs } from '@/components/ui/material-top-tabs';
 import { SocialPlayerModal } from '@/components/social-player/social-player-modal';
 import { useTheme } from '@/hooks/use-theme';
 import { getCurrentUser, getUnreadCount, subscribeToConversations } from '@/utils/message-utils';
+import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -358,6 +359,31 @@ export default function TabLayout() {
             setHasNewMessages(true);
           }
         });
+
+        // Also subscribe directly to new messages for immediate notification
+        // This catches messages from iOS/Android cross-platform faster
+        const messageChannel = supabase
+          .channel(`messages:global:${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'messages',
+              filter: `receiver_id=eq.${user.id}`,
+            },
+            (payload) => {
+              // Only show dot if message is new and not from current user
+              if (payload.new && !payload.new.is_read) {
+                setHasNewMessages(true);
+              }
+            }
+          )
+          .subscribe();
+
+        // Store channel for cleanup
+        (global as any).messageNotificationChannel = messageChannel;
+
       } catch (error) {
         console.error('Error subscribing to conversations:', error);
       }
@@ -366,6 +392,10 @@ export default function TabLayout() {
     return () => {
       isMounted = false;
       unsubscribe?.();
+      // Cleanup message channel
+      if ((global as any).messageNotificationChannel) {
+        supabase.removeChannel((global as any).messageNotificationChannel);
+      }
     };
   }, [checkUnreadMessages]);
 
@@ -480,8 +510,8 @@ const styles = StyleSheet.create({
   },
   messageDot: {
     position: 'absolute',
-    top: 0,
-    right: -6,
+    top: 2,
+    right: 12,
     width: 8,
     height: 8,
     borderRadius: 4,

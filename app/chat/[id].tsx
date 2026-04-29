@@ -1,5 +1,6 @@
 import { AttachmentModal } from '@/components/messages/attachment-modal';
 import { AttachmentRenderer } from '@/components/messages/attachment-renderer';
+import { MessageStatusIndicator } from '@/components/messages/message-status-indicator';
 import { CharismaAttachmentModal } from '@/components/messages/charisma-attachment-modal';
 import { ColorPickerModal } from '@/components/messages/color-picker-modal';
 import { EmojiPickerModal } from '@/components/messages/emoji-picker-modal';
@@ -33,6 +34,7 @@ import {
     getMessages,
     getUserProfile,
     sendMessage,
+    setCurrentConversation,
     subscribeToMessages,
     updateConversation,
     updateMessageReactions,
@@ -136,6 +138,9 @@ export default function ChatScreen() {
     // loadProfilePhoto() is not needed here - initializeChat sets profilePhoto from Supabase data
     loadTextColor();
 
+    // Set current conversation (for read receipt tracking)
+    setCurrentConversation(id);
+
     // Subscribe to real-time messages
     const unsubscribe = subscribeToMessages(id, (newMessage) => {
       // Validate message before processing
@@ -166,10 +171,11 @@ export default function ChatScreen() {
           return Array.from(messageMap.values());
         }
         
-        // Update existing message if it's newer (for reactions / read status)
-        if (enriched.timestamp > existing.timestamp || 
+        // Update existing message if it's newer (for reactions / read status / delivery status)
+        if (enriched.timestamp > existing.timestamp ||
             enriched.reactions?.length !== existing.reactions?.length ||
-            enriched.isRead !== existing.isRead) {
+            enriched.isRead !== existing.isRead ||
+            enriched.deliveryStatus !== existing.deliveryStatus) {
           messageMap.set(enriched.id, enriched);
           return Array.from(messageMap.values());
         }
@@ -181,6 +187,8 @@ export default function ChatScreen() {
     // Cleanup subscription on unmount
     return () => {
       unsubscribe();
+      // Clear current conversation when leaving chat
+      setCurrentConversation(null);
     };
   }, [id]);
 
@@ -1159,6 +1167,21 @@ export default function ChatScreen() {
                 {formatMessageTime(item.timestamp)}
               </Text>
             )}
+
+            {isFromCurrentUser && (
+              <View style={styles.messageMeta}>
+                <Text style={[
+                  styles.messageTime,
+                  { color: colors.textSecondary }
+                ]}>
+                  {formatMessageTime(item.timestamp)}
+                </Text>
+                <MessageStatusIndicator
+                  status={item.deliveryStatus || 'sent'}
+                  size={12}
+                />
+              </View>
+            )}
           </View>
 
 
@@ -1987,6 +2010,12 @@ const styles = StyleSheet.create({
   messageTime: {
     fontSize: 11,
     marginTop: 4,
+  },
+  messageMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
   },
   dateSeparator: {
     flexDirection: 'row',
