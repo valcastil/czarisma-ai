@@ -388,6 +388,9 @@ export const getMessages = async (
       if (unreadMessages.length > 0) {
         await markMessagesAsRead(unreadMessages.map(msg => msg.id));
       }
+      // Always reset unread count to 0 when user opens the chat
+      // This ensures the badge clears even if trigger-based decrement was out of sync
+      await resetUnreadCount(otherUserId);
     }
 
     return decryptedMessages;
@@ -402,6 +405,13 @@ export const getMessages = async (
  */
 export const markMessagesAsRead = async (messageIds: string[]): Promise<void> => {
   await SupabaseMessageService.markMessagesAsRead(messageIds);
+};
+
+/**
+ * Reset unread count for a conversation to 0
+ */
+export const resetUnreadCount = async (participantId: string): Promise<void> => {
+  await SupabaseMessageService.resetUnreadCount(participantId);
 };
 
 /**

@@ -326,9 +326,7 @@ export default function TabLayout() {
   const checkUnreadMessages = useCallback(async () => {
     try {
       const count = await getUnreadCount();
-      if (count > 0) {
-        setHasNewMessages(true);
-      }
+      setHasNewMessages(count > 0);
     } catch (error) {
       console.error('Error checking unread messages:', error);
     }
@@ -354,10 +352,9 @@ export default function TabLayout() {
         await checkUnreadMessages();
 
         // Subscribe to real-time conversation updates
-        unsubscribe = subscribeToConversations((conversation) => {
-          if (conversation?.unreadCount && conversation.unreadCount > 0) {
-            setHasNewMessages(true);
-          }
+        // Recheck total unread on every update so badge clears when all are read
+        unsubscribe = subscribeToConversations(() => {
+          checkUnreadMessages();
         });
 
         // Also subscribe directly to new messages for immediate notification
@@ -377,6 +374,19 @@ export default function TabLayout() {
               if (payload.new && !payload.new.is_read) {
                 setHasNewMessages(true);
               }
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'messages',
+              filter: `receiver_id=eq.${user.id}`,
+            },
+            () => {
+              // When messages are marked as read, recheck unread count
+              checkUnreadMessages();
             }
           )
           .subscribe();

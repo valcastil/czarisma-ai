@@ -696,6 +696,28 @@ export const markMessagesAsRead = async (messageIds: string[]): Promise<void> =>
 };
 
 /**
+ * Reset unread count for a conversation to 0.
+ * Called after marking all messages as read to ensure the count is accurate
+ * even if the per-message trigger decrement got out of sync.
+ */
+export const resetUnreadCount = async (participantId: string): Promise<void> => {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { error } = await supabase
+            .from('conversations')
+            .update({ unread_count: 0 })
+            .eq('user_id', session.user.id)
+            .eq('participant_id', participantId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error('Error resetting unread count:', error);
+    }
+};
+
+/**
  * Set the current conversation the user is actively viewing
  * Pass null to indicate user is not in any chat
  */

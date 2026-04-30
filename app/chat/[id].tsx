@@ -33,6 +33,8 @@ import {
     getCurrentUser,
     getMessages,
     getUserProfile,
+    markMessagesAsRead,
+    resetUnreadCount,
     sendMessage,
     setCurrentConversation,
     subscribeToMessages,
@@ -147,6 +149,13 @@ export default function ChatScreen() {
       if (!newMessage || !newMessage.id) {
         console.warn('Received invalid message:', newMessage);
         return;
+      }
+      
+      // If the message is from the other user and not yet read, mark it as read
+      // because the current user is actively viewing this chat
+      if (!newMessage.isFromCurrentUser && !newMessage.isRead) {
+        markMessagesAsRead([newMessage.id]);
+        resetUnreadCount(id);
       }
       
       // Enrich with sender/receiver names from local state (realtime skips the join)
