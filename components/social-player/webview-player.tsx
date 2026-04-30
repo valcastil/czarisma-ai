@@ -7,10 +7,11 @@
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/hooks/use-theme';
-import { toEmbedUrl } from '@/utils/embed-url';
+import { toEmbedUrl, PLATFORM_DURATIONS, type EmbedPlatform } from '@/utils/embed-url';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   StyleSheet,
   Text,
@@ -19,6 +20,14 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+const PLATFORM_COLORS: Record<EmbedPlatform, string> = {
+  tiktok: '#ff0050',
+  youtube: '#ff0000',
+  instagram: '#e1306c',
+  facebook: '#1877f2',
+  unknown: '#888',
+};
+
 export const VIDEO_DURATION_MS = 10_000;
 
 interface WebViewPlayerProps {
@@ -26,6 +35,8 @@ interface WebViewPlayerProps {
   urls: string[];
   startIndex?: number;
   durationMs?: number;
+  loop?: boolean;
+  mute?: boolean;
   onClose: () => void;
 }
 
@@ -34,28 +45,39 @@ export function WebViewPlayer({
   urls,
   startIndex = 0,
   durationMs = VIDEO_DURATION_MS,
+  loop = true,
+  mute: initialMute = false,
   onClose,
 }: WebViewPlayerProps) {
   const { colors } = useTheme();
   const [index, setIndex] = useState(startIndex);
-  const [secondsLeft, setSecondsLeft] = useState(Math.ceil(durationMs / 1000));
   const [paused, setPaused] = useState(false);
+  const [muted, setMuted] = useState(initialMute);
   const [loading, setLoading] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
-  const embedInfos = useMemo(() => urls.map(toEmbedUrl), [urls]);
+  const embedInfos = useMemo(() => urls.map((u) => toEmbedUrl(u, { mute: muted })), [urls, muted]);
   const current = embedInfos[index];
+
+  // Per-platform duration for current item
+  const currentDurationSec = useMemo(() => {
+    if (!current) return Math.ceil(durationMs / 1000);
+    return PLATFORM_DURATIONS[current.platform] || Math.ceil(durationMs / 1000);
+  }, [current, durationMs]);
+
+  const [secondsLeft, setSecondsLeft] = useState(currentDurationSec);
 
   // Reset when opened
   useEffect(() => {
     if (visible) {
       setIndex(startIndex);
       setPaused(false);
-      setSecondsLeft(Math.ceil(durationMs / 1000));
+      setMuted(initialMute);
     }
-  }, [visible, startIndex, durationMs]);
+  }, [visible, startIndex]);
 
-  // Auto-skip if current URL can't be embedded
+  // Reset timer & progress when track changes
   useEffect(() => {
     if (!visible) return;
     if (current && current.embedUrl === null) {
@@ -64,8 +86,24 @@ export function WebViewPlayer({
       return () => clearTimeout(t);
     }
     setLoading(true);
-    setSecondsLeft(Math.ceil(durationMs / 1000));
-  }, [index, visible]);
+    setSecondsLeft(currentDurationSec);
+    progressAnim.setValue(0);
+  }, [index, visible, currentDurationSec]);
+
+  // Animate progress bar
+  useEffect(() => {
+    if (!visible || paused) {
+      progressAnim.stopAnimation();
+      return;
+    }
+    const remaining = (secondsLeft / currentDurationSec);
+    progressAnim.setValue(1 - remaining);
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: secondsLeft * 1000,
+      useNativeDriver: false,
+    }).start();
+  }, [visible, paused, secondsLeft, currentDurationSec]);
 
   // Countdown timer
   useEffect(() => {
@@ -77,7 +115,7 @@ export function WebViewPlayer({
       setSecondsLeft((s) => {
         if (s <= 1) {
           advance();
-          return Math.ceil(durationMs / 1000);
+          return currentDurationSec;
         }
         return s - 1;
       });
@@ -85,10 +123,14 @@ export function WebViewPlayer({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [visible, paused, index]);
+  }, [visible, paused, index, currentDurationSec]);
 
   const advance = () => {
     if (index + 1 >= urls.length) {
+      if (loop) {
+        setIndex(0);
+        return;
+      }
       // Finished playlist — defer onClose to avoid setState during render
       setTimeout(() => onClose(), 0);
       return;
@@ -97,8 +139,14 @@ export function WebViewPlayer({
   };
 
   const prev = () => {
+    if (index === 0 && loop) {
+      setIndex(urls.length - 1);
+      return;
+    }
     setIndex((i) => Math.max(0, i - 1));
   };
+
+  const platformColor = current ? PLATFORM_COLORS[current.platform] : '#888';
 
   if (!visible) return null;
 
@@ -114,10 +162,26 @@ export function WebViewPlayer({
             <Text style={styles.headerTitle} numberOfLines={1}>
               Video {index + 1} of {urls.length}
             </Text>
-            <Text style={styles.headerSub}>
-              {paused ? 'Paused' : `Next in ${secondsLeft}s`} · {current?.platform ?? '—'}
-            </Text>
+            <View style={styles.headerMeta}>
+              <View style={[styles.platformPill, { borderColor: platformColor }]}>
+                <View style={[styles.platformDot, { backgroundColor: platformColor }]} />
+                <Text style={[styles.platformPillText, { color: platformColor }]}>
+                  {(current?.platform ?? '—').toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.headerSub}>
+                {paused ? 'Paused' : `Next in ${secondsLeft}s`}
+              </Text>
+              {loop && <Text style={styles.loopBadge}>LOOP</Text>}
+            </View>
           </View>
+          <TouchableOpacity onPress={() => setMuted((m) => !m)} style={styles.headerBtn}>
+            <IconSymbol
+              size={22}
+              name={muted ? 'speaker.slash.fill' : 'speaker.wave.2.fill'}
+              color={colors.gold}
+            />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => setPaused((p) => !p)} style={styles.headerBtn}>
             <IconSymbol
               size={28}
@@ -127,17 +191,36 @@ export function WebViewPlayer({
           </TouchableOpacity>
         </View>
 
-        {/* Progress bar */}
+        {/* Per-item timer bar */}
         <View style={styles.progressTrack}>
-          <View
+          <Animated.View
             style={[
               styles.progressFill,
               {
-                backgroundColor: colors.gold,
-                width: `${((index + 1) / urls.length) * 100}%`,
+                backgroundColor: platformColor,
+                width: progressAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                }),
               },
             ]}
           />
+        </View>
+
+        {/* Playlist progress (small dots) */}
+        <View style={styles.dotsRow}>
+          {urls.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: i === index ? platformColor : '#333',
+                  width: i === index ? 16 : 6,
+                },
+              ]}
+            />
+          ))}
         </View>
 
         {/* Video */}
@@ -174,10 +257,9 @@ export function WebViewPlayer({
         <View style={styles.controls}>
           <TouchableOpacity
             onPress={prev}
-            disabled={index === 0}
-            style={[styles.ctrlBtn, { opacity: index === 0 ? 0.4 : 1 }]}
+            style={styles.ctrlBtn}
           >
-            <Text style={styles.ctrlText}>← Prev</Text>
+            <Text style={styles.ctrlText}>⏮</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -190,7 +272,7 @@ export function WebViewPlayer({
           </TouchableOpacity>
 
           <TouchableOpacity onPress={advance} style={styles.ctrlBtn}>
-            <Text style={styles.ctrlText}>Next →</Text>
+            <Text style={styles.ctrlText}>⏭</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -210,7 +292,43 @@ const styles = StyleSheet.create({
   headerBtn: { padding: 6 },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  headerSub: { color: '#bbb', fontSize: 12, marginTop: 2 },
+  headerMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  headerSub: { color: '#bbb', fontSize: 12 },
+  platformPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    gap: 4,
+  },
+  platformDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  platformPillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  loopBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#00e5ff',
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,255,0.3)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    letterSpacing: 0.8,
+  },
   progressTrack: {
     height: 3,
     backgroundColor: '#222',
@@ -218,8 +336,20 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
   },
-  progressFill: { height: '100%' },
-  videoWrap: { flex: 1, backgroundColor: '#000', marginTop: 8 },
+  progressFill: { height: '100%', borderRadius: 2 },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  videoWrap: { flex: 1, backgroundColor: '#000', marginTop: 4 },
   webview: { flex: 1, backgroundColor: '#000' },
   loader: {
     ...StyleSheet.absoluteFillObject,
@@ -235,12 +365,12 @@ const styles = StyleSheet.create({
   unsupportedText: { color: '#fff', textAlign: 'center' },
   controls: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
     paddingBottom: 30,
-    gap: 10,
+    gap: 20,
   },
   ctrlBtn: {
     paddingVertical: 10,
@@ -250,5 +380,5 @@ const styles = StyleSheet.create({
   ctrlPrimary: {
     paddingHorizontal: 22,
   },
-  ctrlText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  ctrlText: { color: '#fff', fontSize: 18, fontWeight: '600' },
 });

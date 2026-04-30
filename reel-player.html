@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REEL PLAYER — Multi-Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c12;
+    --panel: #0e1520;
+    --border: #1e2d42;
+    --accent: #ff4d6d;
+    --accent2: #00e5ff;
+    --text: #e8edf5;
+    --muted: #4a607a;
+    --tiktok: #ff0050;
+    --youtube: #ff0000;
+    --instagram: #e1306c;
+    --facebook: #1877f2;
+    --timer-glow: rgba(0, 229, 255, 0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+  }
+
+  /* HEADER */
+  header {
+    grid-column: 1 / -1;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-family: 'Syne Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .status-dot.paused { background: var(--muted); box-shadow: none; animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* MAIN PLAYER */
+  .player-area {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .embed-wrapper {
+    flex: 1;
+    position: relative;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .embed-wrapper iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+  }
+
+  .embed-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--muted);
+    text-align: center;
+    padding: 40px;
+  }
+
+  .embed-placeholder .big-icon { font-size: 64px; opacity: 0.3; }
+  .embed-placeholder h2 { font-size: 18px; font-weight: 700; color: var(--text); }
+  .embed-placeholder p { font-size: 13px; line-height: 1.6; max-width: 320px; }
+
+  .platform-badge {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-family: 'Syne Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+
+  .platform-badge.tiktok { background: rgba(255,0,80,0.2); border: 1px solid var(--tiktok); color: var(--tiktok); }
+  .platform-badge.youtube { background: rgba(255,0,0,0.2); border: 1px solid var(--youtube); color: var(--youtube); }
+  .platform-badge.instagram { background: rgba(225,48,108,0.2); border: 1px solid var(--instagram); color: var(--instagram); }
+  .platform-badge.facebook { background: rgba(24,119,242,0.2); border: 1px solid var(--facebook); color: var(--facebook); }
+
+  .timer-overlay {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(8,12,18,0.85);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    backdrop-filter: blur(10px);
+    z-index: 10;
+  }
+
+  .timer-bar-track {
+    width: 120px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .timer-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 2px;
+    transition: width 0.9s linear;
+    box-shadow: 0 0 6px var(--accent2);
+  }
+
+  .timer-label {
+    font-family: 'Syne Mono', monospace;
+    font-size: 12px;
+    color: var(--accent2);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* CONTROLS */
+  .controls {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #ff6b84; border-color: #ff6b84; }
+  .btn.icon-btn { padding: 8px 10px; font-size: 16px; }
+
+  .now-playing-info {
+    flex: 1;
+    min-width: 0;
+    margin: 0 8px;
+  }
+
+  .now-playing-label {
+    font-family: 'Syne Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .now-playing-url {
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+
+  .duration-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-family: 'Syne Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .duration-select:focus { border-color: var(--accent2); }
+
+  /* SIDEBAR */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--panel);
+  }
+
+  .sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 14px 8px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .tab-btn.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  .tab-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .tab-panel.active { display: flex; }
+
+  /* QUEUE */
+  .queue-header {
+    padding: 14px 16px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .queue-header h3 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .queue-count {
+    font-family: 'Syne Mono', monospace;
+    font-size: 11px;
+    color: var(--accent2);
+    background: rgba(0,229,255,0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .queue-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .queue-list::-webkit-scrollbar { width: 4px; }
+  .queue-list::-webkit-scrollbar-track { background: transparent; }
+  .queue-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.12s;
+    margin-bottom: 4px;
+    position: relative;
+  }
+
+  .queue-item:hover { background: rgba(255,255,255,0.03); border-color: var(--border); }
+  .queue-item.active { background: rgba(0,229,255,0.06); border-color: rgba(0,229,255,0.3); }
+
+  .queue-item-num {
+    font-family: 'Syne Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .queue-item.active .queue-item-num { color: var(--accent2); }
+
+  .platform-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .platform-dot.tiktok { background: var(--tiktok); }
+  .platform-dot.youtube { background: var(--youtube); }
+  .platform-dot.instagram { background: var(--instagram); }
+  .platform-dot.facebook { background: var(--facebook); }
+
+  .queue-item-info { flex: 1; min-width: 0; }
+
+  .queue-item-platform {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .queue-item.active .queue-item-platform { color: var(--accent2); }
+
+  .queue-item-url {
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+
+  .queue-item-del {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .queue-item:hover .queue-item-del { opacity: 1; }
+  .queue-item-del:hover { color: var(--accent); }
+
+  /* ADD PANEL */
+  .add-panel {
+    padding: 14px 14px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .add-panel h4 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .url-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-family: 'Syne Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    transition: border-color 0.15s;
+    margin-bottom: 8px;
+  }
+
+  .url-input:focus { border-color: var(--accent2); }
+  .url-input::placeholder { color: var(--muted); }
+
+  .platform-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  .plat-btn {
+    padding: 7px 8px;
+    border-radius: 6px;
+    font-family: 'Syne', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .plat-btn.tiktok { border-color: var(--tiktok); color: var(--tiktok); background: rgba(255,0,80,0.05); }
+  .plat-btn.tiktok:hover, .plat-btn.tiktok.sel { background: rgba(255,0,80,0.15); }
+  .plat-btn.youtube { border-color: var(--youtube); color: var(--youtube); background: rgba(255,0,0,0.05); }
+  .plat-btn.youtube:hover, .plat-btn.youtube.sel { background: rgba(255,0,0,0.15); }
+  .plat-btn.instagram { border-color: var(--instagram); color: var(--instagram); background: rgba(225,48,108,0.05); }
+  .plat-btn.instagram:hover, .plat-btn.instagram.sel { background: rgba(225,48,108,0.15); }
+  .plat-btn.facebook { border-color: var(--facebook); color: var(--facebook); background: rgba(24,119,242,0.05); }
+  .plat-btn.facebook:hover, .plat-btn.facebook.sel { background: rgba(24,119,242,0.15); }
+
+  .add-btn {
+    width: 100%;
+    padding: 9px;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 14px;
+  }
+
+  .add-btn:hover { background: #ff6b84; }
+
+  /* SETTINGS TAB */
+  .settings-content {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .setting-group { margin-bottom: 20px; }
+
+  .setting-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .toggle {
+    width: 38px; height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle.on { background: var(--accent2); }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: left 0.2s;
+  }
+
+  .toggle.on::after { left: 21px; }
+
+  .duration-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-family: 'Syne Mono', monospace;
+    font-size: 12px;
+    width: 70px;
+    text-align: center;
+    outline: none;
+  }
+
+  .presets-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .preset-btn {
+    padding: 7px 4px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 5px;
+    font-family: 'Syne Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+
+  .preset-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* EMPTY STATE */
+  .empty-queue {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .empty-queue .icon { font-size: 36px; opacity: 0.3; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 12px;
+    opacity: 0;
+    transition: all 0.3s;
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+  }
+
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* LOOP indicator */
+  .loop-badge {
+    font-family: 'Syne Mono', monospace;
+    font-size: 10px;
+    color: var(--accent2);
+    border: 1px solid rgba(0,229,255,0.3);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  /* Embed overlay for unsupported */
+  .unsupported-notice {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 77, 109, 0.1);
+    border: 1px solid rgba(255,77,109,0.3);
+    color: var(--accent);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    text-align: center;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    max-width: 300px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">▶</div>
+    REEL PLAYER
+    <span style="color:var(--muted); font-weight:400; font-size:10px;">MULTI-PLATFORM</span>
+  </div>
+  <div class="status-bar">
+    <div id="statusDot" class="status-dot paused"></div>
+    <span id="statusText">IDLE</span>
+    <span style="color:var(--border)">|</span>
+    <span id="itemCounter">0 / 0</span>
+    <span style="color:var(--border)">|</span>
+    <span class="loop-badge" id="loopBadge">LOOP ON</span>
+  </div>
+</header>
+
+<div class="player-area">
+  <div class="embed-wrapper" id="embedWrapper">
+    <div class="embed-placeholder" id="placeholder">
+      <div class="big-icon">◈</div>
+      <h2>No content loaded</h2>
+      <p>Add URLs to the queue from the sidebar, then press Play to start your multi-platform reel session.</p>
+    </div>
+    <div class="platform-badge" id="platformBadge" style="display:none"></div>
+    <div class="timer-overlay" id="timerOverlay" style="display:none">
+      <div class="timer-bar-track">
+        <div class="timer-bar-fill" id="timerFill" style="width:0%"></div>
+      </div>
+      <span class="timer-label" id="timerLabel">0s</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn icon-btn" id="btnPrev" title="Previous" onclick="prevItem()">⏮</button>
+    <button class="btn primary" id="btnPlay" onclick="togglePlay()">▶ PLAY</button>
+    <button class="btn icon-btn" id="btnNext" title="Next" onclick="nextItem()">⏭</button>
+
+    <div class="now-playing-info">
+      <div class="now-playing-label">Now Playing</div>
+      <div class="now-playing-url" id="nowPlayingUrl">—</div>
+    </div>
+
+    <select class="duration-select" id="defaultDuration" onchange="setDefaultDuration(this.value)">
+      <option value="15">15s</option>
+      <option value="20">20s</option>
+      <option value="30" selected>30s</option>
+      <option value="45">45s</option>
+      <option value="60">60s</option>
+      <option value="90">90s</option>
+    </select>
+
+    <button class="btn" onclick="toggleLoop()" id="btnLoop" title="Toggle Loop">⟳ LOOP</button>
+  </div>
+</div>
+
+<div class="sidebar">
+  <div class="sidebar-tabs">
+    <button class="tab-btn active" onclick="showTab('queue')">Queue</button>
+    <button class="tab-btn" onclick="showTab('add')">+ Add</button>
+    <button class="tab-btn" onclick="showTab('settings')">Settings</button>
+  </div>
+
+  <!-- QUEUE TAB -->
+  <div class="tab-panel active" id="tab-queue">
+    <div class="queue-header">
+      <h3>Playlist</h3>
+      <span class="queue-count" id="queueCount">0 items</span>
+    </div>
+    <div class="queue-list" id="queueList">
+      <div class="empty-queue" id="emptyQueue">
+        <div class="icon">≡</div>
+        <div>Your queue is empty</div>
+        <div style="color:var(--muted); font-size:11px;">Go to + Add to load URLs</div>
+      </div>
+    </div>
+    <div style="padding:10px; border-top:1px solid var(--border);">
+      <button class="btn" style="width:100%; justify-content:center; font-size:11px;" onclick="clearQueue()">✕ Clear All</button>
+    </div>
+  </div>
+
+  <!-- ADD TAB -->
+  <div class="tab-panel" id="tab-add">
+    <div style="padding:16px; overflow-y:auto; flex:1;">
+      <div class="add-panel" style="padding:0; border-top:none;">
+        <h4>Platform</h4>
+        <div class="platform-btns">
+          <button class="plat-btn tiktok sel" onclick="selectPlatform('tiktok',this)" id="plt-tiktok">♪ TikTok</button>
+          <button class="plat-btn youtube" onclick="selectPlatform('youtube',this)" id="plt-youtube">▶ YouTube</button>
+          <button class="plat-btn instagram" onclick="selectPlatform('instagram',this)" id="plt-instagram">◻ Instagram</button>
+          <button class="plat-btn facebook" onclick="selectPlatform('facebook',this)" id="plt-facebook">f Facebook</button>
+        </div>
+
+        <h4 style="margin-top:14px">Video URL</h4>
+        <input type="text" class="url-input" id="urlInput" placeholder="Paste URL here…" />
+
+        <div style="font-size:11px; color:var(--muted); margin-bottom:12px; line-height:1.6;" id="urlHint">
+          TikTok: https://www.tiktok.com/@user/video/123…
+        </div>
+
+        <h4>Duration Override (seconds)</h4>
+        <input type="number" class="url-input" id="durationInput" placeholder="Leave blank to use default" min="5" max="300" style="margin-bottom:14px" />
+
+        <button class="add-btn" onclick="addToQueue()">+ Add to Queue</button>
+
+        <div style="border-top:1px solid var(--border); padding-top:14px; margin-top:4px;">
+          <h4>Quick Load Examples</h4>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button class="btn" style="font-size:11px; justify-content:center;" onclick="loadExampleQueue()">Load Example Queue</button>
+          </div>
+          <div style="margin-top:10px; font-size:11px; color:var(--muted); line-height:1.7;">
+            ⚠ Instagram & Facebook embeds have limited autoplay support due to platform restrictions. TikTok & YouTube Shorts offer the best experience.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="tab-panel" id="tab-settings">
+    <div class="settings-content">
+      <div class="setting-group">
+        <span class="setting-label">Playback</span>
+        <div class="setting-row">
+          <span>Auto-advance</span>
+          <div class="toggle on" id="toggleAutoAdv" onclick="toggleSetting('autoAdvance', this)"></div>
+        </div>
+        <div class="setting-row">
+          <span>Loop queue</span>
+          <div class="toggle on" id="toggleLoop" onclick="toggleSetting('loop', this)"></div>
+        </div>
+        <div class="setting-row">
+          <span>Mute embeds</span>
+          <div class="toggle" id="toggleMute" onclick="toggleSetting('mute', this)"></div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <span class="setting-label">Default Duration</span>
+        <div class="presets-grid">
+          <button class="preset-btn" onclick="applyPreset(15)">15s</button>
+          <button class="preset-btn" onclick="applyPreset(20)">20s</button>
+          <button class="preset-btn" onclick="applyPreset(30)">30s</button>
+          <button class="preset-btn" onclick="applyPreset(45)">45s</button>
+          <button class="preset-btn" onclick="applyPreset(60)">60s</button>
+          <button class="preset-btn" onclick="applyPreset(90)">90s</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <span class="setting-label">Per-Platform Duration (s)</span>
+        <div class="setting-row">
+          <span style="display:flex;align-items:center;gap:8px;"><span style="color:var(--tiktok)">●</span> TikTok</span>
+          <input type="number" class="duration-input" id="dur-tiktok" value="30" min="5" max="300">
+        </div>
+        <div class="setting-row">
+          <span style="display:flex;align-items:center;gap:8px;"><span style="color:var(--youtube)">●</span> YouTube</span>
+          <input type="number" class="duration-input" id="dur-youtube" value="60" min="5" max="300">
+        </div>
+        <div class="setting-row">
+          <span style="display:flex;align-items:center;gap:8px;"><span style="color:var(--instagram)">●</span> Instagram</span>
+          <input type="number" class="duration-input" id="dur-instagram" value="20" min="5" max="300">
+        </div>
+        <div class="setting-row">
+          <span style="display:flex;align-items:center;gap:8px;"><span style="color:var(--facebook)">●</span> Facebook</span>
+          <input type="number" class="duration-input" id="dur-facebook" value="20" min="5" max="300">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+const state = {
+  queue: [],
+  currentIndex: -1,
+  isPlaying: false,
+  loop: true,
+  autoAdvance: true,
+  mute: false,
+  defaultDuration: 30,
+  selectedPlatform: 'tiktok',
+  timer: null,
+  timerStart: 0,
+  timerDuration: 0,
+  timerInterval: null,
+};
+
+const URL_HINTS = {
+  tiktok:    'TikTok: https://www.tiktok.com/@user/video/123…',
+  youtube:   'YouTube: https://www.youtube.com/shorts/abc or /watch?v=…',
+  instagram: 'Instagram: https://www.instagram.com/reel/abc…',
+  facebook:  'Facebook: https://www.facebook.com/reel/123… or /watch/?v=…',
+};
+
+// ─────────────────────────────────────────────
+// PLATFORM DETECTION & EMBED
+// ─────────────────────────────────────────────
+function detectPlatform(url) {
+  if (/tiktok\.com/i.test(url)) return 'tiktok';
+  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
+  if (/instagram\.com/i.test(url)) return 'instagram';
+  if (/facebook\.com|fb\.com/i.test(url)) return 'facebook';
+  return null;
+}
+
+function extractVideoId(url, platform) {
+  try {
+    switch(platform) {
+      case 'tiktok': {
+        const m = url.match(/\/video\/(\d+)/);
+        return m ? m[1] : null;
+      }
+      case 'youtube': {
+        const shortM = url.match(/shorts\/([a-zA-Z0-9_-]+)/);
+        if (shortM) return shortM[1];
+        const watchM = url.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+        if (watchM) return watchM[1];
+        const ytbeM = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+        return ytbeM ? ytbeM[1] : null;
+      }
+      case 'instagram': {
+        const m = url.match(/\/(reel|p|tv)\/([a-zA-Z0-9_-]+)/);
+        return m ? m[2] : null;
+      }
+      case 'facebook': {
+        const rvM = url.match(/\/reel\/(\d+)/);
+        if (rvM) return rvM[1];
+        const vM = url.match(/\/watch\/?\?v=(\d+)/);
+        if (vM) return vM[1];
+        const vidM = url.match(/\/videos\/(\d+)/);
+        return vidM ? vidM[1] : null;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+function buildEmbedUrl(url, platform, mute) {
+  const id = extractVideoId(url, platform);
+  switch(platform) {
+    case 'tiktok':
+      if (!id) return null;
+      return `https://www.tiktok.com/embed/v2/${id}?autoplay=1${mute ? '&muted=1' : ''}`;
+    case 'youtube':
+      if (!id) return null;
+      return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0${mute ? '&mute=1' : ''}`;
+    case 'instagram':
+      if (!id) return null;
+      return `https://www.instagram.com/reel/${id}/embed/`;
+    case 'facebook': {
+      if (!id) return null;
+      const encoded = encodeURIComponent(url);
+      return `https://www.facebook.com/plugins/video.php?href=${encoded}&show_text=false&width=480&autoplay=1${mute ? '&muted=1' : ''}`;
+    }
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────
+// QUEUE MANAGEMENT
+// ─────────────────────────────────────────────
+function addToQueue() {
+  const url = document.getElementById('urlInput').value.trim();
+  const duration = parseInt(document.getElementById('durationInput').value) || null;
+  const platform = state.selectedPlatform;
+
+  if (!url) { showToast('Please enter a URL'); return; }
+
+  const detectedPlatform = detectPlatform(url) || platform;
+
+  state.queue.push({ url, platform: detectedPlatform, duration });
+  document.getElementById('urlInput').value = '';
+  document.getElementById('durationInput').value = '';
+
+  renderQueue();
+  showToast(`Added to queue (${detectedPlatform})`);
+  showTab('queue');
+}
+
+function removeFromQueue(index) {
+  state.queue.splice(index, 1);
+  if (state.currentIndex >= state.queue.length) {
+    state.currentIndex = state.queue.length - 1;
+  }
+  renderQueue();
+  if (state.queue.length === 0) {
+    stopPlayback();
+    renderPlayer(-1);
+  }
+}
+
+function clearQueue() {
+  if (state.queue.length === 0) return;
+  state.queue = [];
+  stopPlayback();
+  renderQueue();
+  renderPlayer(-1);
+  showToast('Queue cleared');
+}
+
+function renderQueue() {
+  const list = document.getElementById('queueList');
+  const empty = document.getElementById('emptyQueue');
+  const count = document.getElementById('queueCount');
+
+  count.textContent = `${state.queue.length} item${state.queue.length !== 1 ? 's' : ''}`;
+
+  if (state.queue.length === 0) {
+    list.innerHTML = '';
+    list.appendChild(empty);
+    empty.style.display = 'flex';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.innerHTML = '';
+  state.queue.forEach((item, i) => {
+    const el = document.createElement('div');
+    el.className = 'queue-item' + (i === state.currentIndex ? ' active' : '');
+    const dur = item.duration || getPlatformDuration(item.platform);
+    el.innerHTML = `
+      <span class="queue-item-num">${i + 1}</span>
+      <span class="platform-dot ${item.platform}"></span>
+      <div class="queue-item-info">
+        <div class="queue-item-platform">${item.platform} · ${dur}s</div>
+        <div class="queue-item-url">${item.url}</div>
+      </div>
+      <button class="queue-item-del" onclick="event.stopPropagation(); removeFromQueue(${i})">✕</button>
+    `;
+    el.addEventListener('click', () => { jumpTo(i); });
+    list.appendChild(el);
+  });
+}
+
+// ─────────────────────────────────────────────
+// PLAYBACK
+// ─────────────────────────────────────────────
+function togglePlay() {
+  if (state.queue.length === 0) { showToast('Add URLs to the queue first'); return; }
+  if (state.isPlaying) {
+    pausePlayback();
+  } else {
+    if (state.currentIndex < 0) state.currentIndex = 0;
+    startPlayback();
+  }
+}
+
+function startPlayback() {
+  state.isPlaying = true;
+  document.getElementById('btnPlay').textContent = '⏸ PAUSE';
+  document.getElementById('statusDot').classList.remove('paused');
+  document.getElementById('statusText').textContent = 'PLAYING';
+  renderPlayer(state.currentIndex);
+  startTimer();
+}
+
+function pausePlayback() {
+  state.isPlaying = false;
+  clearTimers();
+  document.getElementById('btnPlay').textContent = '▶ PLAY';
+  document.getElementById('statusDot').classList.add('paused');
+  document.getElementById('statusText').textContent = 'PAUSED';
+}
+
+function stopPlayback() {
+  state.isPlaying = false;
+  state.currentIndex = -1;
+  clearTimers();
+  document.getElementById('btnPlay').textContent = '▶ PLAY';
+  document.getElementById('statusDot').classList.add('paused');
+  document.getElementById('statusText').textContent = 'IDLE';
+  document.getElementById('itemCounter').textContent = '0 / 0';
+}
+
+function nextItem() {
+  if (state.queue.length === 0) return;
+  let next = state.currentIndex + 1;
+  if (next >= state.queue.length) {
+    if (state.loop) { next = 0; }
+    else { stopPlayback(); renderPlayer(-1); return; }
+  }
+  state.currentIndex = next;
+  if (state.isPlaying) {
+    clearTimers();
+    renderPlayer(next);
+    startTimer();
+  } else {
+    renderPlayer(next);
+  }
+}
+
+function prevItem() {
+  if (state.queue.length === 0) return;
+  let prev = state.currentIndex - 1;
+  if (prev < 0) prev = state.loop ? state.queue.length - 1 : 0;
+  state.currentIndex = prev;
+  if (state.isPlaying) {
+    clearTimers();
+    renderPlayer(prev);
+    startTimer();
+  } else {
+    renderPlayer(prev);
+  }
+}
+
+function jumpTo(index) {
+  state.currentIndex = index;
+  if (state.isPlaying) {
+    clearTimers();
+    renderPlayer(index);
+    startTimer();
+  } else {
+    startPlayback();
+  }
+}
+
+function getPlatformDuration(platform) {
+  const el = document.getElementById(`dur-${platform}`);
+  return el ? parseInt(el.value) || state.defaultDuration : state.defaultDuration;
+}
+
+function startTimer() {
+  const item = state.queue[state.currentIndex];
+  if (!item) return;
+  const duration = item.duration || getPlatformDuration(item.platform);
+  state.timerDuration = duration;
+  state.timerStart = Date.now();
+
+  document.getElementById('timerOverlay').style.display = 'flex';
+
+  clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(() => {
+    const elapsed = (Date.now() - state.timerStart) / 1000;
+    const pct = Math.min(100, (elapsed / state.timerDuration) * 100);
+    const remaining = Math.max(0, state.timerDuration - elapsed);
+
+    document.getElementById('timerFill').style.width = pct + '%';
+    document.getElementById('timerLabel').textContent = Math.ceil(remaining) + 's';
+
+    if (elapsed >= state.timerDuration) {
+      clearInterval(state.timerInterval);
+      if (state.autoAdvance) nextItem();
+    }
+  }, 250);
+}
+
+function clearTimers() {
+  clearInterval(state.timerInterval);
+  document.getElementById('timerFill').style.width = '0%';
+  document.getElementById('timerLabel').textContent = '0s';
+}
+
+// ─────────────────────────────────────────────
+// RENDER PLAYER
+// ─────────────────────────────────────────────
+function renderPlayer(index) {
+  const wrapper = document.getElementById('embedWrapper');
+  const badge = document.getElementById('platformBadge');
+  const placeholder = document.getElementById('placeholder');
+  const nowPlaying = document.getElementById('nowPlayingUrl');
+  const counter = document.getElementById('itemCounter');
+
+  // Remove existing iframes & notices
+  wrapper.querySelectorAll('iframe, .unsupported-notice').forEach(el => el.remove());
+  placeholder.style.display = 'none';
+  badge.style.display = 'none';
+
+  if (index < 0 || !state.queue[index]) {
+    placeholder.style.display = 'flex';
+    nowPlaying.textContent = '—';
+    counter.textContent = '0 / 0';
+    return;
+  }
+
+  const item = state.queue[index];
+  counter.textContent = `${index + 1} / ${state.queue.length}`;
+  nowPlaying.textContent = item.url;
+  renderQueue();
+
+  const embedUrl = buildEmbedUrl(item.url, item.platform, state.mute);
+
+  badge.className = `platform-badge ${item.platform}`;
+  badge.textContent = item.platform.toUpperCase();
+  badge.style.display = 'block';
+
+  if (!embedUrl) {
+    placeholder.style.display = 'flex';
+    placeholder.innerHTML = `
+      <div class="big-icon">⚠</div>
+      <h2>Cannot embed this URL</h2>
+      <p>Could not parse a video ID from:<br><small style="word-break:break-all;color:var(--muted)">${item.url}</small></p>
+    `;
+    return;
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.src = embedUrl;
+  iframe.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
+  iframe.allowFullscreen = true;
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+
+  // For Instagram/Facebook, style differently (portrait-ish)
+  if (item.platform === 'instagram' || item.platform === 'facebook') {
+    iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+    const notice = document.createElement('div');
+    notice.className = 'unsupported-notice';
+    notice.textContent = `${item.platform === 'instagram' ? 'Instagram' : 'Facebook'} embeds have limited autoplay — timer will auto-advance`;
+    wrapper.appendChild(notice);
+    setTimeout(() => { notice.style.opacity = '0'; notice.style.transition = 'opacity 0.5s'; setTimeout(() => notice.remove(), 500); }, 4000);
+  }
+
+  wrapper.appendChild(iframe);
+}
+
+// ─────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  const btns = document.querySelectorAll('.tab-btn');
+  const labels = ['queue','add','settings'];
+  btns[labels.indexOf(name)]?.classList.add('active');
+}
+
+function selectPlatform(platform, btn) {
+  state.selectedPlatform = platform;
+  document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  document.getElementById('urlHint').textContent = URL_HINTS[platform];
+}
+
+function togglePlay_() { togglePlay(); }
+
+function toggleLoop() {
+  state.loop = !state.loop;
+  document.getElementById('loopBadge').textContent = state.loop ? 'LOOP ON' : 'LOOP OFF';
+  document.getElementById('loopBadge').style.borderColor = state.loop ? 'rgba(0,229,255,0.3)' : 'var(--border)';
+  document.getElementById('loopBadge').style.color = state.loop ? 'var(--accent2)' : 'var(--muted)';
+  document.getElementById('toggleLoop').className = 'toggle' + (state.loop ? ' on' : '');
+  showToast(state.loop ? 'Loop enabled' : 'Loop disabled');
+}
+
+function toggleSetting(key, el) {
+  state[key] = !state[key];
+  el.className = 'toggle' + (state[key] ? ' on' : '');
+  if (key === 'loop') {
+    document.getElementById('loopBadge').textContent = state.loop ? 'LOOP ON' : 'LOOP OFF';
+  }
+}
+
+function setDefaultDuration(val) {
+  state.defaultDuration = parseInt(val);
+}
+
+function applyPreset(seconds) {
+  state.defaultDuration = seconds;
+  document.getElementById('defaultDuration').value = seconds;
+  showToast(`Default duration set to ${seconds}s`);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function loadExampleQueue() {
+  state.queue = [
+    { url: 'https://www.tiktok.com/@tiktok/video/7106594312292453675', platform: 'tiktok', duration: 30 },
+    { url: 'https://www.youtube.com/shorts/qVIob5RCbLQ', platform: 'youtube', duration: 60 },
+    { url: 'https://www.instagram.com/reel/CyYzSVzNN_Z/', platform: 'instagram', duration: 20 },
+    { url: 'https://www.facebook.com/reel/1234567890', platform: 'facebook', duration: 20 },
+  ];
+  renderQueue();
+  showToast('Example queue loaded!');
+  showTab('queue');
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.code === 'ArrowRight') nextItem();
+  if (e.code === 'ArrowLeft') prevItem();
+});
+
+// Init
+renderQueue();
+</script>
+</body>
+</html>

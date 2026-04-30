@@ -89,7 +89,9 @@ const MAPPING = {
 
   // Speaker / Audio icons
   'speaker.wave.2': 'volume-up',
+  'speaker.wave.2.fill': 'volume-up',
   'speaker.slash': 'volume-off',
+  'speaker.slash.fill': 'volume-off',
 
   // Shared links platform icons
   'play.rectangle.fill': 'play-arrow',
