@@ -1,9 +1,8 @@
 -- =====================================================
 -- Storage Bucket RLS Policies for Message Attachments
 -- =====================================================
-
--- Enable RLS on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- NOTE: storage.objects RLS is managed via Supabase Dashboard
+-- The ALTER TABLE requires owner privileges not available via migrations
 
 -- Policy: Users can upload files to their own folder
 CREATE POLICY "Users can upload to own folder"

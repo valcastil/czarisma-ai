@@ -7,6 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { handleSignOut } from '@/utils/auth-utils';
 import { exportUserData, getProfile, updateProfile } from '@/utils/profile-utils';
 import { getVoicePreference, setVoicePreference, getVoiceVolume, setVoiceVolume, VoiceGender } from '@/utils/ai-voice';
+import { setCzarVolume } from '@/utils/czar-voice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -50,6 +51,8 @@ export default function SettingsScreen() {
   const handleVolumeChange = async (volume: number) => {
     setAiVoiceVolumeState(volume);
     await setVoiceVolume(volume);
+    // Apply to any currently playing audio
+    setCzarVolume(volume);
   };
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -384,55 +387,72 @@ export default function SettingsScreen() {
               <Text style={[styles.settingLabel, { color: colors.text }]}>
                 Voice Volume
               </Text>
-              <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
-                {Math.round(aiVoiceVolume * 100)}%
-              </Text>
             </View>
-            <View style={styles.sliderRow}>
-              <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>🔇</Text>
-              <View style={styles.sliderTrackWrap}>
+
+            {/* Percentage Display with +/- Controls */}
+            <View style={styles.volumeControlRow}>
+              <TouchableOpacity
+                style={[styles.volumeAdjustButton, { borderColor: colors.border }]}
+                onPress={() => handleVolumeChange(Math.max(0, aiVoiceVolume - 0.05))}
+                activeOpacity={0.7}>
+                <Text style={[styles.volumeAdjustText, { color: colors.text }]}>−</Text>
+              </TouchableOpacity>
+
+              <View style={[styles.volumePercentBox, { backgroundColor: colors.background }]}>
+                <Text style={[styles.volumePercentText, { color: colors.gold }]}>
+                  {Math.round(aiVoiceVolume * 100)}%
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.volumeAdjustButton, { borderColor: colors.border }]}
+                onPress={() => handleVolumeChange(Math.min(1, aiVoiceVolume + 0.05))}
+                activeOpacity={0.7}>
+                <Text style={[styles.volumeAdjustText, { color: colors.text }]}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Visual Volume Bar */}
+            <View style={styles.volumeBarContainer}>
+              <Text style={[styles.volumeIcon, { color: colors.textSecondary }]}>🔇</Text>
+              <View style={[styles.volumeBarTrack, { backgroundColor: colors.border }]}>
                 <View
                   style={[
-                    styles.sliderTrack,
-                    { backgroundColor: colors.border },
-                  ]}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.sliderFill,
+                    styles.volumeBarFill,
                     {
                       backgroundColor: colors.gold,
                       width: `${aiVoiceVolume * 100}%`,
                     },
                   ]}
-                  onPress={() => {}}
-                  activeOpacity={1}
                 />
-                {/* Volume preset buttons */}
-                <View style={styles.volumeButtons}>
-                  {[0, 0.25, 0.5, 0.75, 1].map((vol) => (
-                    <TouchableOpacity
-                      key={vol}
-                      style={[
-                        styles.volumePreset,
-                        {
-                          backgroundColor: Math.abs(aiVoiceVolume - vol) < 0.1 ? colors.gold : 'transparent',
-                        },
-                      ]}
-                      onPress={() => handleVolumeChange(vol)}
-                      activeOpacity={0.7}>
-                      <Text
-                        style={[
-                          styles.volumePresetText,
-                          { color: Math.abs(aiVoiceVolume - vol) < 0.1 ? '#000000' : colors.textSecondary },
-                        ]}>
-                        {vol === 0 ? 'Mute' : `${Math.round(vol * 100)}%`}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </View>
-              <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>🔊</Text>
+              <Text style={[styles.volumeIcon, { color: colors.textSecondary }]}>🔊</Text>
+            </View>
+
+            {/* Quick Preset Buttons */}
+            <View style={styles.volumeButtons}>
+              {[0, 0.25, 0.5, 0.75, 1].map((vol) => (
+                <TouchableOpacity
+                  key={vol}
+                  style={[
+                    styles.volumePreset,
+                    {
+                      backgroundColor: Math.abs(aiVoiceVolume - vol) < 0.05 ? colors.gold : colors.background,
+                      borderColor: colors.border,
+                      borderWidth: Math.abs(aiVoiceVolume - vol) < 0.05 ? 0 : 1,
+                    },
+                  ]}
+                  onPress={() => handleVolumeChange(vol)}
+                  activeOpacity={0.7}>
+                  <Text
+                    style={[
+                      styles.volumePresetText,
+                      { color: Math.abs(aiVoiceVolume - vol) < 0.05 ? '#000000' : colors.textSecondary },
+                    ]}>
+                    {vol === 0 ? 'Mute' : `${Math.round(vol * 100)}%`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         </View>
@@ -933,6 +953,80 @@ const styles = StyleSheet.create({
   },
   voiceButtonText: {
     fontSize: 14,
+    fontWeight: '600',
+  },
+  volumeCard: {
+    padding: 15,
+    marginHorizontal: 20,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  volumeControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 15,
+    marginBottom: 10,
+    gap: 15,
+  },
+  volumeAdjustButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumeAdjustText: {
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  volumePercentBox: {
+    minWidth: 80,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumePercentText: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  volumeBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 15,
+    gap: 10,
+  },
+  volumeIcon: {
+    fontSize: 16,
+  },
+  volumeBarTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  volumeBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  volumeButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  volumePreset: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 55,
+    alignItems: 'center',
+  },
+  volumePresetText: {
+    fontSize: 12,
     fontWeight: '600',
   },
 });

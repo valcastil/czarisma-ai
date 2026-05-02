@@ -58,6 +58,19 @@ export const stopCzarVoice = async (): Promise<void> => {
 };
 
 /**
+ * Set volume for currently playing Czar voice audio
+ */
+export const setCzarVolume = (volume: number): void => {
+  if (activeSound) {
+    try {
+      activeSound.volume = Math.max(0, Math.min(1, volume));
+    } catch {
+      // Ignore errors
+    }
+  }
+};
+
+/**
  * LRU cache management — evict oldest audio when over limit
  */
 const cacheAudioWithEviction = async (key: string, base64Audio: string): Promise<void> => {
@@ -279,8 +292,12 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
     console.log('CzarVoice: Creating audio player for', Platform.OS);
     const volume = await getVoiceVolume();
     const player = createAudioPlayer({ uri: `data:audio/mpeg;base64,${base64Audio}` });
+
+    // Ensure volume is set before playing
+    await new Promise(resolve => setTimeout(resolve, 10));
     player.volume = volume;
-    
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     activeSound = player;
 
     // Estimate duration for fallback (~80ms per character)

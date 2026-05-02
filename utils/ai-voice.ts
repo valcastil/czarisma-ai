@@ -78,6 +78,14 @@ export const getVoiceVolume = async (): Promise<number> => {
 export const setVoiceVolume = async (volume: number): Promise<void> => {
   const clampedVolume = Math.max(0, Math.min(1, volume));
   await AsyncStorage.setItem(AI_VOICE_VOLUME_KEY, clampedVolume.toString());
+  // Also update currently playing audio if any
+  if (activeSound) {
+    try {
+      activeSound.volume = clampedVolume;
+    } catch {
+      // Ignore errors if player is being disposed
+    }
+  }
 };
 
 /**
@@ -263,7 +271,12 @@ export const speakAIMessage = async (message: string): Promise<void> => {
     // Play audio with stored volume
     const volume = await getVoiceVolume();
     const player = createAudioPlayer({ uri: `data:audio/mpeg;base64,${base64Audio}` });
+
+    // Ensure volume is set before playing
+    await new Promise(resolve => setTimeout(resolve, 10));
     player.volume = volume;
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     player.play();
 
     activeSound = player;
