@@ -12,9 +12,7 @@ import {
     verifyPhoneOtp,
 } from '@/utils/firebase-auth-utils';
 import { logger } from '@/utils/logger';
-import { getCurrentUser, registerCurrentUser } from '@/utils/message-utils';
 import { getProfile, updateProfile } from '@/utils/profile-utils';
-import { checkPaidProStatus } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -39,8 +37,6 @@ export default function ProfileSettingsScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [isPaidPro, setIsPaidPro] = useState(false);
-  const [skipQuestions, setSkipQuestions] = useState(false);
 
   // Linked accounts state
   const [linkedPhone, setLinkedPhone] = useState<string | null>(null);
@@ -65,18 +61,6 @@ export default function ProfileSettingsScreen() {
     showBirthDate: false,
   });
   const [avatarUri, setAvatarUri] = useState<string | undefined>(undefined);
-  const [socialLinks, setSocialLinks] = useState({
-    facebook: '',
-    instagram: '',
-    whatsapp: '',
-    tiktok: '',
-    twitter: '',
-    linkedin: '',
-    youtube: '',
-    snapchat: '',
-    threads: '',
-    telegram: '',
-  });
 
   useEffect(() => {
     (async () => {
@@ -87,20 +71,6 @@ export default function ProfileSettingsScreen() {
         setAbout(p.bio || '');
         setAvatarUri(p.avatar);
         if (p.privacy) setPrivacy(p.privacy);
-        if (p.socialLinks) {
-          setSocialLinks({
-            facebook: p.socialLinks.facebook || '',
-            instagram: p.socialLinks.instagram || '',
-            whatsapp: p.socialLinks.whatsapp || '',
-            tiktok: p.socialLinks.tiktok || '',
-            twitter: p.socialLinks.twitter || '',
-            linkedin: p.socialLinks.linkedin || '',
-            youtube: p.socialLinks.youtube || '',
-            snapchat: p.socialLinks.snapchat || '',
-            threads: p.socialLinks.threads || '',
-            telegram: p.socialLinks.telegram || '',
-          });
-        }
 
         // Fetch linked accounts from Supabase
         const { data: { session } } = await supabase.auth.getSession();
@@ -119,13 +89,6 @@ export default function ProfileSettingsScreen() {
         // Check Firebase availability (sync — no native module reference)
         setCanUseFirebase(isFirebaseAvailable());
 
-        // Load skip questions preference
-        const skipQuestionsPref = await AsyncStorage.getItem('@czareel_skip_questions');
-        setSkipQuestions(skipQuestionsPref === 'true');
-
-        // Check paid pro status
-        const paidPro = await checkPaidProStatus();
-        setIsPaidPro(paidPro);
       } catch (e) {
         Alert.alert('Error', 'Unable to load profile settings');
       } finally {
@@ -138,17 +101,12 @@ export default function ProfileSettingsScreen() {
     if (!profile) return false;
     const normalizedAbout = about.trim();
     const normalizedProfileAbout = (profile.bio || '').trim();
-    const socialChanged = Object.keys(socialLinks).some((key) => {
-      const k = key as keyof typeof socialLinks;
-      return (socialLinks[k] || '').trim() !== (profile.socialLinks?.[k] || '').trim();
-    });
     return (
       name.trim() !== (profile.name || '').trim() ||
       normalizedAbout !== normalizedProfileAbout ||
-      avatarUri !== profile.avatar ||
-      socialChanged
+      avatarUri !== profile.avatar
     );
-  }, [about, avatarUri, name, profile, socialLinks]);
+  }, [about, avatarUri, name, profile]);
 
   const handlePickPhoto = async () => {
     try {
@@ -186,28 +144,21 @@ export default function ProfileSettingsScreen() {
       console.log('Saving profile with avatar:', avatarUri ? 'Yes' : 'No');
       
       // Update profile (this now syncs to Supabase automatically, including avatar upload)
-      // Build clean social links (only non-empty values)
-      const cleanSocialLinks: Record<string, string> = {};
-      Object.entries(socialLinks).forEach(([key, value]) => {
-        if (value.trim()) cleanSocialLinks[key] = value.trim();
-      });
-
       const updated = await updateProfile({
         name: trimmedName,
         bio: about.trim(),
         avatar: avatarUri,
-        socialLinks: cleanSocialLinks as any,
       });
       
       console.log('Profile saved successfully');
       setProfile(updated);
       Alert.alert('Success', 'Profile updated and synced successfully!');
 
-      // Sync avatar to AsyncStorage so chat screens can use it immediately
+      // Sync avatar to AsyncStorage
       try {
-        const me = await getCurrentUser();
-        if (me) {
-          const photoKey = `@profile_photo_${me.id}`;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const photoKey = `@profile_photo_${session.user.id}`;
           if (avatarUri) {
             await AsyncStorage.setItem(photoKey, avatarUri);
             console.log('Avatar synced to AsyncStorage:', avatarUri);
@@ -664,85 +615,11 @@ export default function ProfileSettingsScreen() {
           </View>
         )}
 
-        <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>SOCIAL MEDIA LINKS</Text>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {[
-            { key: 'instagram', label: 'Instagram', placeholder: '@username', icon: '📸' },
-            { key: 'facebook', label: 'Facebook', placeholder: 'Profile URL or username', icon: '👤' },
-            { key: 'twitter', label: 'X (Twitter)', placeholder: '@handle', icon: '𝕏' },
-            { key: 'tiktok', label: 'TikTok', placeholder: '@username', icon: '🎵' },
-            { key: 'youtube', label: 'YouTube', placeholder: 'Channel URL or @handle', icon: '▶️' },
-            { key: 'linkedin', label: 'LinkedIn', placeholder: 'Profile URL', icon: '💼' },
-            { key: 'snapchat', label: 'Snapchat', placeholder: '@username', icon: '👻' },
-            { key: 'threads', label: 'Threads', placeholder: '@username', icon: '🧵' },
-            { key: 'whatsapp', label: 'WhatsApp', placeholder: 'Phone number', icon: '💬' },
-            { key: 'telegram', label: 'Telegram', placeholder: '@username', icon: '✈️' },
-          ].map((item, index, arr) => (
-            <View key={item.key}>
-              <View style={styles.fieldRow}>
-                <View style={styles.socialIconWrap}>
-                  <Text style={styles.socialIcon}>{item.icon}</Text>
-                </View>
-                <View style={styles.fieldBody}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{item.label}</Text>
-                  <TextInput
-                    value={socialLinks[item.key as keyof typeof socialLinks]}
-                    onChangeText={(text) => setSocialLinks(prev => ({ ...prev, [item.key]: text }))}
-                    style={[styles.fieldInput, { color: colors.text }]}
-                    placeholder={item.placeholder}
-                    placeholderTextColor={colors.textSecondary}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-              </View>
-              {index < arr.length - 1 && (
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              )}
-            </View>
-          ))}
-        </View>
 
         <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
           <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>CZAR AI SETTINGS</Text>
         </View>
 
-        {isPaidPro && (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.fieldLabel, { color: colors.text }]}>Skip Czar AI Questions</Text>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>Skip questions when creating czareels (Pro feature)</Text>
-              </View>
-              <TouchableOpacity
-                style={{
-                  width: 50,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: skipQuestions ? colors.gold : colors.border,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-                onPress={async () => {
-                  const newValue = !skipQuestions;
-                  setSkipQuestions(newValue);
-                  await AsyncStorage.setItem('@czareel_skip_questions', newValue.toString());
-                }}
-              >
-                <View style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 12,
-                  backgroundColor: '#fff',
-                  transform: [{ translateX: skipQuestions ? 22 : 2 }],
-                }} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         <View style={styles.footerSpacer} />
       </ScrollView>

@@ -112,7 +112,7 @@ export function WebViewPlayer({
       return;
     }
     intervalRef.current = setInterval(() => {
-      setSecondsLeft((s) => {
+      setSecondsLeft((s: number) => {
         if (s <= 1) {
           advance();
           return currentDurationSec;

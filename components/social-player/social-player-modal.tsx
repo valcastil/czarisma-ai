@@ -61,7 +61,7 @@ export function SocialPlayerModal({
     if (visible && urls.length > 0) {
       const validVideos = urls
         .map(parseSocialUrl)
-        .filter((v) => isValidShortFormVideo(v.originalUrl));
+        .filter((v: ParsedSocialUrl) => isValidShortFormVideo(v.originalUrl));
       setParsedVideos(validVideos);
       setCurrentIndex(0);
       setIsPlaying(false);

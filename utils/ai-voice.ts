@@ -4,8 +4,9 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 import * as Speech from 'expo-speech';
 import { AppState } from 'react-native';
 
-// Storage key for voice preference
+// Storage keys
 export const AI_VOICE_PREFERENCE_KEY = '@ai_voice_preference';
+export const AI_VOICE_VOLUME_KEY = '@ai_voice_volume';
 
 // Voice gender type
 export type VoiceGender = 'male' | 'female';
@@ -56,6 +57,27 @@ export const getVoicePreference = async (): Promise<VoiceGender> => {
  */
 export const setVoicePreference = async (gender: VoiceGender): Promise<void> => {
   await AsyncStorage.setItem(AI_VOICE_PREFERENCE_KEY, gender);
+};
+
+/**
+ * Get stored volume (defaults to 1.0)
+ */
+export const getVoiceVolume = async (): Promise<number> => {
+  try {
+    const stored = await AsyncStorage.getItem(AI_VOICE_VOLUME_KEY);
+    const volume = stored ? parseFloat(stored) : 1.0;
+    return isNaN(volume) ? 1.0 : Math.max(0, Math.min(1, volume));
+  } catch {
+    return 1.0;
+  }
+};
+
+/**
+ * Set voice volume (0.0 to 1.0)
+ */
+export const setVoiceVolume = async (volume: number): Promise<void> => {
+  const clampedVolume = Math.max(0, Math.min(1, volume));
+  await AsyncStorage.setItem(AI_VOICE_VOLUME_KEY, clampedVolume.toString());
 };
 
 /**
@@ -238,9 +260,10 @@ export const speakAIMessage = async (message: string): Promise<void> => {
       }
     }
 
-    // Play audio
+    // Play audio with stored volume
+    const volume = await getVoiceVolume();
     const player = createAudioPlayer({ uri: `data:audio/mpeg;base64,${base64Audio}` });
-    player.volume = 1.0;
+    player.volume = volume;
     player.play();
 
     activeSound = player;

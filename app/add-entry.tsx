@@ -4,7 +4,6 @@ import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { deleteAIQuote, getSavedAIQuotes } from '@/utils/ai-quote-storage';
-import { canAccessFeatures, checkPaidProStatus, checkProStatus, checkTrialExpirationAndRedirect, getTrialStatus, setProStatusForTesting, TrialStatus } from '@/utils/subscription-utils';
 import { syncEntryToSupabase } from '@/utils/entry-sync';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -538,66 +537,35 @@ export default function AddEntryScreen() {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [showQuotesModal, setShowQuotesModal] = useState(false);
-  const [isPro, setIsPro] = useState(false);
-  const [isPaidPro, setIsPaidPro] = useState(false);
-  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null);
-  const [canAccess, setCanAccess] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [availableQuotes, setAvailableQuotes] = useState<string[]>(CHARISMA_QUOTES);
   const [savedAIQuotes, setSavedAIQuotes] = useState<string[]>([]);
   const [tapCount, setTapCount] = useState(0);
   const [lastTapTime, setLastTapTime] = useState(0);
+  const [selectedCharismaId, setSelectedCharismaId] = useState<string | null>(null);
+  const [subCharisma, setSubCharisma] = useState<string | null>(null);
+  const [emotion, setEmotion] = useState<string | null>(null);
+  const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProStatusAndQuotes();
+    loadQuotes();
     loadSavedAIQuotes();
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      // Check trial expiration whenever screen gains focus
-      checkTrialExpirationAndRedirect(router);
-    }, [router])
-  );
-
-  const loadProStatusAndQuotes = async () => {
+  const loadQuotes = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const currentUserEmail = session?.user?.email || null;
-      const proStatus = await checkProStatus();
-      const paidProStatus = await checkPaidProStatus();
-      const trial = await getTrialStatus();
-      const hasAccess = await canAccessFeatures(router);
+      setUserEmail(session?.user?.email || null);
 
-      setIsPro(proStatus);
-      setIsPaidPro(paidProStatus);
-      setTrialStatus(trial);
-      setCanAccess(hasAccess);
-      setUserEmail(currentUserEmail);
-
-      // Determine which quotes to show
-      let allQuotes: string[];
-      if (hasAccess) {
-        // User has access (Pro or active trial)
-        const shuffledFreeQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
-        allQuotes = proStatus
-          ? [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES]
-          : shuffledFreeQuotes; // Trial users only get free quotes
-      } else {
-        // No access - only free quotes
-        allQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
-      }
-
+      // All users get all quotes (no subscription paywall)
+      const shuffledFreeQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
+      const allQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
       setAvailableQuotes(allQuotes);
     } catch (error) {
-      console.error('Error loading Pro status:', error);
+      console.error('Error loading quotes:', error);
       // On error, show only free quotes (safer default)
       const shuffled = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
       setAvailableQuotes(shuffled);
-      setCanAccess(false);
-      setUserEmail(null);
-      setIsPro(false);
-      setIsPaidPro(false);
     }
   };
 
@@ -619,48 +587,6 @@ export default function AddEntryScreen() {
     }
   };
 
-  // Development testing helper - remove in production
-  const testProStatus = async () => {
-    console.log('Testing: Setting Pro status to true');
-    await setProStatusForTesting(true);
-    await loadProStatusAndQuotes();
-  };
-
-  // Debug function to check current Pro status
-  const checkCurrentProStatus = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentProStatus = await checkProStatus();
-      const currentTrialStatus = await getTrialStatus();
-      const hasAccess = await canAccessFeatures();
-
-      console.log('=== Pro Status Debug ===');
-      console.log('Current email:', session?.user?.email);
-      console.log('Session exists:', !!session);
-      console.log('isPro state:', isPro);
-      console.log('checkProStatus result:', currentProStatus);
-      console.log('canAccess result:', hasAccess);
-      console.log('Trial active:', currentTrialStatus.isTrialActive);
-      console.log('Trial expired:', currentTrialStatus.isExpired);
-      console.log('Days remaining:', currentTrialStatus.daysRemaining);
-      console.log('Available quotes count:', availableQuotes.length);
-
-      Alert.alert(
-        'Subscription Status Debug',
-        `Email: ${session?.user?.email || 'Not signed in'}\n` +
-        `Pro Status: ${currentProStatus ? 'TRUE' : 'FALSE'}\n` +
-        `Can Access: ${hasAccess ? 'TRUE' : 'FALSE'}\n` +
-        `Trial Active: ${currentTrialStatus.isTrialActive ? 'TRUE' : 'FALSE'}\n` +
-        `Trial Expired: ${currentTrialStatus.isExpired ? 'TRUE' : 'FALSE'}\n` +
-        `Days Remaining: ${currentTrialStatus.daysRemaining || 'N/A'}\n` +
-        `Quotes Available: ${availableQuotes.length}`
-      );
-    } catch (error) {
-      console.error('Error checking Pro status:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      Alert.alert('Debug Error', errorMessage);
-    }
-  };
 
   // For testing: Show all quotes including Pro ones
   const showAllQuotesForTesting = () => {
@@ -668,7 +594,6 @@ export default function AddEntryScreen() {
     const shuffledFreeQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
     const allQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
     setAvailableQuotes(allQuotes);
-    setIsPro(true);
   };
 
   // Handle triple-tap on title for testing Pro quotes
@@ -685,113 +610,23 @@ export default function AddEntryScreen() {
     } else {
       setTapCount(1);
     }
-
-    setLastTapTime(now);
-  };
-
-  const handleSelectQuote = (quote: string) => {
-    // Check if this is a Pro or Inspirational quote (both require Pro access)
-    const isProQuote = PRO_CHARISMA_QUOTES.includes(quote) || INSPIRATIONAL_CHARISMA_QUOTES.includes(quote);
-
-    if (isProQuote && (!canAccess || !userEmail)) {
-      // Check if user is not signed in
-      if (!userEmail) {
-        Alert.alert(
-          'Sign In Required ✨',
-          'Please sign in to access premium Pro quotes and features!',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Sign In',
-              onPress: () => router.push('/subscription'),
-            },
-          ]
-        );
-        return;
-      }
-
-      // Check if trial is expired and redirect immediately
-      if (trialStatus?.isExpired) {
-        Alert.alert(
-          'Trial Expired ⏰',
-          'Your 30-day free trial has expired! Upgrade to Pro to continue accessing premium quotes and features.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Upgrade to Pro',
-              onPress: () => router.push('/subscription'),
-            },
-          ]
-        );
-        return;
-      }
-
-      // Show upgrade prompt for Pro quotes
-      Alert.alert(
-        'Pro Feature ✨',
-        'This quote is available with Pro subscription. Start your free trial or upgrade to unlock all premium quotes!',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: trialStatus?.isExpired ? 'Upgrade to Pro' : 'Start Free Trial',
-            onPress: () => router.push('/subscription'),
-          },
-        ]
-      );
-      return;
-    }
-
-    // Add quote to message with proper spacing
-    const newMessage = message.trim()
-      ? `${message.trim()}\n\n${quote}`
-      : quote;
-    setMessage(newMessage);
-    setShowQuotesModal(false);
-  };
-
-  const handleShuffleFreeQuotes = () => {
-    // Shuffle only the free quotes
-    const shuffledFreeQuotes = [...CHARISMA_QUOTES].sort(() => Math.random() - 0.5);
-
-    // Create new available quotes array with shuffled free quotes
-    let newAvailableQuotes: string[];
-    if (canAccess && isPro) {
-      // If user has Pro access, include Pro quotes in original order
-      newAvailableQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
-    } else {
-      // Only free quotes
-      newAvailableQuotes = shuffledFreeQuotes;
-    }
-
-    setAvailableQuotes(newAvailableQuotes);
   };
 
   const handleContinue = async () => {
-    // Check trial expiration before allowing entry creation
-    if (trialStatus?.isExpired && !isPro) {
-      Alert.alert(
-        'Trial Expired ⏰',
-        'Your 30-day free trial has expired! Upgrade to Pro to continue creating entries and accessing all features.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Upgrade to Pro',
-            onPress: () => router.push('/subscription'),
-          },
-        ]
-      );
+    if (!subCharisma || !emotion) {
+      Alert.alert('Almost There!', 'Please select a Sub-Charisma and an Emotion to continue.');
       return;
     }
 
-    setSaving(true);
     try {
-      // Load selected charisma
-      const selectedCharismaId = await AsyncStorage.getItem('@temp_selected_charisma');
-      const charismaName = selectedCharismaId
-        ? charismaNames[selectedCharismaId] || 'Charisma Entry'
-        : 'Charisma Entry';
+      setSaving(true);
+
+      // Get emoji for selected charisma
       const charismaEmoji = selectedCharismaId
-        ? charismaEmojis[selectedCharismaId] || '✨'
+        ? (charismaEmojis[selectedCharismaId] ||
+           charismaEmojis[selectedCharismaId.replace('_', '')] ||
+           charismaEmojis[selectedCharismaId.split('_')[0]] ||
+           '✨')
         : '✨';
 
       // Load selected emotions
@@ -856,6 +691,21 @@ export default function AddEntryScreen() {
     }
   };
 
+  const handleSelectQuote = (quote: string) => {
+    setSelectedQuote(quote);
+    setShowQuotesModal(false);
+
+    // Create new available quotes array with shuffled free quotes
+    const shuffledFreeQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
+    const newAvailableQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
+    setAvailableQuotes(newAvailableQuotes);
+  };
+
+  const handleShuffleFreeQuotes = () => {
+    const shuffled = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
+    setAvailableQuotes([...shuffled, ...PRO_CHARISMA_QUOTES]);
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -867,28 +717,6 @@ export default function AddEntryScreen() {
           <TouchableOpacity onPress={handleTitlePress} activeOpacity={0.7}>
             <Text style={[styles.appTitle, { color: colors.text }]}>Czar AI</Text>
           </TouchableOpacity>
-          {!canAccess && (
-            <View style={[styles.proButtonsContainer]}>
-              <TouchableOpacity
-                onPress={checkCurrentProStatus}
-                style={[styles.debugButton, { backgroundColor: colors.border }]}
-                activeOpacity={0.8}>
-                <Text style={[styles.debugButtonText, { color: colors.textSecondary }]}>Debug</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {canAccess && !isPro && trialStatus && (
-            <View style={[styles.trialStatusBadge, { backgroundColor: colors.gold }]}>
-              <Text style={styles.trialStatusText}>
-                {trialStatus.daysRemaining === 1 ? '⏰ 1 day left' : `⏰ ${trialStatus.daysRemaining || 30} days left`}
-              </Text>
-            </View>
-          )}
-          {isPaidPro && userEmail && (
-            <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
-              <Text style={styles.proStatusText}>PRO</Text>
-            </View>
-          )}
         </View>
       </View>
 
@@ -1008,11 +836,6 @@ export default function AddEntryScreen() {
               <View style={styles.proSection}>
                 <View style={styles.proSectionHeader}>
                   <Text style={[styles.proSectionTitle, { color: colors.gold }]}>✨ Pro Quotes</Text>
-                  {!isPro && (
-                    <View style={[styles.proBadge, { backgroundColor: colors.gold }]}>
-                      <Text style={styles.proBadgeText} numberOfLines={1}>PRO</Text>
-                    </View>
-                  )}
                 </View>
                 {PRO_CHARISMA_QUOTES.map((quote, index) => (
                   <TouchableOpacity
@@ -1020,17 +843,11 @@ export default function AddEntryScreen() {
                     style={[
                       styles.quoteItem,
                       styles.proQuoteItem,
-                      (!canAccess || !userEmail) && styles.lockedQuoteItem,
                       { backgroundColor: colors.card, borderLeftColor: colors.gold }
                     ]}
                     onPress={() => handleSelectQuote(quote)}
                     activeOpacity={0.7}>
                     <Text style={[styles.quoteText, { color: colors.text }]}>{quote}</Text>
-                    {(!canAccess || !userEmail) && (
-                      <View style={styles.lockIcon}>
-                        <Text style={styles.lockEmoji}>🔒</Text>
-                      </View>
-                    )}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1039,11 +856,6 @@ export default function AddEntryScreen() {
               <View style={styles.proSection}>
                 <View style={styles.proSectionHeader}>
                   <Text style={[styles.proSectionTitle, { color: colors.gold }]}>💬 Inspirational Quotes</Text>
-                  {!isPro && (
-                    <View style={[styles.proBadge, { backgroundColor: colors.gold }]}>
-                      <Text style={styles.proBadgeText} numberOfLines={1}>PRO</Text>
-                    </View>
-                  )}
                 </View>
                 {INSPIRATIONAL_CHARISMA_QUOTES.map((quote, index) => (
                   <TouchableOpacity
@@ -1051,17 +863,11 @@ export default function AddEntryScreen() {
                     style={[
                       styles.quoteItem,
                       styles.proQuoteItem,
-                      (!canAccess || !userEmail) && styles.lockedQuoteItem,
                       { backgroundColor: colors.card, borderLeftColor: colors.gold }
                     ]}
                     onPress={() => handleSelectQuote(quote)}
                     activeOpacity={0.7}>
                     <Text style={[styles.quoteText, { color: colors.text }]}>{quote}</Text>
-                    {(!canAccess || !userEmail) && (
-                      <View style={styles.lockIcon}>
-                        <Text style={styles.lockEmoji}>🔒</Text>
-                      </View>
-                    )}
                   </TouchableOpacity>
                 ))}
               </View>

@@ -1,38 +1,25 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { StripeProvider } from '@/components/stripe-provider';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import { IntelligentCzar } from '@/components/intelligent-czar';
-import { TrialExpiredModal } from '@/components/trial-expired-modal';
 import { InactivityProvider } from '@/contexts/inactivity-provider';
 import { Colors } from '@/constants/theme';
 import { CzarProvider, useCzar } from '@/contexts/czar-context';
 import { ThemeProvider, useColorScheme } from '@/hooks/use-theme';
 import { initializeGemini } from '@/lib/gemini';
-import { initializeRevenueCat } from '@/lib/revenuecat';
 import { initializeSupabase, supabase } from '@/lib/supabase';
 import '@/lib/firebase-init';
 import { initializeVexo } from '@/lib/vexo-analytics';
-import { checkTrialExpirationAndRedirect, getLocalTrialStatus, shouldShowTrialExpiredPopup } from '@/utils/subscription-utils';
-import { advancePlaylist, PLAYLIST_NOTIFICATION_TYPE } from '@/utils/playlist-scheduler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
-
-// expo-notifications is removed from Expo Go (Android) since SDK 53.
-// Lazy-load it so the app doesn't crash in Expo Go.
-const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 // ⚠️ TEMPORARY: Set to true to reset onboarding, then set back to false
 const DEV_RESET_ONBOARDING = false;
-
-// Stripe publishable key - replace with your actual key
-const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here';
 
 export const unstable_settings = {
   initialRouteName: '(tabs)',
@@ -44,8 +31,6 @@ function RootLayoutContent() {
   const router = useRouter();
   const pathname = usePathname();
   const { setCurrentScreen } = useCzar();
-  const [showTrialModal, setShowTrialModal] = useState(false);
-  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | undefined>(undefined);
 
   // Handle deep links for auth callbacks (email confirmation, password reset)
   useEffect(() => {
@@ -69,14 +54,6 @@ function RootLayoutContent() {
               });
               if (!error) {
                 console.log('Session established from deep link hash');
-                try {
-                  const { refreshProStatus, createTrialIfNeeded } = await import('@/utils/subscription-utils');
-                  await refreshProStatus();
-                  const { data: { user } } = await supabase.auth.getUser();
-                  if (user) await createTrialIfNeeded(user.id);
-                } catch (e) {
-                  console.error('Error setting up subscription after deep link auth:', e);
-                }
                 router.replace('/(tabs)');
                 return;
               }
@@ -110,76 +87,22 @@ function RootLayoutContent() {
     }
   }, [pathname, setCurrentScreen]);
 
-  // Check auth state and trial status after navigation is ready
-  // NEW FLOW: 7-day trial → sign up → 3-month free → PRO subscription
+  // Check auth state and enforce handle gate
   useEffect(() => {
-    const checkAuthAndTrial = async () => {
+    const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        // Not signed in — check if 7-day trial expired
-        const trial = await getLocalTrialStatus();
-        const shouldShowPopup = await shouldShowTrialExpiredPopup();
-        
-        if (shouldShowPopup) {
-          // Show persistent trial expired modal
-          setTrialDaysRemaining(trial.daysRemaining ?? undefined);
-          setShowTrialModal(true);
-        } else if (trial.daysRemaining !== null && trial.daysRemaining <= 2) {
-          // Show warning popup when 2 or fewer days remaining
-          setTrialDaysRemaining(trial.daysRemaining);
-          setShowTrialModal(true);
-        }
-        
-        // Also redirect to sign-in if fully expired
-        if (trial.isExpired) {
-          await checkTrialExpirationAndRedirect(router);
-        }
-      } else {
-        // Signed in — check if 3-month trial expired and needs PRO
-        await checkTrialExpirationAndRedirect(router);
-
-        // Force handle claim if the signed-in user hasn't set one yet.
+      if (session) {
         await enforceHandleGate();
       }
     };
-    checkAuthAndTrial();
+    checkAuth();
 
-    // Re-check on every sign-in so users coming from /auth-sign-in are routed.
     const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         enforceHandleGate().catch((e) => console.warn('Handle gate check failed:', e));
       }
     });
     return () => { authSub.subscription.unsubscribe(); };
-  }, []);
-
-  // Playlist notification tap handler — advance to next video
-  useEffect(() => {
-    if (isExpoGo) return; // expo-notifications not supported in Expo Go (Android SDK 53+)
-    let sub: { remove: () => void } | undefined;
-    (async () => {
-      try {
-        const Notifications = await import('expo-notifications');
-        Notifications.setNotificationHandler({
-          handleNotification: async () => ({
-            shouldShowBanner: true,
-            shouldShowList: true,
-            shouldPlaySound: true,
-            shouldSetBadge: false,
-          }),
-        });
-        sub = Notifications.addNotificationResponseReceivedListener((response) => {
-          const type = response.notification.request.content.data?.type;
-          if (type === PLAYLIST_NOTIFICATION_TYPE) {
-            advancePlaylist().catch((e) => console.warn('advancePlaylist failed:', e));
-          }
-        });
-      } catch (e) {
-        console.warn('expo-notifications setup failed:', e);
-      }
-    })();
-    return () => { sub?.remove(); };
   }, []);
 
   // Gate helper: redirects signed-in users to /claim-handle when a required handle is missing.
@@ -216,30 +139,17 @@ function RootLayoutContent() {
           <Stack.Screen name="onboarding-emotions" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="add-entry" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="settings" />
-          <Stack.Screen name="subscription" />
-          <Stack.Screen name="subscriptions-info" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="auth-sign-in" options={{ gestureEnabled: false }} />
-          <Stack.Screen name="ai-chat" />
           <Stack.Screen name="profile-settings" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="edit-profile" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="change-password" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-          <Stack.Screen name="new-message" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
-          <Stack.Screen name="chat" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="search" options={{ gestureEnabled: true, animation: 'slide_from_right' }} />
           <Stack.Screen name="claim-handle" options={{ gestureEnabled: false, animation: 'fade' }} />
           <Stack.Screen name="entry" options={{ headerShown: false }} />
-          <Stack.Screen name="czareels" options={{ headerShown: false, animation: 'slide_from_right' }} />
-          <Stack.Screen name="create-czareel" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
         </Stack>
         <StatusBar style="light" />
         {/* Intelligent Czar - appears after 20s of inactivity */}
         <IntelligentCzar />
-        {/* Trial Expired Modal */}
-        <TrialExpiredModal
-          visible={showTrialModal}
-          daysRemaining={trialDaysRemaining}
-          onClose={() => setShowTrialModal(false)}
-        />
       </InactivityProvider>
     </NavigationThemeProvider>
   );
@@ -277,12 +187,6 @@ export default function RootLayout() {
           console.warn('Failed to initialize Vexo Analytics:', error);
         }
         
-        try {
-          await initializeRevenueCat();
-        } catch (error) {
-          console.warn('Failed to initialize RevenueCat:', error);
-        }
-
         console.log('Core services initialized successfully');
       } catch (error) {
         console.error('Critical error during service initialization:', error);
@@ -296,13 +200,11 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY}>
-          <ThemeProvider>
-            <CzarProvider>
-              <RootLayoutContent />
-            </CzarProvider>
-          </ThemeProvider>
-        </StripeProvider>
+        <ThemeProvider>
+          <CzarProvider>
+            <RootLayoutContent />
+          </CzarProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );

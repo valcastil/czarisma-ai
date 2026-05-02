@@ -30,13 +30,6 @@ export const initializeSupabase = async () => {
       if (event === 'SIGNED_IN' && session) {
         console.log('User signed in:', session.user.email);
 
-        try {
-          const { refreshProStatus } = await import('@/utils/subscription-utils');
-          await refreshProStatus();
-        } catch (error) {
-          console.error('Error refreshing pro status on sign-in:', error);
-        }
-
         // Profile will be created automatically by database trigger
         // Update online status
         await supabase
@@ -45,13 +38,6 @@ export const initializeSupabase = async () => {
           .eq('id', session.user.id);
       } else if (event === 'SIGNED_OUT') {
         console.log('User signed out');
-
-        try {
-          const { clearProStatus } = await import('@/utils/subscription-utils');
-          await clearProStatus();
-        } catch (error) {
-          console.error('Error clearing pro status on sign-out:', error);
-        }
 
         // Update online status to false
         const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -68,13 +54,6 @@ export const initializeSupabase = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       console.log('Active session found:', session.user.email);
-
-      try {
-        const { refreshProStatus } = await import('@/utils/subscription-utils');
-        await refreshProStatus();
-      } catch (error) {
-        console.error('Error refreshing pro status on app start:', error);
-      }
 
       // Update online status for current session
       await supabase

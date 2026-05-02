@@ -1,24 +1,16 @@
 import { CharismaLogo, CharismaLogoRef } from '@/components/charisma-logo';
-import { PasteLinkModal } from '@/components/paste-link-modal';
-import { SocialPlayerModal } from '@/components/social-player/social-player-modal';
-import { SubscriptionStatusBanner } from '@/components/subscription-status-banner';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { deleteSharedLink, getPlatformColor, getPlatformEmoji, getSharedLinks, refreshMissingTitles, SharedLink } from '@/utils/link-storage';
 import { calculateUserStats, updateProfile } from '@/utils/profile-utils';
-import { getSubscriptionInfo } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActionSheetIOS,
     ActivityIndicator,
     Alert,
     DeviceEventEmitter,
     FlatList,
-    Image,
-    Linking,
     Modal,
     Platform,
     Share,
@@ -33,37 +25,18 @@ const ONBOARDING_KEY = '@charisma_onboarding';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const { colors } = useTheme();
   const [entries, setEntries] = useState<CharismaEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
-  const [subscriptionInfo, setSubscriptionInfo] = useState<{
-    isPro: boolean;
-    isTrialActive: boolean;
-    daysRemaining: number | null;
-    statusMessage: string;
-    userEmail: string | null;
-  } | null>(null);
-  const [sharedLinks, setSharedLinks] = useState<SharedLink[]>([]);
-  const [showPasteLinkModal, setShowPasteLinkModal] = useState(false);
-  const [showPlayer, setShowPlayer] = useState(false);
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const pendingScrollToEntries = useRef(false);
   const logoRef = useRef<CharismaLogoRef>(null);
-  const didBackfillRef = useRef(false);
   const lastLoadRef = useRef(0);
   const prevEntryCountRef = useRef(-1);
 
-  const params = useLocalSearchParams<{ openPasteLink?: string; scrollToEntries?: string }>();
-
-  // Open paste link modal when navigated with param (uses timestamp for uniqueness)
-  useEffect(() => {
-    if (params.openPasteLink) {
-      setShowPasteLinkModal(true);
-    }
-  }, [params.openPasteLink]);
+  const params = useLocalSearchParams<{ scrollToEntries?: string }>();
 
   // Flag scroll when navigated with scrollToEntries param (after adding entry)
   useEffect(() => {
@@ -71,12 +44,6 @@ export default function HomeScreen() {
       pendingScrollToEntries.current = true;
     }
   }, [params.scrollToEntries]);
-
-  // Derive video links from shared links (pasted on home screen)
-  const videoLinks = useMemo(
-    () => sharedLinks.map(link => link.url),
-    [sharedLinks]
-  );
 
   // Single data loading point — useFocusEffect fires on mount AND every tab focus
   useFocusEffect(
@@ -88,8 +55,6 @@ export default function HomeScreen() {
       if (isFirstLoad || isStale) {
         lastLoadRef.current = now;
         loadData();
-        loadSharedLinks(isFirstLoad); // backfill only on first mount
-        loadSubscriptionInfo();
       }
 
       // Flip logo
@@ -114,79 +79,6 @@ export default function HomeScreen() {
       router.replace('/modal');
     }
   }, [loading, onboardingComplete]);
-
-  const loadSubscriptionInfo = async () => {
-    try {
-      const info = await getSubscriptionInfo();
-      setSubscriptionInfo(info);
-    } catch (error) {
-      console.error('Error loading subscription info:', error);
-    }
-  };
-
-  const loadSharedLinks = async (runBackfill = false) => {
-    try {
-      const links = await getSharedLinks();
-      setSharedLinks(links);
-
-      // Backfill titles/thumbnails only once per session
-      if (runBackfill && !didBackfillRef.current) {
-        didBackfillRef.current = true;
-        const didUpdate = await refreshMissingTitles();
-        if (didUpdate) {
-          const refreshed = await getSharedLinks();
-          setSharedLinks(refreshed);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading shared links:', error);
-    }
-  };
-
-  const handleDeleteLink = async (linkId: string) => {
-    Alert.alert(
-      'Delete Link',
-      'Remove this link?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteSharedLink(linkId);
-              await loadSharedLinks();
-            } catch (error) {
-              console.error('Error deleting link:', error);
-              Alert.alert('Error', 'Failed to delete link');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleShareLink = async (link: SharedLink) => {
-    try {
-      const message = `Check out this ${link.label}: ${link.url}\n\nForwarded from Czar AI`;
-      await Share.share({ message });
-    } catch (error) {
-      console.error('Error sharing link:', error);
-    }
-  };
-
-  const handleOpenLink = async (url: string) => {
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'No app available to open this link');
-      }
-    } catch {
-      Alert.alert('Error', 'Could not open link');
-    }
-  };
 
   const handleShareEntry = async (entry: CharismaEntry, event: any) => {
     event.stopPropagation();
@@ -290,31 +182,6 @@ Forwarded from Czar AI
         </View>
 
         <View style={styles.headerActions}>
-          {/* Yellow Play Button - always visible */}
-          <TouchableOpacity
-            style={[styles.playButton, { backgroundColor: colors.gold }]}
-            onPress={() => {
-              if (videoLinks.length === 0) {
-                Alert.alert(
-                  'No Social Videos',
-                  'Paste social media links (YouTube, TikTok, Instagram, Facebook) on the home screen to play them continuously.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Paste Link', onPress: () => setShowPasteLinkModal(true) },
-                  ]
-                );
-              } else {
-                setShowPlayer(true);
-              }
-            }}
-            activeOpacity={0.8}
-          >
-            <IconSymbol size={18} name="play.fill" color="#000" />
-            {videoLinks.length > 0 && (
-              <Text style={styles.playButtonText}>{videoLinks.length}</Text>
-            )}
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.hamburgerButton}
             onPress={() => setShowHamburgerMenu(true)}
@@ -324,41 +191,14 @@ Forwarded from Czar AI
         </View>
       </View>
 
-      {/* Subscription Status Banner */}
-      <SubscriptionStatusBanner info={subscriptionInfo} />
-
       {/* Main Content — FlatList for virtualized rendering */}
       <HomeList
         ref={flatListRef}
-        sharedLinks={sharedLinks}
         entries={entries}
         colors={colors}
         router={router}
-        onOpenLink={handleOpenLink}
-        onShareLink={handleShareLink}
-        onDeleteLink={handleDeleteLink}
         onShareEntry={handleShareEntry}
         pendingScrollToEntries={pendingScrollToEntries}
-      />
-
-      {/* Paste Link Modal */}
-      <PasteLinkModal
-        visible={showPasteLinkModal}
-        onClose={() => setShowPasteLinkModal(false)}
-        onLinkAdded={() => {
-          loadSharedLinks();
-          setTimeout(() => {
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-          }, 300);
-        }}
-      />
-
-      {/* Social Player Modal */}
-      <SocialPlayerModal
-        visible={showPlayer}
-        onClose={() => setShowPlayer(false)}
-        urls={videoLinks}
-        title="My Social Videos"
       />
 
       {/* Hamburger Menu */}
@@ -377,26 +217,6 @@ Forwarded from Czar AI
               style={[styles.menuOption, { borderBottomColor: colors.border }]}
               onPress={() => {
                 setShowHamburgerMenu(false);
-                router.push('/czareels' as any);
-              }}>
-              <Text style={styles.menuIcon}>🎬</Text>
-              <Text style={[styles.menuText, { color: colors.text }]}>Czareels</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.menuOption, { borderBottomColor: colors.border }]}
-              onPress={() => {
-                setShowHamburgerMenu(false);
-                flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-              }}>
-              <Text style={styles.menuIcon}>🔗</Text>
-              <Text style={[styles.menuText, { color: colors.text }]}>Social Links</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.menuOption, { borderBottomColor: colors.border }]}
-              onPress={() => {
-                setShowHamburgerMenu(false);
                 pendingScrollToEntries.current = true;
                 flatListRef.current?.scrollToEnd({ animated: true });
               }}>
@@ -408,18 +228,30 @@ Forwarded from Czar AI
               style={[styles.menuOption, { borderBottomColor: colors.border }]}
               onPress={() => {
                 setShowHamburgerMenu(false);
-                try {
-                  if (navigation && navigation.navigate) {
-                    navigation.navigate('ai-chat' as never);
-                  } else {
-                    router.navigate('/ai-chat');
-                  }
-                } catch {
-                  router.push('/ai-chat');
-                }
+                router.push('/onboarding-charisma');
               }}>
-              <Text style={styles.menuIcon}>🤖</Text>
-              <Text style={[styles.menuText, { color: colors.text }]}>Talk to AI</Text>
+              <Text style={styles.menuIcon}>✨</Text>
+              <Text style={[styles.menuText, { color: colors.text }]}>Add Entry</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuOption, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setShowHamburgerMenu(false);
+                router.push('/search');
+              }}>
+              <Text style={styles.menuIcon}>�</Text>
+              <Text style={[styles.menuText, { color: colors.text }]}>Search</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuOption, { borderBottomColor: colors.border }]}
+              onPress={() => {
+                setShowHamburgerMenu(false);
+                router.push('/settings');
+              }}>
+              <Text style={styles.menuIcon}>⚙️</Text>
+              <Text style={[styles.menuText, { color: colors.text }]}>Settings</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -437,151 +269,54 @@ Forwarded from Czar AI
 
 // ------- Virtualized Home List -------
 type ListItem =
-  | { type: 'link-header'; id: string; hasEntries: boolean }
-  | { type: 'link'; id: string; data: SharedLink }
-  | { type: 'entries-header'; id: string; hasLinks: boolean }
+  | { type: 'entries-header'; id: string }
   | { type: 'entry'; id: string; data: CharismaEntry }
   | { type: 'empty'; id: string };
 
 interface HomeListProps {
-  sharedLinks: SharedLink[];
   entries: CharismaEntry[];
   colors: any;
   router: any;
-  onOpenLink: (url: string) => void;
-  onShareLink: (link: SharedLink) => void;
-  onDeleteLink: (id: string) => void;
   onShareEntry: (entry: CharismaEntry, e: any) => void;
   pendingScrollToEntries: React.MutableRefObject<boolean>;
 }
 
 const HomeList = React.forwardRef<FlatList, HomeListProps>(({
-  sharedLinks, entries, colors, router,
-  onOpenLink, onShareLink, onDeleteLink, onShareEntry,
+  entries, colors, router,
+  onShareEntry,
   pendingScrollToEntries,
 }, ref) => {
   // Build unified flat data array
   const data = useMemo<ListItem[]>(() => {
     const items: ListItem[] = [];
-    if (sharedLinks.length > 0) {
-      items.push({ type: 'link-header', id: '_lh', hasEntries: entries.length > 0 });
-      sharedLinks.forEach(l => items.push({ type: 'link', id: l.id, data: l }));
-    }
     if (entries.length > 0) {
-      items.push({ type: 'entries-header', id: '_eh', hasLinks: sharedLinks.length > 0 });
+      items.push({ type: 'entries-header', id: '_eh' });
       entries.forEach(e => items.push({ type: 'entry', id: e.id, data: e }));
     }
-    if (sharedLinks.length === 0 && entries.length === 0) {
+    if (entries.length === 0) {
       items.push({ type: 'empty', id: '_empty' });
     }
     return items;
-  }, [sharedLinks, entries]);
-
-  // Index of entries header for scroll-to
-  const entriesHeaderIndex = useMemo(() => data.findIndex(i => i.type === 'entries-header'), [data]);
-
-  const scrollToEntries = useCallback(() => {
-    if (entriesHeaderIndex >= 0 && ref && 'current' in ref && ref.current) {
-      ref.current.scrollToIndex({ index: entriesHeaderIndex, animated: true });
-    }
-  }, [entriesHeaderIndex, ref]);
-
-  const scrollToTop = useCallback(() => {
-    if (ref && 'current' in ref && ref.current) {
-      ref.current.scrollToOffset({ offset: 0, animated: true });
-    }
-  }, [ref]);
+  }, [entries]);
 
   // Handle pending scroll after data loads
   useEffect(() => {
-    if (pendingScrollToEntries.current && entriesHeaderIndex >= 0) {
+    if (pendingScrollToEntries.current && data.length > 0) {
       pendingScrollToEntries.current = false;
-      setTimeout(scrollToEntries, 150);
+      setTimeout(() => {
+        if (ref && 'current' in ref && ref.current) {
+          ref.current.scrollToOffset({ offset: 0, animated: true });
+        }
+      }, 150);
     }
   }, [data]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     switch (item.type) {
-      case 'link-header':
-        return (
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Social Links</Text>
-              {item.hasEntries && (
-                <TouchableOpacity onPress={scrollToEntries} style={styles.scrollToTopButton} activeOpacity={0.7}>
-                  <IconSymbol size={14} name="arrow.down" color={colors.gold} />
-                  <Text style={[styles.scrollToTopText, { color: colors.gold }]}>Charisma Entries</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        );
-
-      case 'link': {
-        const link = item.data;
-        const platformColor = getPlatformColor(link.platform);
-        const emoji = getPlatformEmoji(link.platform);
-        return (
-          <View style={[styles.linkCard, { backgroundColor: colors.card }]}>
-            <TouchableOpacity onPress={() => onOpenLink(link.url)} activeOpacity={0.7}>
-              {link.thumbnail ? (
-                <Image
-                  source={{ uri: link.thumbnail.replace(/^http:/, 'https:') }}
-                  style={styles.linkThumbnail}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={[styles.linkThumbnailPlaceholder, { backgroundColor: platformColor + '15' }]}>
-                  <Text style={styles.linkPlaceholderEmoji}>{emoji}</Text>
-                </View>
-              )}
-              <View style={styles.linkInfo}>
-                <View style={[styles.linkPlatformTag, { backgroundColor: platformColor + '20' }]}>
-                  <Text style={styles.linkPlatformEmoji}>{emoji}</Text>
-                  <Text style={[styles.linkPlatformLabel, { color: platformColor }]}>{link.label}</Text>
-                </View>
-                {link.title && (
-                  <Text style={[styles.linkTitle, { color: colors.text }]} numberOfLines={2}>{link.title}</Text>
-                )}
-                {link.description && (
-                  <Text style={[styles.linkDescription, { color: colors.textSecondary }]} numberOfLines={3}>{link.description}</Text>
-                )}
-                <Text style={[styles.linkUrl, { color: colors.textSecondary }]} numberOfLines={1}>{link.url}</Text>
-                <View style={styles.linkFooter}>
-                  <Text style={[styles.linkTime, { color: colors.textSecondary }]}>{link.date} {link.time}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.linkShareButton} onPress={() => onShareLink(link)} activeOpacity={0.7}>
-              <IconSymbol size={20} name="paperplane.fill" color={colors.gold} />
-            </TouchableOpacity>
-            <View style={[styles.linkActions, { borderTopColor: colors.border }]}>
-              <TouchableOpacity style={styles.linkActionButton} onPress={() => onShareLink(link)} activeOpacity={0.7}>
-                <IconSymbol size={18} name="square.and.arrow.up" color={colors.gold} />
-                <Text style={[styles.linkActionText, { color: colors.gold }]}>Share</Text>
-              </TouchableOpacity>
-              <View style={[styles.linkActionDivider, { backgroundColor: colors.border }]} />
-              <TouchableOpacity style={styles.linkActionButton} onPress={() => onDeleteLink(link.id)} activeOpacity={0.7}>
-                <IconSymbol size={18} name="trash" color="#FF3B30" />
-                <Text style={[styles.linkActionText, { color: '#FF3B30' }]}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      }
-
       case 'entries-header':
         return (
           <View style={styles.sectionContainer}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>Charisma Entries</Text>
-              {item.hasLinks && (
-                <TouchableOpacity onPress={scrollToTop} style={styles.scrollToTopButton} activeOpacity={0.7}>
-                  <IconSymbol size={14} name="arrow.up" color={colors.gold} />
-                  <Text style={[styles.scrollToTopText, { color: colors.gold }]}>Social Links</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Charisma Entries</Text>
           </View>
         );
 
@@ -637,7 +372,7 @@ const HomeList = React.forwardRef<FlatList, HomeListProps>(({
       default:
         return null;
     }
-  }, [colors, scrollToEntries, scrollToTop, onOpenLink, onShareLink, onDeleteLink, onShareEntry, router]);
+  }, [colors, onShareEntry, router]);
 
   const keyExtractor = useCallback((item: ListItem) => item.id, []);
 
@@ -687,20 +422,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  playButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 18,
-    gap: 4,
-  },
-  playButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#000',
-  },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -725,24 +446,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
   },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  scrollToTopButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  scrollToTopText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
   emptyState: {
     flex: 1,
     alignItems: 'center',
@@ -757,92 +460,6 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     textAlign: 'center',
-  },
-  // Social Link Card Styles
-  linkCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  linkThumbnail: {
-    width: '100%',
-    height: 180,
-  },
-  linkThumbnailPlaceholder: {
-    width: '100%',
-    height: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  linkPlaceholderEmoji: {
-    fontSize: 36,
-  },
-  linkInfo: {
-    padding: 12,
-    gap: 6,
-  },
-  linkPlatformTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    gap: 4,
-  },
-  linkPlatformEmoji: {
-    fontSize: 12,
-  },
-  linkPlatformLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  linkTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 20,
-    marginTop: 4,
-    paddingRight: 30,
-  },
-  linkDescription: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 2,
-    paddingRight: 30,
-  },
-  linkUrl: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  linkFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  linkTime: {
-    fontSize: 11,
-  },
-  linkActions: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    marginTop: 8,
-  },
-  linkActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 6,
-  },
-  linkActionText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  linkActionDivider: {
-    width: 1,
-    height: '100%',
   },
   // Charisma Entry Card Styles
   entryCard: {
@@ -898,11 +515,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingRight: 50,
     marginBottom: 8,
-  },
-  linkShareButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
   },
   shareButton: {
     position: 'absolute',

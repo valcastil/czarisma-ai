@@ -1,13 +1,9 @@
 import { CharismaLogo } from '@/components/charisma-logo';
 import { useTheme } from '@/hooks/use-theme';
-import { supabase } from '@/lib/supabase';
-import { checkPaidProStatus, checkProStatus, isProCharisma } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const ONBOARDING_KEY = '@charisma_onboarding';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface CharismaOption {
   emoji: string;
@@ -18,7 +14,6 @@ interface CharismaOption {
 interface CharismaCategory {
   title: string;
   options: CharismaOption[];
-  isPro?: boolean;
 }
 
 const charismaCategories: CharismaCategory[] = [
@@ -191,7 +186,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Transformational Charisma',
-    isPro: true,
     options: [
       { emoji: '🔄', label: 'Repeat\nButton', id: 'transformational_repeat' },
       { emoji: '🚀', label: 'Rocket', id: 'transformational_rocket' },
@@ -203,7 +197,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Ethical Charisma',
-    isPro: true,
     options: [
       { emoji: '⚖️', label: 'Balance\nScale', id: 'balance_scale' },
       { emoji: '🧭', label: 'Compass', id: 'compass' },
@@ -215,7 +208,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Socialized Charisma',
-    isPro: true,
     options: [
       { emoji: '🤝', label: 'Handshake', id: 'socialized_handshake' },
       { emoji: '🌍', label: 'Globe Showing\nAmericas', id: 'globe' },
@@ -227,7 +219,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Personalized Charisma',
-    isPro: true,
     options: [
       { emoji: '🤑', label: 'Money-Mouth\nFace', id: 'money_mouth' },
       { emoji: '🎭', label: 'Performing\nArts', id: 'performing_arts' },
@@ -239,7 +230,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Neo-Charismatic Leadership',
-    isPro: true,
     options: [
       { emoji: '🦾', label: 'Mechanical\nArm', id: 'mechanical_arm' },
       { emoji: '🔧', label: 'Wrench', id: 'neo_wrench' },
@@ -251,7 +241,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Divine Charisma',
-    isPro: true,
     options: [
       { emoji: '🛐', label: 'Place of\nWorship', id: 'place_worship' },
       { emoji: '👼', label: 'Baby\nAngel', id: 'baby_angel' },
@@ -263,7 +252,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Office-holder Charisma',
-    isPro: true,
     options: [
       { emoji: '🏛️', label: 'Classical\nBuilding', id: 'classical_building' },
       { emoji: '🎖️', label: 'Military\nMedal', id: 'military_medal' },
@@ -275,7 +263,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Star Power Charisma',
-    isPro: true,
     options: [
       { emoji: '🌟', label: 'Glowing\nStar', id: 'star_power_star' },
       { emoji: '🎬', label: 'Clapper\nBoard', id: 'clapper_board' },
@@ -287,7 +274,6 @@ const charismaCategories: CharismaCategory[] = [
   },
   {
     title: 'Difficult/Disliked Charisma',
-    isPro: true,
     options: [
       { emoji: '😠', label: 'Angry\nFace', id: 'angry_face' },
       { emoji: '🧨', label: 'Firecracker', id: 'firecracker' },
@@ -303,65 +289,19 @@ export default function OnboardingCharismaScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [selectedCharisma, setSelectedCharisma] = useState<string | null>(null);
-  const [isPro, setIsPro] = useState(false);
-  const [isPaidPro, setIsPaidPro] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [shuffledCategories, setShuffledCategories] = useState<CharismaCategory[]>([]);
 
   useEffect(() => {
-    loadProStatus();
     shuffleCategories();
   }, []);
 
   const shuffleCategories = () => {
-    // Separate free and Pro categories
-    const freeCategories = charismaCategories.filter(cat => !cat.isPro);
-    const proCategories = charismaCategories.filter(cat => cat.isPro);
-
-    // Shuffle only the free categories
-    const shuffledFree = [...freeCategories].sort(() => Math.random() - 0.5);
-
-    // Combine: shuffled free categories first, then Pro categories in original order
-    const finalOrder = [...shuffledFree, ...proCategories];
-    setShuffledCategories(finalOrder);
-  };
-
-  const loadProStatus = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUserEmail = session?.user?.email || null;
-      const proStatus = await checkProStatus();
-      const paidProStatus = await checkPaidProStatus();
-
-      setIsPro(proStatus);
-      setIsPaidPro(paidProStatus);
-      setUserEmail(currentUserEmail);
-    } catch (error) {
-      console.error('Error loading Pro status:', error);
-      // Set safe defaults to prevent crashes
-      setIsPro(false);
-      setIsPaidPro(false);
-      setUserEmail(null);
-    }
+    // Shuffle all categories randomly
+    const shuffled = [...charismaCategories].sort(() => Math.random() - 0.5);
+    setShuffledCategories(shuffled);
   };
 
   const handleCharismaSelect = async (charismaId: string) => {
-    // Check if this is a Pro-only charisma
-    if (isProCharisma(charismaId) && (!isPro || !userEmail)) {
-      Alert.alert(
-        'Pro Feature ✨',
-        'This charisma type is available with Pro subscription. Sign in and upgrade to unlock all premium charisma types!',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Sign In & Upgrade',
-            onPress: () => router.push('/subscription'),
-          },
-        ]
-      );
-      return;
-    }
-
     setSelectedCharisma(charismaId);
   };
 
@@ -388,11 +328,6 @@ export default function OnboardingCharismaScreen() {
         <CharismaLogo size={50} />
         <View style={styles.titleContainer}>
           <Text style={[styles.appTitle, { color: colors.text }]}>Czar AI</Text>
-          {isPaidPro && userEmail && (
-            <View style={[styles.proStatusBadge, { backgroundColor: colors.gold }]}>
-              <Text style={styles.proStatusText}>PRO</Text>
-            </View>
-          )}
         </View>
       </View>
 
@@ -411,11 +346,6 @@ export default function OnboardingCharismaScreen() {
           <View key={categoryIndex} style={styles.categorySection}>
             <View style={styles.categoryHeader}>
               <Text style={[styles.categoryTitle, { color: colors.gold }]}>{category.title}</Text>
-              {category.isPro && (!isPro || !userEmail) && (
-                <View style={[styles.proBadge, { backgroundColor: colors.gold }]}>
-                  <Text style={styles.proBadgeText} numberOfLines={1}>PRO</Text>
-                </View>
-              )}
             </View>
             <View style={styles.grid}>
               {category.options.map((option) => (
@@ -425,17 +355,11 @@ export default function OnboardingCharismaScreen() {
                     styles.optionCard,
                     { backgroundColor: colors.card, borderColor: 'transparent' },
                     selectedCharisma === option.id && [styles.optionCardSelected, { borderColor: colors.gold }],
-                    category.isPro && (!isPro || !userEmail) && styles.optionCardLocked,
                   ]}
                   onPress={() => handleCharismaSelect(option.id)}
                   activeOpacity={0.7}>
                   <Text style={styles.emoji}>{option.emoji}</Text>
                   <Text style={[styles.optionLabel, { color: colors.text }]}>{option.label}</Text>
-                  {category.isPro && (!isPro || !userEmail) && (
-                    <View style={styles.lockIcon}>
-                      <Text style={styles.lockEmoji}>🔒</Text>
-                    </View>
-                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -488,16 +412,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-  proStatusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  proStatusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000000',
-  },
   questionSection: {
     paddingHorizontal: 20,
     paddingTop: 20,
@@ -534,23 +448,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  proBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    minWidth: 32,
-  },
-  proBadgeText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#000000',
-    letterSpacing: 0.8,
-    includeFontPadding: false,
-    textAlign: 'center',
-  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -569,20 +466,9 @@ const styles = StyleSheet.create({
   optionCardSelected: {
     backgroundColor: 'rgba(244, 197, 66, 0.1)',
   },
-  optionCardLocked: {
-    opacity: 0.5,
-  },
   emoji: {
     fontSize: 48,
     marginBottom: 12,
-  },
-  lockIcon: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  lockEmoji: {
-    fontSize: 20,
   },
   optionLabel: {
     fontSize: 12,

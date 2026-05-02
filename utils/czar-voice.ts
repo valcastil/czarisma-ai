@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { AppState, Platform } from 'react-native';
-import { getCurrentVoiceId } from './ai-voice';
+import { getCurrentVoiceId, getVoiceVolume } from './ai-voice';
 
 // Get API key from environment variable or app.json extra config
 const ENV_API_KEY = process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY || '';
@@ -275,10 +275,11 @@ export const speakCzarMessage = async (message: string): Promise<number> => {
       }
     }
 
-    // 4. Play audio from base64
+    // 4. Play audio from base64 with stored volume
     console.log('CzarVoice: Creating audio player for', Platform.OS);
+    const volume = await getVoiceVolume();
     const player = createAudioPlayer({ uri: `data:audio/mpeg;base64,${base64Audio}` });
-    player.volume = 1.0;
+    player.volume = volume;
     
     activeSound = player;
 

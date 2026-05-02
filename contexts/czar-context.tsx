@@ -35,16 +35,6 @@ const screenMessages: Record<string, string[]> = {
     "Why don't charismatic people get lost? They always find their way! 😄",
     "Keep exploring — that's what legends do! 🏆",
   ],
-  'ai-chat': [
-    "AI + You = Unstoppable combo! 🤖✨",
-    "Ask me anything! I promise I won't judge... much. 😜",
-    "Fun fact: Even AI needs a coffee break. Just kidding, I'm always here!",
-    "Your AI buddy is ready! Let's brainstorm something brilliant. 💡",
-    "Why did the AI go to therapy? Too many unresolved queries! 😂",
-    "Think of me as your charisma co-pilot. Let's fly! ✈️",
-    "Pro tip: The best conversations start with curiosity. Go ahead!",
-    "I've been waiting for you! ...okay that sounded creepy. But really, hi! 👋",
-  ],
   'profile': [
     "Looking sharp! Your profile is 🔥",
     "Fun fact: Your profile pic has more charisma than most people's whole personality! 😎",
@@ -61,19 +51,6 @@ const screenMessages: Record<string, string[]> = {
     "Pro tip: The best settings are the ones that make YOU happy.",
     "Tweaking your profile? That's what champions do! 🏅",
     "Fun fact: Even royalty updates their look from time to time! 👑",
-  ],
-  'subscription': [
-    "PRO users have 200% more charisma. Okay I made that up, but still! 😂",
-    "Investing in yourself? That's the most charismatic move of all! 💎",
-    "Fun fact: PRO stands for Pretty Remarkable & Outstanding. Obviously.",
-    "Your future PRO self is cheering you on right now! 🎉",
-    "Going PRO is like adding a crown to your charisma toolkit! 👑",
-  ],
-  'subscriptions-info': [
-    "Knowledge is power! Understanding your options = big brain energy. 🧠",
-    "PRO tip: Reading the fine print makes you 10x more sophisticated! 📋",
-    "The more you know, the better you grow! 🌱",
-    "Smart people ask questions. You're clearly one of them! 💡",
   ],
   'add-entry': [
     "New entry time! Your future self will thank you for this. 📝",
@@ -115,13 +92,6 @@ const screenMessages: Record<string, string[]> = {
     "Your kingdom awaits, Your Majesty! Just sign in. 👑",
     "Fun fact: The password to success is... well, your actual password! 🔑😂",
   ],
-  'chat': [
-    "Chatting with friends? Your charisma is contagious! 💬✨",
-    "Pro tip: Good listeners make the best conversationalists! 👂",
-    "Fun fact: The average person sends 72 texts a day. You're clearly above average! 📱",
-    "Your words have power — use them wisely and hilariously! 😄",
-    "Why did the text message break up with the email? It wanted a quicker response! 💌😂",
-  ],
   'modal': [
     "Welcome to Czar AI! Your charisma journey starts NOW! 🎬",
     "The Czar is in! Ready to guide you to greatness! 👑",
@@ -140,18 +110,14 @@ const getScreenContext = (screen: string): ScreenContext => {
   const friendlyNames: Record<string, string> = {
     'index': 'Home',
     '(tabs)': 'Home',
-    'ai-chat': 'AI Chat',
     'profile': 'Profile',
     'profile-settings': 'Profile Settings',
-    'subscription': 'Subscription',
-    'subscriptions-info': 'Subscriptions',
     'add-entry': 'Add Entry',
     'entry/[id]': 'Entry Details',
     'settings': 'Settings',
     'onboarding-charisma': 'Onboarding',
     'onboarding-emotions': 'Onboarding',
     'auth-sign-in': 'Sign In',
-    'chat': 'Chat',
     'modal': 'Welcome',
   };
 
@@ -187,7 +153,7 @@ const CzarContext = createContext<CzarContextType | undefined>(undefined);
 const VISIBILITY_DURATION = 18; // seconds Czar stays visible (long enough for voice to finish)
 
 // Screens where the Czar companion should never appear (user is already interacting with AI)
-const SUPPRESSED_SCREENS = ['ai-chat'];
+const SUPPRESSED_SCREENS: string[] = [];
 
 export function CzarProvider({ children }: { children: React.ReactNode }) {
   const [currentScreen, setCurrentScreenState] = useState('index');

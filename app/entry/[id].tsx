@@ -1,7 +1,6 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { CharismaEntry, Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { checkPaidProStatus } from '@/utils/subscription-utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -37,18 +36,9 @@ export default function EntryDetailScreen() {
 
   useEffect(() => {
     loadEntry();
-    loadProStatus();
+    // All users have Pro features (no subscription paywall)
+    setIsPro(true);
   }, [id]);
-
-  const loadProStatus = async () => {
-    try {
-      const proStatus = await checkPaidProStatus();
-      setIsPro(proStatus);
-    } catch (error) {
-      console.error('Error checking Pro status:', error);
-      setIsPro(false);
-    }
-  };
 
   useEffect(() => {
     console.log('isEditing state changed:', isEditing);
@@ -100,21 +90,7 @@ export default function EntryDetailScreen() {
 
   const handleStartEdit = () => {
     console.log('Edit button pressed');
-    if (!isPro) {
-      Alert.alert(
-        'Pro Feature',
-        'Entry editing is available for Pro subscribers only. Upgrade to Pro to edit your charisma entries.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Upgrade',
-            onPress: () => router.push('/subscription'),
-          },
-        ]
-      );
-      return;
-    }
-    
+    // All users can edit entries (no Pro paywall)
     if (entry) {
       console.log('Entry found:', entry);
       setEditedMajorCharisma(entry.majorCharisma);

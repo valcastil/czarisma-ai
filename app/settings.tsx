@@ -6,7 +6,7 @@ import { useCzar } from '@/contexts/czar-context';
 import { useTheme } from '@/hooks/use-theme';
 import { handleSignOut } from '@/utils/auth-utils';
 import { exportUserData, getProfile, updateProfile } from '@/utils/profile-utils';
-import { getVoicePreference, setVoicePreference, VoiceGender } from '@/utils/ai-voice';
+import { getVoicePreference, setVoicePreference, getVoiceVolume, setVoiceVolume, VoiceGender } from '@/utils/ai-voice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -19,15 +19,17 @@ export default function SettingsScreen() {
   const { czarEnabled, setCzarEnabled, idleTimeout, setIdleTimeout } = useCzar();
   const [localTimer, setLocalTimer] = useState(idleTimeout);
   const [aiVoicePreference, setAiVoicePreferenceState] = useState<VoiceGender>('male');
+  const [aiVoiceVolume, setAiVoiceVolumeState] = useState(1.0);
 
   // Sync local state when context value loads from AsyncStorage
   useEffect(() => {
     setLocalTimer(idleTimeout);
   }, [idleTimeout]);
 
-  // Load voice preference on mount
+  // Load voice preference and volume on mount
   useEffect(() => {
     loadVoicePreference();
+    loadVoiceVolume();
   }, []);
 
   const loadVoicePreference = async () => {
@@ -35,9 +37,19 @@ export default function SettingsScreen() {
     setAiVoicePreferenceState(preference);
   };
 
+  const loadVoiceVolume = async () => {
+    const volume = await getVoiceVolume();
+    setAiVoiceVolumeState(volume);
+  };
+
   const handleVoicePreferenceChange = async (gender: VoiceGender) => {
     setAiVoicePreferenceState(gender);
     await setVoicePreference(gender);
+  };
+
+  const handleVolumeChange = async (volume: number) => {
+    setAiVoiceVolumeState(volume);
+    await setVoiceVolume(volume);
   };
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -363,6 +375,64 @@ export default function SettingsScreen() {
                   Female
                 </Text>
               </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* AI Voice Volume */}
+          <View style={[styles.volumeCard, { backgroundColor: colors.card }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>
+                Voice Volume
+              </Text>
+              <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
+                {Math.round(aiVoiceVolume * 100)}%
+              </Text>
+            </View>
+            <View style={styles.sliderRow}>
+              <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>🔇</Text>
+              <View style={styles.sliderTrackWrap}>
+                <View
+                  style={[
+                    styles.sliderTrack,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.sliderFill,
+                    {
+                      backgroundColor: colors.gold,
+                      width: `${aiVoiceVolume * 100}%`,
+                    },
+                  ]}
+                  onPress={() => {}}
+                  activeOpacity={1}
+                />
+                {/* Volume preset buttons */}
+                <View style={styles.volumeButtons}>
+                  {[0, 0.25, 0.5, 0.75, 1].map((vol) => (
+                    <TouchableOpacity
+                      key={vol}
+                      style={[
+                        styles.volumePreset,
+                        {
+                          backgroundColor: Math.abs(aiVoiceVolume - vol) < 0.1 ? colors.gold : 'transparent',
+                        },
+                      ]}
+                      onPress={() => handleVolumeChange(vol)}
+                      activeOpacity={0.7}>
+                      <Text
+                        style={[
+                          styles.volumePresetText,
+                          { color: Math.abs(aiVoiceVolume - vol) < 0.1 ? '#000000' : colors.textSecondary },
+                        ]}>
+                        {vol === 0 ? 'Mute' : `${Math.round(vol * 100)}%`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              <Text style={[styles.sliderLabel, { color: colors.textSecondary }]}>🔊</Text>
             </View>
           </View>
         </View>

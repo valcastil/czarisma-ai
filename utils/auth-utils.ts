@@ -1,5 +1,4 @@
 import { UserProfile } from '@/constants/theme';
-import { logoutRevenueCatUser } from '@/lib/revenuecat';
 import { supabase } from '@/lib/supabase';
 import { getEntries as getSupabaseEntries, getProfile as getSupabaseProfile } from '@/lib/supabase-service';
 import { trackAuth, trackError } from '@/lib/vexo-analytics';
@@ -38,7 +37,6 @@ export const handleSignOut = async (): Promise<{ success: boolean; error?: any }
     // Run critical cleanup in parallel with timeouts on network calls
     await Promise.allSettled([
       Promise.race([supabase.auth.signOut(), new Promise(r => setTimeout(r, 3000))]),
-      Promise.race([logoutRevenueCatUser(), new Promise(r => setTimeout(r, 2000))]),
       ...secureKeys.map(key => SecureStorage.removeItem(key)),
       AsyncStorage.multiRemove(asyncKeys),
     ]);

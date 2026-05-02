@@ -1,17 +1,12 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { MaterialTopTabs } from '@/components/ui/material-top-tabs';
-import { SocialPlayerModal } from '@/components/social-player/social-player-modal';
 import { useTheme } from '@/hooks/use-theme';
-import { getCurrentUser, getUnreadCount, subscribeToConversations } from '@/utils/message-utils';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Animated, BackHandler, DeviceEventEmitter, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getProfile } from '@/utils/profile-utils';
-
-const CZAR_IMAGE = require('@/assets/images/czar.png');
+import React, { useCallback, useEffect, useState } from 'react';
+import { Animated, BackHandler, DeviceEventEmitter, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -70,15 +65,10 @@ function AnimatedTabButton({ onPress, children, isFocused, color }: any) {
   );
 }
 
-function AddMenu({ visible, onClose, colors, insets, router, videoLinks, onPlayVideos }: any) {
-  const hasVideos = videoLinks && videoLinks.length >= 2;
-  
+function AddMenu({ visible, onClose, colors, insets, router }: any) {
   const options = [
-    hasVideos && { emoji: '🎬', label: `Play ${videoLinks.length} Videos`, onPress: () => { onClose(); onPlayVideos?.(); } },
-    { emoji: '🎥', label: 'Create Czareel', onPress: () => { onClose(); router.push('/create-czareel'); } },
     { emoji: '✨', label: 'Add Charisma Entry', onPress: () => { onClose(); router.push('/onboarding-charisma'); } },
-    { emoji: '🔗', label: 'Paste Social Link', onPress: () => { onClose(); router.push({ pathname: '/(tabs)', params: { openPasteLink: Date.now().toString() } }); } },
-  ].filter(Boolean);
+  ];
   
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -100,61 +90,11 @@ function AddMenu({ visible, onClose, colors, insets, router, videoLinks, onPlayV
   );
 }
 
-function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNewMessages }: any) {
+function CustomTabBar({ state, descriptors, navigation }: any) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [showAddMenu, setShowAddMenu] = useState(false);
-  const [showPlayer, setShowPlayer] = useState(false);
-  const [videoLinks, setVideoLinks] = useState<string[]>([]);
-
-  // Load user's social video links
-  useEffect(() => {
-    const loadVideoLinks = async () => {
-      try {
-        const profile = await getProfile();
-        if (profile?.socialLinks) {
-          const videoPlatforms = ['youtube', 'tiktok', 'instagram', 'facebook'];
-          
-          const links = Object.entries(profile.socialLinks)
-            .filter(([key, value]) => videoPlatforms.includes(key) && value && value.trim().length > 0)
-            .map(([key, value]) => {
-              if (!value) return null;
-              let url = value.trim();
-              // Build full URL if needed
-              if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                const prefix = {
-                  youtube: 'https://youtube.com/',
-                  tiktok: 'https://tiktok.com/@',
-                  instagram: 'https://instagram.com/',
-                  facebook: 'https://facebook.com/',
-                }[key];
-                if (prefix) {
-                  url = prefix + url.replace(/^@/, '');
-                }
-              }
-              return url;
-            })
-            .filter((url): url is string => url !== null);
-          
-          console.log('Loaded video links:', links);
-          setVideoLinks(links);
-        }
-      } catch (error) {
-        console.error('Error loading video links:', error);
-      }
-    };
-    
-    loadVideoLinks();
-  }, []);
-
-  const focusedRouteName = state?.routes?.[state.index]?.name;
-
-  useEffect(() => {
-    if (focusedRouteName === 'messages' && hasNewMessages) {
-      clearNewMessages?.();
-    }
-  }, [focusedRouteName, hasNewMessages, clearNewMessages]);
 
   return (
     <>
@@ -164,14 +104,6 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
         colors={colors}
         insets={insets}
         router={router}
-        videoLinks={videoLinks}
-        onPlayVideos={() => setShowPlayer(true)}
-      />
-      <SocialPlayerModal
-        visible={showPlayer}
-        onClose={() => setShowPlayer(false)}
-        urls={videoLinks}
-        title="My Social Videos"
       />
       <View style={[styles.tabBar, {
       backgroundColor: colors.background,
@@ -211,19 +143,6 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
             if (route.name === 'explore') {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setShowAddMenu(true);
-            } else if (route.name === 'czar-chat') {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              try {
-                // Use navigation.navigate for better production build compatibility
-                navigation.navigate('ai-chat', route.params);
-              } catch (error) {
-                console.error('Tab navigation error:', error);
-                router.push('/ai-chat');
-              }
-            } else if (route.name === 'messages') {
-              clearNewMessages?.();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              navigation.navigate(route.name, route.params);
             } else {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               navigation.navigate(route.name, route.params);
@@ -244,34 +163,7 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
 
         let iconName = "house";
         if (route.name === 'index') iconName = "house";
-        if (route.name === 'messages') iconName = "message";
         if (route.name === 'profile') iconName = "person";
-
-        // Special render for Czar AI chat tab — use Czar profile image
-        if (route.name === 'czar-chat') {
-          return (
-            <AnimatedTabButton
-              key={route.key}
-              onPress={onPress}
-              isFocused={isFocused}
-              color={color}
-            >
-              <View style={styles.tabIconWrap}>
-                <Image
-                  source={CZAR_IMAGE}
-                  style={[
-                    styles.czarTabImage,
-                    { borderColor: isFocused ? colors.gold : 'transparent' },
-                  ]}
-                  resizeMode="cover"
-                />
-              </View>
-              <Text style={[styles.tabLabel, { color }]}>
-                {label}
-              </Text>
-            </AnimatedTabButton>
-          );
-        }
 
         return (
           <AnimatedTabButton
@@ -282,9 +174,6 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
           >
             <View style={styles.tabIconWrap}>
               <IconSymbol size={24} name={iconName as any} color={color} style={styles.tabIcon} />
-              {route.name === 'messages' && !!hasNewMessages && !isFocused ? (
-                <View style={styles.messageDot} />
-              ) : null}
             </View>
             <Text style={[styles.tabLabel, { color }]}>
               {label}
@@ -299,8 +188,6 @@ function CustomTabBar({ state, descriptors, navigation, hasNewMessages, clearNew
 
 export default function TabLayout() {
   const [hasEntries, setHasEntries] = useState(false);
-  const [hasNewMessages, setHasNewMessages] = useState(false);
-  const router = useRouter();
 
   const checkEntries = useCallback(async () => {
     try {
@@ -322,108 +209,18 @@ export default function TabLayout() {
     }, [checkEntries])
   );
 
-  // Check for unread messages on initial load and when app comes to foreground
-  const checkUnreadMessages = useCallback(async () => {
-    try {
-      const count = await getUnreadCount();
-      setHasNewMessages(count > 0);
-    } catch (error) {
-      console.error('Error checking unread messages:', error);
-    }
-  }, []);
-
-  // Check unread messages on mount and when tab layout gains focus
-  useFocusEffect(
-    useCallback(() => {
-      checkUnreadMessages();
-    }, [checkUnreadMessages])
-  );
-
-  useEffect(() => {
-    let unsubscribe: undefined | (() => void);
-    let isMounted = true;
-
-    (async () => {
-      try {
-        const user = await getCurrentUser();
-        if (!user || !isMounted) return;
-
-        // Initial check for unread messages
-        await checkUnreadMessages();
-
-        // Subscribe to real-time conversation updates
-        // Recheck total unread on every update so badge clears when all are read
-        unsubscribe = subscribeToConversations(() => {
-          checkUnreadMessages();
-        });
-
-        // Also subscribe directly to new messages for immediate notification
-        // This catches messages from iOS/Android cross-platform faster
-        const messageChannel = supabase
-          .channel(`messages:global:${user.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'messages',
-              filter: `receiver_id=eq.${user.id}`,
-            },
-            (payload) => {
-              // Only show dot if message is new and not from current user
-              if (payload.new && !payload.new.is_read) {
-                setHasNewMessages(true);
-              }
-            }
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'messages',
-              filter: `receiver_id=eq.${user.id}`,
-            },
-            () => {
-              // When messages are marked as read, recheck unread count
-              checkUnreadMessages();
-            }
-          )
-          .subscribe();
-
-        // Store channel for cleanup
-        (global as any).messageNotificationChannel = messageChannel;
-
-      } catch (error) {
-        console.error('Error subscribing to conversations:', error);
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-      unsubscribe?.();
-      // Cleanup message channel
-      if ((global as any).messageNotificationChannel) {
-        supabase.removeChannel((global as any).messageNotificationChannel);
-      }
-    };
-  }, [checkUnreadMessages]);
-
   // Handle hardware back button to prevent freeze
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Check if user is authenticated
       (async () => {
-        const user = await getCurrentUser();
-        if (!user) {
-          // If not authenticated, exit the app
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
           BackHandler.exitApp();
           return true;
         }
-        // If authenticated, let the default back behavior handle it
         return false;
       })();
-      return true; // Prevent default behavior while we check auth
+      return true;
     });
 
     return () => backHandler.remove();
@@ -434,8 +231,6 @@ export default function TabLayout() {
       tabBar={(props) => (
         <CustomTabBar
           {...props}
-          hasNewMessages={hasNewMessages}
-          clearNewMessages={() => setHasNewMessages(false)}
         />
       )}
       tabBarPosition="bottom"
@@ -457,36 +252,9 @@ export default function TabLayout() {
         }}
       />
       <MaterialTopTabs.Screen
-        name="messages"
-        options={{
-          title: 'Messages',
-        }}
-      />
-      {/* explore is strictly a placeholder for the button in this logic, 
-          but for swiping order, it will exist as a screen.
-          Ideally we want to SKIP it during swipe or make it a real screen.
-          Users CAN swipe to 'explore' if we leave it here.
-          If we want to avoid swiping to 'explore' (since it pushes a route),
-          we should probably NOT include it as a tab and just render the button overlay?
-          BUT MaterialTopTabs needs the route to exist to map it in the bar easily.
-          
-          Better UX: Make 'explore' a real View (maybe "New Entry") that auto-redirects?
-          OR, simpler: Just let it be a tab that shows "New Entry" screen directly instead of Pushing?
-          
-          The user originally had it strictly as a button. 
-          If I swipe to it, what happens? 
-          For now, I'll map it to a View that redirects on focus if accessed via swipe.
-      */}
-      <MaterialTopTabs.Screen
         name="explore"
         options={{
           title: '',
-        }}
-      />
-      <MaterialTopTabs.Screen
-        name="czar-chat"
-        options={{
-          title: 'Czar AI',
         }}
       />
       <MaterialTopTabs.Screen
@@ -518,24 +286,8 @@ const styles = StyleSheet.create({
   tabIcon: {
     marginTop: 4,
   },
-  messageDot: {
-    position: 'absolute',
-    top: 2,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF3B30',
-  },
   tabLabel: {
     fontSize: 10,
-    marginTop: 4,
-  },
-  czarTabImage: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
     marginTop: 4,
   },
   addButton: {
