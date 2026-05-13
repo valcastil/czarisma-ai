@@ -253,12 +253,12 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Czar AI</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Czarisma AI</Text>
 
           <View style={[styles.settingItem, { backgroundColor: colors.card }]}>
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: colors.text }]}>
-                Czar AI Companion
+                Czarisma AI Companion
               </Text>
               <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
                 {czarEnabled ? `Appears after ${idleTimeout}s of inactivity` : 'Disabled'}
@@ -276,7 +276,7 @@ export default function SettingsScreen() {
             <View style={[styles.timerCard, { backgroundColor: colors.card }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Czar AI Timer
+                  Czarisma AI Timer
                 </Text>
                 <Text style={[styles.settingValue, { color: colors.textSecondary }]}>
                   {localTimer >= 60 ? `${localTimer / 60} min` : `${localTimer}s`}

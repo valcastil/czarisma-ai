@@ -134,6 +134,9 @@ const MAPPING = {
   'camera.on.rectangle': 'photo-camera-front',
   'camera.on.rectangle.fill': 'photo-camera-back',
 
+  // Shuffle
+  'shuffle': 'shuffle',
+
   // Undo / refresh
   'arrow.counterclockwise': 'replay',
 

@@ -300,7 +300,7 @@ export default function ProfileSettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Czar AI Companion - Duolingo-style floating mascot */}
+      {/* Czarisma AI Companion - Duolingo-style floating mascot */}
       <View style={styles.czarContainer}>
         <CzarCompanion
           size="medium"
@@ -617,7 +617,7 @@ export default function ProfileSettingsScreen() {
 
 
         <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>CZAR AI SETTINGS</Text>
+          <Text style={[styles.sectionHeaderText, { color: colors.textSecondary }]}>CZARISMA AI SETTINGS</Text>
         </View>
 
 

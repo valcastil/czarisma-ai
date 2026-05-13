@@ -93,8 +93,8 @@ const screenMessages: Record<string, string[]> = {
     "Fun fact: The password to success is... well, your actual password! 🔑😂",
   ],
   'modal': [
-    "Welcome to Czar AI! Your charisma journey starts NOW! 🎬",
-    "The Czar is in! Ready to guide you to greatness! 👑",
+    "Welcome to Czarisma AI! Your charisma journey starts NOW! 🎬",
+    "Czarisma is in! Ready to guide you to greatness! 👑",
     "Fun fact: You've just opened the most charismatic app ever created. Coincidence? I think not! 😎",
   ],
 };

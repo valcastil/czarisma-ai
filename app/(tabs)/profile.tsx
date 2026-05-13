@@ -10,7 +10,7 @@ import { calculateUserStats, getProfile, getRecentEntries, updateProfile } from 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -161,11 +161,11 @@ export default function ProfileScreen() {
 
   const handleSubscription = () => {
     // Save current scroll position before navigating
-    router.push('/subscription');
+    router.push('/subscription' as any);
   };
 
   const handleSubscriptionsInfo = () => {
-    router.push('/subscriptions-info');
+    router.push('/subscriptions-info' as any);
   };
 
   const handleSearch = () => {
@@ -242,7 +242,7 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-            Czar AI v{Constants.expoConfig?.version || '1.0.2'}
+            Czarisma AI v{Constants.expoConfig?.version || '1.0.2'}
           </Text>
         </View>
       </ScrollView>

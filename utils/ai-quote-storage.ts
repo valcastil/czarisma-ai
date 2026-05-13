@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const AI_QUOTES_KEY = '@czar_ai_saved_quotes';
 
 /**
- * Get all saved Czar AI quotes.
+ * Get all saved Czarisma AI quotes.
  */
 export const getSavedAIQuotes = async (): Promise<string[]> => {
   try {

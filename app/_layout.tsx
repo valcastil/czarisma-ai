@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, usePathname } from 'expo-router';
 import * as Linking from 'expo-linking';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
@@ -8,13 +8,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import { IntelligentCzar } from '@/components/intelligent-czar';
-import { InactivityProvider } from '@/contexts/inactivity-provider';
 import { Colors } from '@/constants/theme';
 import { CzarProvider, useCzar } from '@/contexts/czar-context';
+import { InactivityProvider } from '@/contexts/inactivity-provider';
 import { ThemeProvider, useColorScheme } from '@/hooks/use-theme';
+import '@/lib/firebase-init';
 import { initializeGemini } from '@/lib/gemini';
 import { initializeSupabase, supabase } from '@/lib/supabase';
-import '@/lib/firebase-init';
 import { initializeVexo } from '@/lib/vexo-analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -171,8 +171,8 @@ export default function RootLayout() {
   useEffect(() => {
     const initializeServices = async () => {
       try {
-        // Initialize Supabase first (critical)
-        await initializeSupabase();
+        // Initialize Supabase (non-blocking to avoid slow startup)
+        initializeSupabase();
 
         // Initialize other services with error handling
         try {

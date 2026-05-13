@@ -19,7 +19,7 @@ export default function WelcomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top Section - App Name */}
       <View style={styles.topSection}>
-        <Text style={[styles.appName, { color: colors.gold }]}>Czar AI</Text>
+        <Text style={[styles.appName, { color: colors.gold }]}>Czarisma AI</Text>
       </View>
 
       {/* Middle Section - Logo */}

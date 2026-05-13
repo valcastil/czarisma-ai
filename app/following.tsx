@@ -1,19 +1,19 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { followUser, getFollowersList, getFollowingList, isFollowing, unfollowUser } from '@/utils/follow-utils';
 import { supabase } from '@/lib/supabase';
+import { followUser, getFollowersList, getFollowingList, unfollowUser } from '@/utils/follow-utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface UserListItem {
   id: string;
@@ -128,7 +128,7 @@ export default function FollowingScreen() {
       <TouchableOpacity
         style={styles.userItem}
         activeOpacity={0.7}
-        onPress={() => router.push({ pathname: '/chat/[id]', params: { id: item.id, username: item.username, name: item.name } })}>
+        onPress={() => router.push({ pathname: '/chat/[id]' as any, params: { id: item.id, username: item.username, name: item.name } })}>
         <View style={styles.avatarContainer}>
           {item.avatar_url ? (
             <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
@@ -193,7 +193,7 @@ export default function FollowingScreen() {
         <Text style={styles.headerTitle}>
           {type === 'followers' ? `${name}'s Followers` : `${name}'s Following`}
         </Text>
-        <TouchableOpacity onPress={() => router.replace('/(tabs)/messages')} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/messages' as any)} style={styles.backButton}>
           <IconSymbol size={22} name="envelope" color="#000" />
         </TouchableOpacity>
       </View>

@@ -327,7 +327,7 @@ export default function OnboardingCharismaScreen() {
       <View style={styles.header}>
         <CharismaLogo size={50} />
         <View style={styles.titleContainer}>
-          <Text style={[styles.appTitle, { color: colors.text }]}>Czar AI</Text>
+          <Text style={[styles.appTitle, { color: colors.text }]}>Czarisma AI</Text>
         </View>
       </View>
 

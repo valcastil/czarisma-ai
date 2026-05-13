@@ -6,20 +6,19 @@ import { supabase } from '@/lib/supabase';
 import { deleteAIQuote, getSavedAIQuotes } from '@/utils/ai-quote-storage';
 import { syncEntryToSupabase } from '@/utils/entry-sync';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
 } from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -548,25 +547,40 @@ export default function AddEntryScreen() {
   const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
 
   useEffect(() => {
+    loadSelections();
     loadQuotes();
     loadSavedAIQuotes();
   }, []);
 
-  const loadQuotes = async () => {
+  const loadSelections = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUserEmail(session?.user?.email || null);
-
-      // All users get all quotes (no subscription paywall)
-      const shuffledFreeQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
-      const allQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
-      setAvailableQuotes(allQuotes);
+      const charismaData = await AsyncStorage.getItem('@temp_selected_charisma');
+      if (charismaData) {
+        setSelectedCharismaId(charismaData);
+        setSubCharisma(charismaData);
+      }
+      const emotionsData = await AsyncStorage.getItem('@temp_selected_emotions');
+      if (emotionsData) {
+        const parsed = JSON.parse(emotionsData);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setEmotion(parsed[0]);
+        }
+      }
     } catch (error) {
-      console.error('Error loading quotes:', error);
-      // On error, show only free quotes (safer default)
-      const shuffled = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
-      setAvailableQuotes(shuffled);
+      console.error('Error loading selections:', error);
     }
+  };
+
+  const loadQuotes = () => {
+    // Quotes are local constants — load instantly without network
+    const shuffledFreeQuotes = [...CHARISMA_QUOTES].sort(() => Math.random() - 0.5);
+    const allQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
+    setAvailableQuotes(allQuotes);
+
+    // Load user email in background (non-blocking)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserEmail(session?.user?.email || null);
+    }).catch(() => {});
   };
 
   const loadSavedAIQuotes = async () => {
@@ -591,7 +605,7 @@ export default function AddEntryScreen() {
   // For testing: Show all quotes including Pro ones
   const showAllQuotesForTesting = () => {
     console.log('Showing all quotes for testing (including Pro quotes)');
-    const shuffledFreeQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
+    const shuffledFreeQuotes = [...CHARISMA_QUOTES].sort(() => Math.random() - 0.5);
     const allQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
     setAvailableQuotes(allQuotes);
   };
@@ -613,11 +627,6 @@ export default function AddEntryScreen() {
   };
 
   const handleContinue = async () => {
-    if (!subCharisma || !emotion) {
-      Alert.alert('Almost There!', 'Please select a Sub-Charisma and an Emotion to continue.');
-      return;
-    }
-
     try {
       setSaving(true);
 
@@ -696,13 +705,13 @@ export default function AddEntryScreen() {
     setShowQuotesModal(false);
 
     // Create new available quotes array with shuffled free quotes
-    const shuffledFreeQuotes = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
+    const shuffledFreeQuotes = [...CHARISMA_QUOTES].sort(() => Math.random() - 0.5);
     const newAvailableQuotes = [...shuffledFreeQuotes, ...PRO_CHARISMA_QUOTES];
     setAvailableQuotes(newAvailableQuotes);
   };
 
   const handleShuffleFreeQuotes = () => {
-    const shuffled = CHARISMA_QUOTES.sort(() => Math.random() - 0.5);
+    const shuffled = [...CHARISMA_QUOTES].sort(() => Math.random() - 0.5);
     setAvailableQuotes([...shuffled, ...PRO_CHARISMA_QUOTES]);
   };
 
@@ -715,7 +724,7 @@ export default function AddEntryScreen() {
         <CharismaLogo size={60} />
         <View style={styles.titleContainer}>
           <TouchableOpacity onPress={handleTitlePress} activeOpacity={0.7}>
-            <Text style={[styles.appTitle, { color: colors.text }]}>Czar AI</Text>
+            <Text style={[styles.appTitle, { color: colors.text }]}>Czarisma AI</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -747,6 +756,18 @@ export default function AddEntryScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Selected Quote Display */}
+      {selectedQuote && (
+        <View style={[styles.selectedQuoteContainer, { backgroundColor: colors.card, borderLeftColor: colors.gold }]}>
+          <Text style={[styles.selectedQuoteText, { color: colors.text }]}>{selectedQuote}</Text>
+          <TouchableOpacity
+            onPress={() => setSelectedQuote(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={[styles.selectedQuoteRemove, { color: colors.textSecondary }]}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Continue Button */}
       <View style={styles.bottomSection}>
         <TouchableOpacity
@@ -766,11 +787,19 @@ export default function AddEntryScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setShowQuotesModal(false)}
-        onShow={loadSavedAIQuotes}>
-        <Pressable
-          style={[styles.modalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}
-          onPress={() => setShowQuotesModal(false)}>
-          <Pressable style={[styles.modalContent, { backgroundColor: colors.background }]} onPress={(e) => e.stopPropagation()}>
+        onShow={() => {
+          console.log('Modal opened - reloading quotes');
+          loadQuotes();
+          loadSavedAIQuotes();
+        }}>
+        <View style={styles.modalOverlay}>
+          {/* Tappable overlay area to dismiss */}
+          <TouchableWithoutFeedback onPress={() => setShowQuotesModal(false)}>
+            <View style={styles.modalOverlayDismiss} />
+          </TouchableWithoutFeedback>
+
+          {/* Modal content — plain View so it never steals scroll gestures */}
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
             <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>✨ Inspirational Quotes</Text>
               <TouchableOpacity
@@ -780,22 +809,20 @@ export default function AddEntryScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.quotesScrollView} showsVerticalScrollIndicator={false}>
-              {/* Free Quotes Section */}
+            <ScrollView contentContainerStyle={styles.quotesScrollContent} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
+              {/* Inspirational Quotes Section - shown first */}
               <View>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.gold }]}>Free Quotes</Text>
-                  <TouchableOpacity
-                    style={[styles.shuffleButton, { backgroundColor: colors.card }]}
-                    onPress={handleShuffleFreeQuotes}
-                    activeOpacity={0.7}>
-                    <IconSymbol size={16} name="shuffle" color={colors.gold} />
-                  </TouchableOpacity>
+                <View style={styles.proSectionHeader}>
+                  <Text style={[styles.proSectionTitle, { color: colors.gold }]}>💬 Inspirational Quotes</Text>
                 </View>
-                {availableQuotes.filter(quote => !PRO_CHARISMA_QUOTES.includes(quote)).map((quote, index) => (
+                {INSPIRATIONAL_CHARISMA_QUOTES.map((quote, index) => (
                   <TouchableOpacity
-                    key={`free-${index}`}
-                    style={[styles.quoteItem, { backgroundColor: colors.card, borderLeftColor: colors.gold }]}
+                    key={`insp-${index}`}
+                    style={[
+                      styles.quoteItem,
+                      styles.proQuoteItem,
+                      { backgroundColor: colors.card, borderLeftColor: colors.gold }
+                    ]}
                     onPress={() => handleSelectQuote(quote)}
                     activeOpacity={0.7}>
                     <Text style={[styles.quoteText, { color: colors.text }]}>{quote}</Text>
@@ -803,11 +830,11 @@ export default function AddEntryScreen() {
                 ))}
               </View>
 
-              {/* Czar AI Saved Quotes Section */}
+              {/* Czarisma AI Saved Quotes Section */}
               {savedAIQuotes.length > 0 && (
                 <View style={styles.proSection}>
                   <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.gold }]}>🤖 Czar AI Quotes</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.gold }]}>🤖 Czarisma AI Quotes</Text>
                     <View style={[styles.aiQuoteCountBadge, { backgroundColor: colors.gold }]}>
                       <Text style={styles.aiQuoteCountText}>{savedAIQuotes.length}</Text>
                     </View>
@@ -832,39 +859,21 @@ export default function AddEntryScreen() {
                 </View>
               )}
 
-              {/* Pro Quotes Section */}
+              {/* Charisma Quotes Section (Free + Pro) */}
               <View style={styles.proSection}>
-                <View style={styles.proSectionHeader}>
-                  <Text style={[styles.proSectionTitle, { color: colors.gold }]}>✨ Pro Quotes</Text>
-                </View>
-                {PRO_CHARISMA_QUOTES.map((quote, index) => (
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.gold }]}>✨ Charisma Quotes</Text>
                   <TouchableOpacity
-                    key={`pro-${index}`}
-                    style={[
-                      styles.quoteItem,
-                      styles.proQuoteItem,
-                      { backgroundColor: colors.card, borderLeftColor: colors.gold }
-                    ]}
-                    onPress={() => handleSelectQuote(quote)}
+                    style={[styles.shuffleButton, { backgroundColor: colors.card }]}
+                    onPress={handleShuffleFreeQuotes}
                     activeOpacity={0.7}>
-                    <Text style={[styles.quoteText, { color: colors.text }]}>{quote}</Text>
+                    <IconSymbol size={16} name="shuffle" color={colors.gold} />
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Inspirational Quotes Section */}
-              <View style={styles.proSection}>
-                <View style={styles.proSectionHeader}>
-                  <Text style={[styles.proSectionTitle, { color: colors.gold }]}>💬 Inspirational Quotes</Text>
                 </View>
-                {INSPIRATIONAL_CHARISMA_QUOTES.map((quote, index) => (
+                {[...CHARISMA_QUOTES, ...PRO_CHARISMA_QUOTES].map((quote, index) => (
                   <TouchableOpacity
-                    key={`insp-${index}`}
-                    style={[
-                      styles.quoteItem,
-                      styles.proQuoteItem,
-                      { backgroundColor: colors.card, borderLeftColor: colors.gold }
-                    ]}
+                    key={`quote-${index}`}
+                    style={[styles.quoteItem, { backgroundColor: colors.card, borderLeftColor: colors.gold }]}
                     onPress={() => handleSelectQuote(quote)}
                     activeOpacity={0.7}>
                     <Text style={[styles.quoteText, { color: colors.text }]}>{quote}</Text>
@@ -872,8 +881,8 @@ export default function AddEntryScreen() {
                 ))}
               </View>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -1017,6 +1026,10 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalOverlayDismiss: {
+    flex: 1,
   },
   modalContent: {
     borderTopLeftRadius: 24,
@@ -1024,6 +1037,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
     maxHeight: '80%',
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1042,8 +1056,12 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
   quotesScrollView: {
+    flex: 1,
+  },
+  quotesScrollContent: {
     paddingHorizontal: 24,
     paddingTop: 16,
+    paddingBottom: 40,
   },
   quoteItem: {
     padding: 20,
@@ -1144,5 +1162,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#000000',
+  },
+  noQuotesText: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 20,
+    fontStyle: 'italic',
+  },
+  selectedQuoteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+  },
+  selectedQuoteText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  selectedQuoteRemove: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 12,
   },
 });

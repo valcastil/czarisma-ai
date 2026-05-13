@@ -94,7 +94,7 @@ ${emotions ? `Emotions: ${emotions}` : ''}
 
 ${entry.notes ? `Notes: ${entry.notes}` : ''}
 
-Forwarded from Czar AI
+Forwarded from Czarisma AI
       `.trim();
 
       await Share.share({
@@ -178,7 +178,7 @@ Forwarded from Czar AI
       <View style={styles.header}>
         <View style={styles.logoContainer}>
           <CharismaLogo ref={logoRef} size={50} />
-          <Text style={[styles.title, { color: colors.text }]}>Czar AI</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Czarisma AI</Text>
         </View>
 
         <View style={styles.headerActions}>

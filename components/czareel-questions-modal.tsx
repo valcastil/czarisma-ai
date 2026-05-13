@@ -213,7 +213,7 @@ export function CzareelQuestionsModal({
       >
         <View style={[styles.container, { backgroundColor: colors.card }]}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>Czar AI Questions</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Czarisma AI Questions</Text>
             <TouchableOpacity onPress={handleCancel} style={styles.closeButton}>
               <Text style={[styles.closeButtonText, { color: colors.text }]}>✕</Text>
             </TouchableOpacity>
@@ -243,7 +243,7 @@ export function CzareelQuestionsModal({
 
             {feedback && (
               <View style={[styles.feedbackCard, { backgroundColor: colors.background, borderColor: colors.gold }]}>
-                <Text style={[styles.feedbackTitle, { color: colors.gold }]}>Czar AI Feedback</Text>
+                <Text style={[styles.feedbackTitle, { color: colors.gold }]}>Czarisma AI Feedback</Text>
                 <Text style={[styles.feedbackText, { color: colors.text }]}>{feedback}</Text>
                 {suggestions.length > 0 && (
                   <View style={styles.suggestions}>
