@@ -9,16 +9,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View
 } from 'react-native';
 
 const ENTRIES_KEY = '@charisma_entries';
@@ -657,12 +657,17 @@ export default function AddEntryScreen() {
         hour12: true
       });
 
+      // Combine message and selected quote into notes
+      const userMessage = message.trim();
+      const quote = selectedQuote?.trim() || '';
+      const combinedNotes = [quote, userMessage].filter(Boolean).join('\n\n');
+
       // Create new entry with the message as notes
       const newEntry: CharismaEntry = {
         id: Date.now().toString(),
         majorCharisma: selectedCharismaId || 'confidence',
         subCharisma: '',
-        notes: message.trim(),
+        notes: combinedNotes,
         timestamp: Date.now(),
         date: now.toLocaleDateString(),
         time: timeString,
