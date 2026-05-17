@@ -235,9 +235,9 @@ export default function ProfileScreen() {
           onEditProfile={handleEditProfile}
           onExportData={handleExportData}
           onSettings={handleSettings}
+          onSubscription={handleSubscription}
           onSubscriptionsInfo={handleSubscriptionsInfo}
           onSearch={handleSearch}
-          /* onSubscription={handleSubscription} // Disabled for free mode */
         />
 
         <View style={styles.footer}>

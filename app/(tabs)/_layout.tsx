@@ -163,6 +163,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
         let iconName = "house";
         if (route.name === 'index') iconName = "house";
+        if (route.name === 'ai-chat') iconName = "sparkles";
+        if (route.name === 'quotes') iconName = "text.quote";
         if (route.name === 'profile') iconName = "person";
 
         return (
@@ -252,9 +254,21 @@ export default function TabLayout() {
         }}
       />
       <MaterialTopTabs.Screen
+        name="ai-chat"
+        options={{
+          title: 'Czar AI',
+        }}
+      />
+      <MaterialTopTabs.Screen
         name="explore"
         options={{
           title: '',
+        }}
+      />
+      <MaterialTopTabs.Screen
+        name="quotes"
+        options={{
+          title: 'Quotes',
         }}
       />
       <MaterialTopTabs.Screen

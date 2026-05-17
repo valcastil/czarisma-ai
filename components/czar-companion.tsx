@@ -1,6 +1,8 @@
 import { useTheme } from '@/hooks/use-theme';
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Animated, Easing, Image, PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { AI_VOICE_PREFERENCE_KEY } from '@/utils/ai-voice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Image, PanResponder, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 interface CzarCompanionProps {
   message?: string;
@@ -29,8 +31,9 @@ const messages = {
   sleepy: ['*yawn*', 'So tired...', 'Time for a break?', 'Goodnight!'],
 };
 
-// Czar image - Tsar portrait
-const CZAR_IMAGE = require('@/assets/images/czar.png');
+// Czar images - Male and Female portraits
+const CZAR_MALE_IMAGE = require('@/assets/images/czar.png');
+const CZAR_FEMALE_IMAGE = require('@/assets/images/woman_czar.png');
 
 // SCREEN_WIDTH / SCREEN_HEIGHT now obtained via useWindowDimensions() inside component
 
@@ -59,9 +62,16 @@ export function CzarCompanion({
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
-  const mouthScaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
+
+  // Solar flare animation refs (replaces mouth animation)
+  const flareScale1 = useRef(new Animated.Value(1)).current;
+  const flareOpacity1 = useRef(new Animated.Value(0)).current;
+  const flareScale2 = useRef(new Animated.Value(1)).current;
+  const flareOpacity2 = useRef(new Animated.Value(0)).current;
+  const flareScale3 = useRef(new Animated.Value(1)).current;
+  const flareOpacity3 = useRef(new Animated.Value(0)).current;
 
   // Draggable position state
   const pan = useRef(new Animated.ValueXY()).current;
@@ -73,8 +83,22 @@ export function CzarCompanion({
   const [isWiggling, setIsWiggling] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [hasAppeared, setHasAppeared] = useState(false);
+  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('male');
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load voice preference to determine which image to show
+  useEffect(() => {
+    const loadGender = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(AI_VOICE_PREFERENCE_KEY);
+        if (stored === 'female' || stored === 'male') {
+          setVoiceGender(stored);
+        }
+      } catch {}
+    };
+    loadGender();
+  }, []);
 
   // Get current size based on prop
   const currentSize = sizeStyles[size];
@@ -343,42 +367,58 @@ export function CzarCompanion({
     return () => clearTimeout(timer);
   }, [isWiggling, rotateAnim]);
 
-  // Talking animation - mouth opening/closing
+  // Solar flare animation - pulsing rings when talking (like Claude Code AI)
   useEffect(() => {
     if (!isTalking) {
-      mouthScaleAnim.setValue(0);
+      flareScale1.setValue(1);
+      flareOpacity1.setValue(0);
+      flareScale2.setValue(1);
+      flareOpacity2.setValue(0);
+      flareScale3.setValue(1);
+      flareOpacity3.setValue(0);
       return;
     }
 
-    const talkAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(mouthScaleAnim, {
-          toValue: 1,
-          duration: 150,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(mouthScaleAnim, {
-          toValue: 0.3,
-          duration: 150,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(mouthScaleAnim, {
-          toValue: 1,
-          duration: 200,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(mouthScaleAnim, {
-          toValue: 0,
-          duration: 150,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-      ])
-    );
-    talkAnimation.start();
+    const createFlareAnimation = (scale: Animated.Value, opacity: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.timing(scale, {
+              toValue: 1.6,
+              duration: 1200,
+              easing: Easing.out(Easing.ease),
+              useNativeDriver: false,
+            }),
+            Animated.sequence([
+              Animated.timing(opacity, {
+                toValue: 0.6,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+              Animated.timing(opacity, {
+                toValue: 0,
+                duration: 1000,
+                easing: Easing.out(Easing.ease),
+                useNativeDriver: false,
+              }),
+            ]),
+          ]),
+          Animated.timing(scale, {
+            toValue: 1,
+            duration: 0,
+            useNativeDriver: false,
+          }),
+        ])
+      );
+
+    const flare1 = createFlareAnimation(flareScale1, flareOpacity1, 0);
+    const flare2 = createFlareAnimation(flareScale2, flareOpacity2, 400);
+    const flare3 = createFlareAnimation(flareScale3, flareOpacity3, 800);
+
+    flare1.start();
+    flare2.start();
+    flare3.start();
 
     // Stop talking after estimated audio duration (~80ms per char, min 2s, max 15s)
     const estimatedDuration = Math.min(
@@ -390,10 +430,12 @@ export function CzarCompanion({
     }, estimatedDuration);
 
     return () => {
-      talkAnimation.stop();
+      flare1.stop();
+      flare2.stop();
+      flare3.stop();
       clearTimeout(timer);
     };
-  }, [isTalking, mouthScaleAnim]);
+  }, [isTalking]);
 
   const rotateInterpolate = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -439,7 +481,48 @@ export function CzarCompanion({
               },
             ]}
           >
-            {/* Main circular image (like Duolingo owl) */}
+            {/* Solar flare rings - pulsing outward when talking */}
+            <Animated.View
+              style={[
+                styles.flareRing,
+                {
+                  width: currentSize.width,
+                  height: currentSize.height,
+                  borderRadius: currentSize.width / 2,
+                  borderColor: colors.gold || '#F4C542',
+                  transform: [{ scale: flareScale1 }],
+                  opacity: flareOpacity1,
+                },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.flareRing,
+                {
+                  width: currentSize.width,
+                  height: currentSize.height,
+                  borderRadius: currentSize.width / 2,
+                  borderColor: colors.gold || '#F4C542',
+                  transform: [{ scale: flareScale2 }],
+                  opacity: flareOpacity2,
+                },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.flareRing,
+                {
+                  width: currentSize.width,
+                  height: currentSize.height,
+                  borderRadius: currentSize.width / 2,
+                  borderColor: colors.gold || '#F4C542',
+                  transform: [{ scale: flareScale3 }],
+                  opacity: flareOpacity3,
+                },
+              ]}
+            />
+
+            {/* Main circular image */}
             <Animated.View
               style={[
                 styles.czarBody,
@@ -453,36 +536,13 @@ export function CzarCompanion({
               ]}
             >
               <Image
-                source={CZAR_IMAGE}
+                source={voiceGender === 'female' ? CZAR_FEMALE_IMAGE : CZAR_MALE_IMAGE}
                 style={[styles.czarImage, { width: currentSize.width, height: currentSize.height }]}
-                resizeMode="contain"
+                resizeMode="cover"
               />
             </Animated.View>
 
-            {/* Animated Mouth - positioned on the face */}
-            <Animated.View
-              style={[
-                styles.mouthWrapper,
-                {
-                  transform: [
-                    { scale: mouthScaleAnim },
-                  ],
-                  opacity: mouthScaleAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, 1],
-                  }),
-                },
-              ]}
-            >
-              <View style={styles.mouth}>
-                <View style={styles.mouthInner}>
-                  <View style={styles.teethTop} />
-                  <View style={styles.tongue} />
-                </View>
-              </View>
-            </Animated.View>
-
-            {/* Base/stand shadow (like Duolingo owl sits on something) */}
+            {/* Base/stand shadow */}
             <View style={[styles.shadowBase, { width: currentSize.width * 0.8 }]} />
           </Animated.View>
         </View>
@@ -551,47 +611,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     transform: [{ scaleX: 1.2 }],
   },
-  mouthWrapper: {
+  flareRing: {
     position: 'absolute',
-    bottom: '22%',
-    left: '50%',
-    marginLeft: -18,
-    width: 36,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  mouth: {
-    width: 36,
-    height: 24,
-    backgroundColor: '#4A1C1C',
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#2D0F0F',
-  },
-  mouthInner: {
-    flex: 1,
-    backgroundColor: '#8B3A3A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  teethTop: {
-    position: 'absolute',
-    top: 0,
-    width: '100%',
-    height: 8,
-    backgroundColor: '#FFF',
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-  tongue: {
-    position: 'absolute',
-    bottom: 3,
-    width: 14,
-    height: 8,
-    backgroundColor: '#FF6B6B',
-    borderRadius: 7,
+    borderWidth: 3,
   },
 });

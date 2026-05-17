@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Czarisma AI",
-    "slug": "charisma-chat",
+    "slug": "czarisma-ai",
     "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/adaptive-icon.png",
@@ -77,7 +77,8 @@
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "config": {
         "googleMaps": {
@@ -195,7 +196,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "41fc9874-9a30-4bf1-9523-383d1480ed52"
+        "projectId": "50351e55-ec64-41dd-961d-401f2c80a1c6"
       },
       "geminiApiKey": "",
       "elevenLabsApiKey": ""
